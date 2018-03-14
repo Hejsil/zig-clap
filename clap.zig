@@ -260,26 +260,6 @@ test "clap.parse.Example" {
         }
     };
 
-    const COption = Option(Color, @typeOf(Color.rFromStr).ReturnType.ErrorSet);
-    const options = comptime []COption {
-        COption.init(Color.rFromStr)
-            .setHelp("The amount of red in our color")
-            .setShort('r')
-            .setLong("red")
-            .takesValue(true)
-            .setKind(COption.Kind.Required),
-        COption.init(Color.gFromStr)
-            .setHelp("The amount of green in our color")
-            .setShort('g')
-            .setLong("green")
-            .takesValue(true),
-        COption.init(Color.bFromStr)
-            .setHelp("The amount of blue in our color")
-            .setShort('b')
-            .setLong("blue")
-            .takesValue(true),
-    };
-
     const Case = struct { args: []const []const u8, res: Color, err: ?error };
     const cases = []Case {
         Case {
@@ -319,7 +299,29 @@ test "clap.parse.Example" {
         },
     };
 
-    const Clap = Parser(Color, @typeOf(Color.rFromStr).ReturnType.ErrorSet, Color { .r = 0, .g = 0, .b = 0 }, options);
+    const COption = Option(Color, @typeOf(Color.rFromStr).ReturnType.ErrorSet);
+    const Clap = Parser(Color, @typeOf(Color.rFromStr).ReturnType.ErrorSet,
+        Color { .r = 0, .g = 0, .b = 0 },
+        comptime []COption {
+            COption.init(Color.rFromStr)
+                .setHelp("The amount of red in our color")
+                .setShort('r')
+                .setLong("red")
+                .takesValue(true)
+                .setKind(COption.Kind.Required),
+            COption.init(Color.gFromStr)
+                .setHelp("The amount of green in our color")
+                .setShort('g')
+                .setLong("green")
+                .takesValue(true),
+            COption.init(Color.bFromStr)
+                .setHelp("The amount of blue in our color")
+                .setShort('b')
+                .setLong("blue")
+                .takesValue(true),
+        }
+    );
+
     for (cases) |case, i| {
         if (Clap.parse(case.args)) |res| {
             assert(res.r == case.res.r);
