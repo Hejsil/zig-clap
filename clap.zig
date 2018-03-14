@@ -22,16 +22,16 @@ pub fn Option(comptime Result: type, comptime ParseError: type) type {
             IgnoresRequired
         };
 
-        parser: fn(&Result, []const u8) ParseError!void,
+        parse: fn(&Result, []const u8) ParseError!void,
         help: []const u8,
         kind: Kind,
         takes_value: bool,
         short: ?u8,
         long: ?[]const u8,
 
-        pub fn init(parser: fn(&Result, []const u8) ParseError!void) Self {
+        pub fn init(parse_fn: fn(&Result, []const u8) ParseError!void) Self {
             return Self {
-                .parser = parser,
+                .parse = parse_fn,
                 .help = "",
                 .kind = Kind.Optional,
                 .takes_value = false,
@@ -82,10 +82,12 @@ pub fn Parser(comptime Result: type, comptime ParseError: type, comptime default
     //       This limits the user to 128 required arguments, which is more than
     //       enough.
     const required_mask = comptime blk: {
+        var required_index : u128 = 0;
         var required_res : u128 = 0;
         for (options) |option, i| {
             if (option.kind == OptionT.Kind.Required) {
-                required_res = (required_res << 1) | 0x1;
+                required_res |= 0x1 << required_index;
+                required_index += 1;
             }
         }
 
@@ -93,7 +95,17 @@ pub fn Parser(comptime Result: type, comptime ParseError: type, comptime default
     };
 
     return struct {
-        fn parse(args: []const []const u8) !Result {
+        fn newRequired(option: &const OptionT, old_required: u128, index: usize) u128 {
+            switch (option.kind) {
+                OptionT.Kind.Required => {
+                    return bits.set(u128, old_required, u7(index), false);
+                },
+                OptionT.Kind.IgnoresRequired => return 0,
+                else => return old_required,
+            }
+        }
+
+        pub fn parse(args: []const []const u8) !Result {
             var result = *defaults;
             var required = required_mask;
 
@@ -111,57 +123,61 @@ pub fn Parser(comptime Result: type, comptime ParseError: type, comptime default
                 const arg = pair.arg;
                 const kind = pair.kind;
 
-                var required_index : usize = 0;
-                for (options) |option, op_i| {
+                success: {
+                    var required_index = usize(0);
+
                     switch (kind) {
                         Arg.Kind.None => {
-                            if (option.short != null) continue;
-                            if (option.long  != null) continue;
+                            inline for (options) |option| {
+                                defer if (option.kind == OptionT.Kind.Required) required_index += 1;
+                                if (option.short != null) continue;
+                                if (option.long  != null) continue;
 
-                            try option.parser(&result, arg);
-
-                            switch (option.kind) {
-                                OptionT.Kind.Required => {
-                                    required = bits.set(u128, required, u7(required_index), false);
-                                    required_index += 1;
-                                },
-                                OptionT.Kind.IgnoresRequired => {
-                                    required = 0;
-                                    required_index += 1;
-                                },
-                                else => {}
+                                try option.parse(&result, arg);
+                                required = newRequired(option, required, required_index);
+                                break :success;
                             }
-
-                            break;
                         },
                         Arg.Kind.Short => {
-                            const short = option.short ??        continue;
-                            if (arg.len != 1 or arg[0] != short) continue;
+                            inline for (options) |option| {
+                                defer if (option.kind == OptionT.Kind.Required) required_index += 1;
+                                const short = option.short ?? continue;
+                                if (arg.len == 1 and arg[0] == short) {
+                                    if (option.takes_value) {
+                                        arg_i += 1;
+                                        if (args.len <= arg_i) return error.OptionMissingValue;
+
+                                        try option.parse(&result, args[arg_i]);
+                                    } else {
+                                        try option.parse(&result, []u8{});
+                                    }
+
+                                    required = newRequired(option, required, required_index);
+                                    break :success;
+                                }
+                            }
                         },
                         Arg.Kind.Long => {
-                            const long = option.long ??  continue;
-                            if (!mem.eql(u8, long, arg)) continue;
+                            inline for (options) |option| {
+                                defer if (option.kind == OptionT.Kind.Required) required_index += 1;
+                                const long = option.long ?? continue;
+                                if (mem.eql(u8, arg, long)) {
+                                    if (option.takes_value) {
+                                        arg_i += 1;
+                                        if (args.len <= arg_i) return error.OptionMissingValue;
+
+                                        try option.parse(&result, args[arg_i]);
+                                    } else {
+                                        try option.parse(&result, []u8{});
+                                    }
+
+                                    required = newRequired(option, required, required_index);
+                                    break :success;
+                                }
+                            }
                         }
                     }
 
-                    if (option.takes_value) arg_i += 1;
-                    if (args.len <= arg_i) return error.MissingValueToArgument;
-                    try option.parser(&result, args[arg_i]);
-
-                    switch (option.kind) {
-                        OptionT.Kind.Required => {
-                            required = bits.set(u128, required, u7(required_index), false);
-                            required_index += 1;
-                        },
-                        OptionT.Kind.IgnoresRequired => {
-                            required = 0;
-                            required_index += 1;
-                        },
-                        else => {}
-                    }
-
-                    break;
-                } else {
                     return error.InvalidArgument;
                 }
             }
@@ -294,7 +310,7 @@ test "clap.parse.Example" {
         Case {
             .args = [][]const u8 { "-g" },
             .res = Color { .r = 0, .g = 0, .b = 0 },
-            .err = error.MissingValueToArgument,
+            .err = error.OptionMissingValue,
         },
     };
 
