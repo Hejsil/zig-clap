@@ -98,7 +98,7 @@ pub fn Parser(comptime Result: type, comptime ParseError: type, comptime default
             var required = required_mask;
 
             var arg_i = usize(0);
-            loop: while (arg_i < args.len) : (arg_i += 1) {
+            while (arg_i < args.len) : (arg_i += 1) {
                 const pair = blk: {
                     const tmp = args[arg_i];
                     if (mem.startsWith(u8, tmp, "--"))
@@ -111,13 +111,12 @@ pub fn Parser(comptime Result: type, comptime ParseError: type, comptime default
                 const arg = pair.arg;
                 const kind = pair.kind;
 
-                comptime var required_index : usize = 0;
-                inline_loop: inline for (options) |option, op_i| {
-
+                var required_index : usize = 0;
+                for (options) |option, op_i| {
                     switch (kind) {
                         Arg.Kind.None => {
-                            if (option.short != null) continue :inline_loop;
-                            if (option.long  != null) continue :inline_loop;
+                            if (option.short != null) continue;
+                            if (option.long  != null) continue;
 
                             try option.parser(&result, arg);
 
@@ -133,15 +132,15 @@ pub fn Parser(comptime Result: type, comptime ParseError: type, comptime default
                                 else => {}
                             }
 
-                            continue :loop;
+                            break;
                         },
                         Arg.Kind.Short => {
-                            const short = option.short ??        continue :inline_loop;
-                            if (arg.len != 1 or arg[0] != short) continue :inline_loop;
+                            const short = option.short ??        continue;
+                            if (arg.len != 1 or arg[0] != short) continue;
                         },
                         Arg.Kind.Long => {
-                            const long = option.long ??  continue :inline_loop;
-                            if (!mem.eql(u8, long, arg)) continue :inline_loop;
+                            const long = option.long ??  continue;
+                            if (!mem.eql(u8, long, arg)) continue;
                         }
                     }
 
@@ -161,7 +160,7 @@ pub fn Parser(comptime Result: type, comptime ParseError: type, comptime default
                         else => {}
                     }
 
-                    continue :loop;
+                    break;
                 } else {
                     return error.InvalidArgument;
                 }
