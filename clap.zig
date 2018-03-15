@@ -250,7 +250,7 @@ pub fn Parser(comptime Result: type, comptime ParseError: type, comptime default
                 }
 
                 try out_stream.print(" " ** missing_spaces);
-                try out_stream.print("{}\n", option.help_message);
+                try out_stream.print("{}\n", option.help);
             }
         }
     };
