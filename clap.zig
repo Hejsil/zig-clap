@@ -8,9 +8,8 @@ const io    = std.io;
 
 const assert = debug.assert;
 
-// TODO: Missing a few convinient features
-//     * Short arguments that doesn't take values should probably be able to be
-//       chain like many linux programs: "rm -rf"
+// TODO:
+//     * Inform the caller which argument caused the error.
 pub fn Option(comptime Result: type, comptime ParseError: type) type {
     return struct {
         const Self = this;
@@ -150,10 +149,10 @@ pub fn Parser(comptime Result: type, comptime ParseError: type, comptime default
                 const after_eql = arg_info.after_eql;
 
                 success: {
-                    var required_index = usize(0);
 
                     switch (kind) {
                         Arg.Kind.None => {
+                            var required_index = usize(0);
                             inline for (options) |option| {
                                 defer if (option.kind == OptionT.Kind.Required) required_index += 1;
                                 if (option.short != null) continue;
@@ -165,10 +164,31 @@ pub fn Parser(comptime Result: type, comptime ParseError: type, comptime default
                             }
                         },
                         Arg.Kind.Short => {
+                            if (arg.len == 0) return error.FoundShortOptionWithNoName;
+                            short_arg_loop: for (arg[0..arg.len - 1]) |short_arg| {
+                                var required_index = usize(0);
+                                inline for (options) |option| {
+                                    defer if (option.kind == OptionT.Kind.Required) required_index += 1;
+                                    const short = option.short ?? continue;
+                                    if (short_arg == short) {
+                                        if (option.takes_value) return error.OptionMissingValue;
+
+                                        try option.parse(&result, []u8{});
+                                        required = newRequired(option, required, required_index);
+                                        continue :short_arg_loop;
+                                    }
+                                }
+
+                                return error.InvalidArgument;
+                            }
+
+                            const last_arg = arg[arg.len - 1];
+                            var required_index = usize(0);
                             inline for (options) |option| {
                                 defer if (option.kind == OptionT.Kind.Required) required_index += 1;
                                 const short = option.short ?? continue;
-                                if (arg.len == 1 and arg[0] == short) {
+
+                                if (last_arg == short) {
                                     if (option.takes_value) {
                                         const value = after_eql ?? it.next() ?? return error.OptionMissingValue;
                                         try option.parse(&result, value);
@@ -182,6 +202,7 @@ pub fn Parser(comptime Result: type, comptime ParseError: type, comptime default
                             }
                         },
                         Arg.Kind.Long => {
+                            var required_index = usize(0);
                             inline for (options) |option| {
                                 defer if (option.kind == OptionT.Kind.Required) required_index += 1;
                                 const long = option.long ?? continue;
@@ -292,7 +313,15 @@ test "clap.parse.Example" {
         fn bFromStr(color: &Self, str: []const u8) !void {
             color.b = try fmt.parseInt(u8, str, 10);
         }
+
+        // TODO: There is a segfault when we try to use the error set: @typeOf(fmt.parseInt).ReturnType.ErrorSet
+        fn setMax(color: &Self, str: []const u8) !void {
+            color.r = try fmt.parseInt(u8, "255", 10);
+            color.g = try fmt.parseInt(u8, "255", 10);
+            color.b = try fmt.parseInt(u8, "255", 10);
+        }
     };
+    const Error = @typeOf(Color.setMax).ReturnType.ErrorSet;
 
     const Case = struct { args: []const []const u8, res: Color, err: ?error };
     const cases = []Case {
@@ -322,6 +351,16 @@ test "clap.parse.Example" {
             .err = null,
         },
         Case {
+            .args = [][]const u8 { "-mr", "100" },
+            .res = Color { .r = 100, .g = 255, .b = 255 },
+            .err = null,
+        },
+        Case {
+            .args = [][]const u8 { "-mr=100" },
+            .res = Color { .r = 100, .g = 255, .b = 255 },
+            .err = null,
+        },
+        Case {
             .args = [][]const u8 { "-g", "200", "-b", "255" },
             .res = Color { .r = 0, .g = 0, .b = 0 },
             .err = error.RequiredArgumentWasntHandled,
@@ -336,10 +375,20 @@ test "clap.parse.Example" {
             .res = Color { .r = 0, .g = 0, .b = 0 },
             .err = error.OptionMissingValue,
         },
+        Case {
+            .args = [][]const u8 { "-" },
+            .res = Color { .r = 0, .g = 0, .b = 0 },
+            .err = error.FoundShortOptionWithNoName,
+        },
+        Case {
+            .args = [][]const u8 { "-rg", "100" },
+            .res = Color { .r = 0, .g = 0, .b = 0 },
+            .err = error.OptionMissingValue,
+        },
     };
 
-    const COption = Option(Color, @typeOf(Color.rFromStr).ReturnType.ErrorSet);
-    const Clap = Parser(Color, @typeOf(Color.rFromStr).ReturnType.ErrorSet,
+    const COption = Option(Color, Error);
+    const Clap = Parser(Color, Error,
         Color { .r = 0, .g = 0, .b = 0 },
         comptime []COption {
             COption.init(Color.rFromStr)
@@ -358,11 +407,16 @@ test "clap.parse.Example" {
                 .setShort('b')
                 .setLong("blue")
                 .takesValue(true),
+            COption.init(Color.setMax)
+                .setHelp("Set all values to max")
+                .setShort('m')
+                .setLong("max"),
         }
     );
 
     for (cases) |case, i| {
         if (Clap.parse(case.args)) |res| {
+            assert(case.err == null);
             assert(res.r == case.res.r);
             assert(res.g == case.res.g);
             assert(res.b == case.res.b);
