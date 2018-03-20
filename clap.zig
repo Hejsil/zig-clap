@@ -210,7 +210,7 @@ pub fn Parser(comptime Result: type, comptime ParseError: type, comptime default
                 break :blk res;
             };
 
-            inline for (options) |option| {
+            for (options) |option| {
                 if (option.short == null and option.long == null) continue;
 
                 try out_stream.print("    ");
@@ -231,9 +231,11 @@ pub fn Parser(comptime Result: type, comptime ParseError: type, comptime default
                 const missing_spaces = comptime blk: {
                     var res = longest_long + 3;
                     if (option.long) |long| {
+                        try out_stream.print("--{}", long);
                         res -= 2 + long.len;
 
                         if (option.takes_value) {
+                            try out_stream.print("{}", equal_value);
                             res -= equal_value.len;
                         }
                     }
@@ -241,15 +243,10 @@ pub fn Parser(comptime Result: type, comptime ParseError: type, comptime default
                     break :blk res;
                 };
 
-                if (option.long) |long| {
-                    try out_stream.print("--{}", long);
-
-                    if (option.takes_value) {
-                        try out_stream.print("{}", equal_value);
-                    }
+                var i = usize(0);
+                while (i < missing_spaces) : (i += 1) {
+                    try out_stream.print(" ");
                 }
-
-                try out_stream.print(" " ** missing_spaces);
                 try out_stream.print("{}\n", option.help);
             }
         }
@@ -343,7 +340,7 @@ test "clap.parse.Example" {
             assert(res.g == case.res.g);
             assert(res.b == case.res.b);
         } else |err| {
-            assert(err == (case.err ?? unreachable));
+            assert(err == ??case.err);
         }
     }
 }
