@@ -1,5 +1,4 @@
 const std  = @import("std");
-const bits = @import("bits.zig");
 
 const mem   = std.mem;
 const fmt   = std.fmt;
@@ -109,7 +108,7 @@ pub fn Parser(comptime Result: type, comptime ParseError: type, comptime default
         fn newRequired(option: &const OptionT, old_required: u128, index: usize) u128 {
             switch (option.kind) {
                 OptionT.Kind.Required => {
-                    return bits.set(u128, old_required, u7(index), false);
+                    return old_required & ~(u128(1) << u7(index));
                 },
                 OptionT.Kind.IgnoresRequired => return 0,
                 else => return old_required,
