@@ -11,7 +11,6 @@ const assert = debug.assert;
 // TODO: Missing a few convinient features
 //     * Short arguments that doesn't take values should probably be able to be
 //       chain like many linux programs: "rm -rf"
-//     * Handle "--something=VALUE"
 pub fn Option(comptime Result: type, comptime ParseError: type) type {
     return struct {
         const Self = this;
@@ -75,7 +74,20 @@ pub fn Parser(comptime Result: type, comptime ParseError: type, comptime default
         const Kind = enum { Long, Short, None };
 
         arg: []const u8,
-        kind: Kind
+        kind: Kind,
+        after_eql: ?[]const u8,
+    };
+
+    const Iterator = struct {
+        slice: []const []const u8,
+
+        pub fn next(it: &this) ?[]const u8 {
+            if (it.slice.len == 0)
+                return null;
+
+            defer it.slice = it.slice[1..];
+            return it.slice[0];
+        }
     };
 
     // NOTE: For now, a bitfield is used to keep track of the required arguments.
@@ -109,19 +121,33 @@ pub fn Parser(comptime Result: type, comptime ParseError: type, comptime default
             var result = *defaults;
             var required = required_mask;
 
-            var arg_i = usize(0);
-            while (arg_i < args.len) : (arg_i += 1) {
-                const pair = blk: {
-                    const tmp = args[arg_i];
-                    if (mem.startsWith(u8, tmp, "--"))
-                        break :blk Arg { .arg = tmp[2..], .kind = Arg.Kind.Long };
-                    if (mem.startsWith(u8, tmp, "-"))
-                        break :blk Arg { .arg = tmp[1..], .kind = Arg.Kind.Short };
+            var it = Iterator { .slice = args };
+            while (it.next()) |item| {
+                const arg_info = blk: {
+                    var arg = item;
+                    var kind = Arg.Kind.None;
 
-                    break :blk Arg { .arg = tmp, .kind = Arg.Kind.None };
+                    if (mem.startsWith(u8, arg, "--")) {
+                        arg = arg[2..];
+                        kind = Arg.Kind.Long;
+                    } else if (mem.startsWith(u8, arg, "-")) {
+                        arg = arg[1..];
+                        kind = Arg.Kind.Short;
+                    }
+
+                    if (kind == Arg.Kind.None)
+                        break :blk Arg { .arg = arg, .kind = kind, .after_eql = null };
+
+
+                    if (mem.indexOfScalar(u8, arg, '=')) |index| {
+                        break :blk Arg { .arg = arg[0..index], .kind = kind, .after_eql = arg[index + 1..] };
+                    } else {
+                        break :blk Arg { .arg = arg, .kind = kind, .after_eql = null };
+                    }
                 };
-                const arg = pair.arg;
-                const kind = pair.kind;
+                const arg = arg_info.arg;
+                const kind = arg_info.kind;
+                const after_eql = arg_info.after_eql;
 
                 success: {
                     var required_index = usize(0);
@@ -144,10 +170,8 @@ pub fn Parser(comptime Result: type, comptime ParseError: type, comptime default
                                 const short = option.short ?? continue;
                                 if (arg.len == 1 and arg[0] == short) {
                                     if (option.takes_value) {
-                                        arg_i += 1;
-                                        if (args.len <= arg_i) return error.OptionMissingValue;
-
-                                        try option.parse(&result, args[arg_i]);
+                                        const value = after_eql ?? it.next() ?? return error.OptionMissingValue;
+                                        try option.parse(&result, value);
                                     } else {
                                         try option.parse(&result, []u8{});
                                     }
@@ -163,10 +187,8 @@ pub fn Parser(comptime Result: type, comptime ParseError: type, comptime default
                                 const long = option.long ?? continue;
                                 if (mem.eql(u8, arg, long)) {
                                     if (option.takes_value) {
-                                        arg_i += 1;
-                                        if (args.len <= arg_i) return error.OptionMissingValue;
-
-                                        try option.parse(&result, args[arg_i]);
+                                        const value = after_eql ?? it.next() ?? return error.OptionMissingValue;
+                                        try option.parse(&result, value);
                                     } else {
                                         try option.parse(&result, []u8{});
                                     }
@@ -281,6 +303,11 @@ test "clap.parse.Example" {
         },
         Case {
             .args = [][]const u8 { "--red", "100", "-g", "100", "--blue", "50", },
+            .res = Color { .r = 100, .g = 100, .b = 50 },
+            .err = null,
+        },
+        Case {
+            .args = [][]const u8 { "--red=100", "-g=100", "--blue=50", },
             .res = Color { .r = 100, .g = 100, .b = 50 },
             .err = null,
         },
