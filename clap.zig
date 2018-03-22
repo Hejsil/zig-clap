@@ -20,7 +20,217 @@ pub fn Clap(comptime Result: type) type {
         defaults: Result,
 
         pub fn parse(comptime clap: &const Self, arguments: []const []const u8) !Result {
-            return clap.command.parse(Result, clap.defaults, arguments);
+            return parseCommand(CommandList { .command = clap.command, .prev = null }, clap.defaults, arguments);
+        }
+
+        const CommandList = struct {
+            command: &const Command,
+            prev: ?&const CommandList,
+        };
+
+        fn parseCommand(comptime list: &const CommandList, defaults: &const Result, arguments: []const []const u8) !Result {
+            const command = list.command;
+
+            const Arg = struct {
+                const Kind = enum { Long, Short, Value };
+
+                arg: []const u8,
+                kind: Kind,
+                after_eql: ?[]const u8,
+            };
+
+            const Iterator = struct {
+                index: usize,
+                slice: []const []const u8,
+
+                pub fn next(it: &this) ?[]const u8 {
+                    if (it.index >= it.slice.len)
+                        return null;
+
+                    defer it.index += 1;
+                    return it.slice[it.index];
+                }
+            };
+
+            // NOTE: For now, a bitfield is used to keep track of the required arguments.
+            //       This limits the user to 128 required arguments, which should be more
+            //       than enough.
+            var required = comptime blk: {
+                var required_index : u128 = 0;
+                var required_res : u128 = 0;
+                for (command.arguments) |option| {
+                    if (option.required) {
+                        required_res |= 0x1 << required_index;
+                        required_index += 1;
+                    }
+                }
+
+                break :blk required_res;
+            };
+
+            var result = *defaults;
+
+            var it = Iterator { .index = 0, .slice = arguments };
+            while (it.next()) |item| {
+                const arg_info = blk: {
+                    var arg = item;
+                    var kind = Arg.Kind.Value;
+
+                    if (mem.startsWith(u8, arg, "--")) {
+                        arg = arg[2..];
+                        kind = Arg.Kind.Long;
+                    } else if (mem.startsWith(u8, arg, "-")) {
+                        arg = arg[1..];
+                        kind = Arg.Kind.Short;
+                    }
+
+                    if (kind == Arg.Kind.Value)
+                        break :blk Arg { .arg = arg, .kind = kind, .after_eql = null };
+
+
+                    if (mem.indexOfScalar(u8, arg, '=')) |index| {
+                        break :blk Arg { .arg = arg[0..index], .kind = kind, .after_eql = arg[index + 1..] };
+                    } else {
+                        break :blk Arg { .arg = arg, .kind = kind, .after_eql = null };
+                    }
+                };
+                const arg = arg_info.arg;
+                const kind = arg_info.kind;
+                const after_eql = arg_info.after_eql;
+
+                success: {
+                    switch (kind) {
+                        // TODO: Handle subcommands
+                        Arg.Kind.Value => {
+                            var required_index = usize(0);
+                            inline for (command.arguments) |option| {
+                                defer if (option.required) required_index += 1;
+                                if (option.short != null) continue;
+                                if (option.long  != null) continue;
+
+                                try option.parse(&result, arg);
+                                required = newRequired(option, required, required_index);
+                                break :success;
+                            }
+                        },
+                        Arg.Kind.Short => {
+                            if (arg.len == 0) return error.FoundShortOptionWithNoName;
+                            short_arg_loop: for (arg[0..arg.len - 1]) |short_arg| {
+                                var required_index = usize(0);
+                                inline for (command.arguments) |option| {
+                                    defer if (option.required) required_index += 1;
+                                    const short = option.short ?? continue;
+                                    if (short_arg == short) {
+                                        if (option.takes_value) return error.OptionMissingValue;
+
+                                        *getFieldPtr(Result, &result, option.field) = true;
+                                        required = newRequired(option, required, required_index);
+                                        continue :short_arg_loop;
+                                    }
+                                }
+
+                                return error.InvalidArgument;
+                            }
+
+                            const last_arg = arg[arg.len - 1];
+                            var required_index = usize(0);
+                            inline for (command.arguments) |option| {
+                                defer if (option.required) required_index += 1;
+                                const short = option.short ?? continue;
+
+                                if (last_arg == short) {
+                                    if (option.takes_value) {
+                                        const value = after_eql ?? it.next() ?? return error.OptionMissingValue;
+                                        *getFieldPtr(Result, &result, option.field) = try strToValue(FieldType(Result, option.field), value);
+                                    } else {
+                                        *getFieldPtr(Result, &result, option.field) = true;
+                                    }
+
+                                    required = newRequired(option, required, required_index);
+                                    break :success;
+                                }
+                            }
+                        },
+                        Arg.Kind.Long => {
+                            var required_index = usize(0);
+                            inline for (command.arguments) |option| {
+                                defer if (option.required) required_index += 1;
+                                const long = option.long ?? continue;
+
+                                if (mem.eql(u8, arg, long)) {
+                                    if (option.takes_value) {
+                                        const value = after_eql ?? it.next() ?? return error.OptionMissingValue;
+                                        *getFieldPtr(Result, &result, option.field) = try strToValue(FieldType(Result, option.field), value);
+                                    } else {
+                                        *getFieldPtr(Result, &result, option.field) = true;
+                                    }
+
+                                    required = newRequired(option, required, required_index);
+                                    break :success;
+                                }
+                            }
+                        }
+                    }
+
+                    return error.InvalidArgument;
+                }
+            }
+
+            if (required != 0) {
+                return error.RequiredArgumentWasntHandled;
+            }
+
+            return result;
+        }
+
+        fn FieldType(comptime T: type, comptime field: []const u8) type {
+            var i = usize(0);
+            inline while (i < @memberCount(T)) : (i += 1) {
+                if (mem.eql(u8, @memberName(T, i), field))
+                    return @memberType(T, i);
+            }
+
+            @compileError("Field not found!");
+        }
+
+        fn getFieldPtr(comptime T: type, res: &T, comptime field: []const u8) &FieldType(T, field) {
+            return @intToPtr(&FieldType(T, field), @ptrToInt(res) + @offsetOf(T, field));
+        }
+
+        fn strToValue(comptime T: type, str: []const u8) !T {
+            const TypeId = builtin.TypeId;
+            switch (@typeId(T)) {
+                TypeId.Type, TypeId.Void, TypeId.NoReturn, TypeId.Pointer,
+                TypeId.Array, TypeId.Struct, TypeId.UndefinedLiteral,
+                TypeId.NullLiteral, TypeId.ErrorUnion, TypeId.ErrorSet,
+                TypeId.Union, TypeId.Fn, TypeId.Namespace, TypeId.Block,
+                TypeId.BoundFn, TypeId.ArgTuple, TypeId.Opaque, TypeId.Promise => @compileError("Type not supported!"),
+
+                TypeId.Bool => {
+                    if (mem.eql(u8, "true", str))
+                        return true;
+                    if (mem.eql(u8, "false", str))
+                        return false;
+
+                    return error.CannotParseStringAsBool;
+                },
+                TypeId.Int, TypeId.IntLiteral => return fmt.parseInt(T, str, 10),
+                TypeId.Float, TypeId.FloatLiteral => @compileError("TODO: Implement str to float"),
+                TypeId.Nullable => {
+                    if (mem.eql(u8, "null", str))
+                        return null;
+
+                    return strToValue(T.Child, str);
+                },
+                TypeId.Enum => @compileError("TODO: Implement str to enum"),
+            }
+        }
+
+        fn newRequired(argument: &const Argument, old_required: u128, index: usize) u128 {
+            if (argument.required)
+                return old_required & ~(u128(1) << u7(index));
+
+            return old_required;
         }
 
         pub const Builder = struct {
@@ -81,209 +291,6 @@ pub const Command = struct {
     name: []const u8,
     arguments: []const Argument,
     sub_commands: []const Command,
-
-    pub fn parse(comptime command: &const Command, comptime Result: type, defaults: &const Result, arguments: []const []const u8) !Result {
-        const Arg = struct {
-            const Kind = enum { Long, Short, Value };
-
-            arg: []const u8,
-            kind: Kind,
-            after_eql: ?[]const u8,
-        };
-
-        const Iterator = struct {
-            index: usize,
-            slice: []const []const u8,
-
-            pub fn next(it: &this) ?[]const u8 {
-                if (it.index >= it.slice.len)
-                    return null;
-
-                defer it.index += 1;
-                return it.slice[it.index];
-            }
-        };
-
-        // NOTE: For now, a bitfield is used to keep track of the required arguments.
-        //       This limits the user to 128 required arguments, which should be more
-        //       than enough.
-        var required = comptime blk: {
-            var required_index : u128 = 0;
-            var required_res : u128 = 0;
-            for (command.arguments) |option| {
-                if (option.required) {
-                    required_res |= 0x1 << required_index;
-                    required_index += 1;
-                }
-            }
-
-            break :blk required_res;
-        };
-
-        var result = *defaults;
-
-        var it = Iterator { .index = 0, .slice = arguments };
-        while (it.next()) |item| {
-            const arg_info = blk: {
-                var arg = item;
-                var kind = Arg.Kind.Value;
-
-                if (mem.startsWith(u8, arg, "--")) {
-                    arg = arg[2..];
-                    kind = Arg.Kind.Long;
-                } else if (mem.startsWith(u8, arg, "-")) {
-                    arg = arg[1..];
-                    kind = Arg.Kind.Short;
-                }
-
-                if (kind == Arg.Kind.Value)
-                    break :blk Arg { .arg = arg, .kind = kind, .after_eql = null };
-
-
-                if (mem.indexOfScalar(u8, arg, '=')) |index| {
-                    break :blk Arg { .arg = arg[0..index], .kind = kind, .after_eql = arg[index + 1..] };
-                } else {
-                    break :blk Arg { .arg = arg, .kind = kind, .after_eql = null };
-                }
-            };
-            const arg = arg_info.arg;
-            const kind = arg_info.kind;
-            const after_eql = arg_info.after_eql;
-
-            success: {
-                switch (kind) {
-                    // TODO: Handle subcommands
-                    Arg.Kind.Value => {
-                        var required_index = usize(0);
-                        inline for (command.arguments) |option| {
-                            defer if (option.required) required_index += 1;
-                            if (option.short != null) continue;
-                            if (option.long  != null) continue;
-
-                            try option.parse(&result, arg);
-                            required = newRequired(option, required, required_index);
-                            break :success;
-                        }
-                    },
-                    Arg.Kind.Short => {
-                        if (arg.len == 0) return error.FoundShortOptionWithNoName;
-                        short_arg_loop: for (arg[0..arg.len - 1]) |short_arg| {
-                            var required_index = usize(0);
-                            inline for (command.arguments) |option| {
-                                defer if (option.required) required_index += 1;
-                                const short = option.short ?? continue;
-                                if (short_arg == short) {
-                                    if (option.takes_value) return error.OptionMissingValue;
-
-                                    *getFieldPtr(Result, &result, option.field) = true;
-                                    required = newRequired(option, required, required_index);
-                                    continue :short_arg_loop;
-                                }
-                            }
-
-                            return error.InvalidArgument;
-                        }
-
-                        const last_arg = arg[arg.len - 1];
-                        var required_index = usize(0);
-                        inline for (command.arguments) |option| {
-                            defer if (option.required) required_index += 1;
-                            const short = option.short ?? continue;
-
-                            if (last_arg == short) {
-                                if (option.takes_value) {
-                                    const value = after_eql ?? it.next() ?? return error.OptionMissingValue;
-                                    *getFieldPtr(Result, &result, option.field) = try strToValue(FieldType(Result, option.field), value);
-                                } else {
-                                    *getFieldPtr(Result, &result, option.field) = true;
-                                }
-
-                                required = newRequired(option, required, required_index);
-                                break :success;
-                            }
-                        }
-                    },
-                    Arg.Kind.Long => {
-                        var required_index = usize(0);
-                        inline for (command.arguments) |option| {
-                            defer if (option.required) required_index += 1;
-                            const long = option.long ?? continue;
-
-                            if (mem.eql(u8, arg, long)) {
-                                if (option.takes_value) {
-                                    const value = after_eql ?? it.next() ?? return error.OptionMissingValue;
-                                    *getFieldPtr(Result, &result, option.field) = try strToValue(FieldType(Result, option.field), value);
-                                } else {
-                                    *getFieldPtr(Result, &result, option.field) = true;
-                                }
-
-                                required = newRequired(option, required, required_index);
-                                break :success;
-                            }
-                        }
-                    }
-                }
-
-                return error.InvalidArgument;
-            }
-        }
-
-        if (required != 0) {
-            return error.RequiredArgumentWasntHandled;
-        }
-
-        return result;
-    }
-
-    fn FieldType(comptime Result: type, comptime field: []const u8) type {
-        var i = usize(0);
-        inline while (i < @memberCount(Result)) : (i += 1) {
-            if (mem.eql(u8, @memberName(Result, i), field))
-                return @memberType(Result, i);
-        }
-
-        @compileError("Field not found!");
-    }
-
-    fn getFieldPtr(comptime Result: type, res: &Result, comptime field: []const u8) &FieldType(Result, field) {
-        return @intToPtr(&FieldType(Result, field), @ptrToInt(res) + @offsetOf(Result, field));
-    }
-
-    fn strToValue(comptime Result: type, str: []const u8) !Result {
-        const TypeId = builtin.TypeId;
-        switch (@typeId(Result)) {
-            TypeId.Type, TypeId.Void, TypeId.NoReturn, TypeId.Pointer,
-            TypeId.Array, TypeId.Struct, TypeId.UndefinedLiteral,
-            TypeId.NullLiteral, TypeId.ErrorUnion, TypeId.ErrorSet,
-            TypeId.Union, TypeId.Fn, TypeId.Namespace, TypeId.Block,
-            TypeId.BoundFn, TypeId.ArgTuple, TypeId.Opaque, TypeId.Promise => @compileError("Type not supported!"),
-
-            TypeId.Bool => {
-                if (mem.eql(u8, "true", str))
-                    return true;
-                if (mem.eql(u8, "false", str))
-                    return false;
-
-                return error.CannotParseStringAsBool;
-            },
-            TypeId.Int, TypeId.IntLiteral => return fmt.parseInt(Result, str, 10),
-            TypeId.Float, TypeId.FloatLiteral => @compileError("TODO: Implement str to float"),
-            TypeId.Nullable => {
-                if (mem.eql(u8, "null", str))
-                    return null;
-
-                return strToValue(Result.Child, str);
-            },
-            TypeId.Enum => @compileError("TODO: Implement str to enum"),
-        }
-    }
-
-    fn newRequired(argument: &const Argument, old_required: u128, index: usize) u128 {
-        if (argument.required)
-            return old_required & ~(u128(1) << u7(index));
-
-        return old_required;
-    }
 
     pub const Builder = struct {
         result: Command,
