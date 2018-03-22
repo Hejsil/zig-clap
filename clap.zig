@@ -51,9 +51,9 @@ pub fn Clap(comptime Result: type) type {
                 return res;
             }
 
-            pub fn version(builder: &const Builder, version: []const u8) Builder {
+            pub fn version(builder: &const Builder, version_str: []const u8) Builder {
                 var res = *builder;
-                res.result.author = version;
+                res.result.author = version_str;
                 return res;
             }
 
@@ -267,7 +267,7 @@ pub const Command = struct {
                 return error.CannotParseStringAsBool;
             },
             TypeId.Int, TypeId.IntLiteral => return fmt.parseInt(Result, str, 10),
-            TypeId.Float, TypeId.FloatLiteral => return fmt.parseFloat(Result, str),
+            TypeId.Float, TypeId.FloatLiteral => @compileError("TODO: Implement str to float"),
             TypeId.Nullable => {
                 if (mem.eql(u8, "null", str))
                     return null;
