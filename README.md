@@ -13,4 +13,5 @@ See [example](example.zig).
   * Chaining `-abc` where `a` and `b` does not take values.
 * Long arguments `--long`
 * Supports both passing values using spacing and `=` (`-a 100`, `-a=100`)
-  * Both work with chaining (`-ba 100`, `-ba=100`)
+  * Short args also support passing values with no spacing or `=` (`-a100`)
+  * This all works with chaining (`-ba 100`, `-ba=100`, `-ba100`)

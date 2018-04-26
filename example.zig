@@ -22,12 +22,17 @@ const Options = struct {
 // a = 1
 // zig-clap> .\example.exe -pa 1
 // a = 1
-// zig-clap> .\example.exe -pd friend
-// d = friend
-// zig-clap> .\example.exe -pd=friend
-// d = friend
-// zig-clap> .\example.exe -p -d=friend
-// d = friend
+// zig-clap> .\example.exe -pd V1
+// d = V1
+// zig-clap> .\example.exe -pd=V2
+// d = V2
+// zig-clap> .\example.exe -p -d=V3
+// d = V3
+// zig-clap> .\example.exe -pdV=4
+// d = V=4
+// zig-clap> .\example.exe -p -dV=5
+// d = V=5
+
 pub fn main() !void {
     const parser = comptime Clap(Options).init(
             Options {

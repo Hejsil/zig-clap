@@ -162,11 +162,16 @@ pub fn Clap(comptime Result: type) type {
 
                                     if (has_right_index) {
                                         if (short_arg == short) {
-                                            if (option.takes_value) |_| return error.OptionMissingValue;
+                                            if (option.takes_value) |parser| {
+                                                const value = arg[i + 1..];
+                                                try parser.parse(&@field(result, option.field), value);
+                                                break :success;
+                                            } else {
+                                                @field(result, option.field) = true;
+                                                continue :short_arg_loop;
+                                            }
 
-                                            @field(result, option.field) = true;
                                             required = newRequired(option, required, required_index);
-                                            continue :short_arg_loop;
                                         }
                                     }
                                 }
@@ -420,10 +425,12 @@ test "clap.parse: short" {
     testNoErr(clap, [][]const u8 { "-a" },       default.with("a", true));
     testNoErr(clap, [][]const u8 { "-a", "-b" }, default.with("a", true).with("b",  true));
     testNoErr(clap, [][]const u8 { "-i=100" },   default.with("int", 100));
+    testNoErr(clap, [][]const u8 { "-i100" },   default.with("int", 100));
     testNoErr(clap, [][]const u8 { "-i", "100" },   default.with("int", 100));
     testNoErr(clap, [][]const u8 { "-ab" },      default.with("a", true).with("b",  true));
     testNoErr(clap, [][]const u8 { "-abi", "100" }, default.with("a", true).with("b", true).with("int",  100));
     testNoErr(clap, [][]const u8 { "-abi=100" }, default.with("a", true).with("b", true).with("int",  100));
+    testNoErr(clap, [][]const u8 { "-abi100" }, default.with("a", true).with("b", true).with("int",  100));
 }
 
 test "clap.parse: long" {
