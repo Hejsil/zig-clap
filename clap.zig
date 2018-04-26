@@ -403,7 +403,7 @@ test "clap.parse: short" {
     testNoErr(clap, [][]const u8 { "-i=100" },   default.with("int", 100));
     testNoErr(clap, [][]const u8 { "-i", "100" },   default.with("int", 100));
     testNoErr(clap, [][]const u8 { "-ab" },      default.with("a", true).with("b",  true));
-    testNoErr(clap, [][]const u8 { "-abi 100" }, default.with("a", true).with("b", true).with("int",  100));
+    testNoErr(clap, [][]const u8 { "-abi", "100" }, default.with("a", true).with("b", true).with("int",  100));
     testNoErr(clap, [][]const u8 { "-abi=100" }, default.with("a", true).with("b", true).with("int",  100));
 }
 
