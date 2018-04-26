@@ -19,6 +19,23 @@ pub fn Clap(comptime Result: type) type {
         command: Command,
         defaults: Result,
 
+        pub fn init(defaults: &const Result) Self {
+            return Self {
+                .program_name = "",
+                .author = "",
+                .version = "",
+                .about = "",
+                .command = Command.init(""),
+                .defaults = *defaults,
+            };
+        }
+
+        pub fn with(parser: &const Self, comptime field: []const u8, value: var) Self {
+            var res = *parser;
+            @field(res, field) = value;
+            return res;
+        }
+
         pub fn parse(comptime clap: &const Self, arguments: []const []const u8) !Result {
             return parseCommand(CommandList { .command = clap.command, .prev = null }, clap.defaults, arguments);
         }
@@ -108,12 +125,18 @@ pub fn Clap(comptime Result: type) type {
                                 if (option.short != null) continue;
                                 if (option.long  != null) continue;
 
-                                try option.parse(&result, arg);
+                                if (option.takes_value) |parser| {
+                                    try parser.parse(&@field(result, option.field), arg);
+                                } else {
+                                    @field(result, option.field) = true;
+                                }
+
                                 required = newRequired(option, required, required_index);
                                 break :success;
                             }
                         },
                         Arg.Kind.Short => {
+                            const arg_len = arg.len;
                             if (arg.len == 0) return error.FoundShortOptionWithNoName;
                             short_arg_loop: for (arg[0..arg.len - 1]) |short_arg| {
                                 var required_index = usize(0);
@@ -121,9 +144,9 @@ pub fn Clap(comptime Result: type) type {
                                     defer if (option.required) required_index += 1;
                                     const short = option.short ?? continue;
                                     if (short_arg == short) {
-                                        if (option.takes_value) return error.OptionMissingValue;
+                                        if (option.takes_value) |_| return error.OptionMissingValue;
 
-                                        *getFieldPtr(Result, &result, option.field) = true;
+                                        @field(result, option.field) = true;
                                         required = newRequired(option, required, required_index);
                                         continue :short_arg_loop;
                                     }
@@ -139,11 +162,11 @@ pub fn Clap(comptime Result: type) type {
                                 const short = option.short ?? continue;
 
                                 if (last_arg == short) {
-                                    if (option.takes_value) {
+                                    if (option.takes_value) |parser| {
                                         const value = after_eql ?? it.next() ?? return error.OptionMissingValue;
-                                        *getFieldPtr(Result, &result, option.field) = try strToValue(FieldType(Result, option.field), value);
+                                        try parser.parse(&@field(result, option.field), value);
                                     } else {
-                                        *getFieldPtr(Result, &result, option.field) = true;
+                                        @field(result, option.field) = true;
                                     }
 
                                     required = newRequired(option, required, required_index);
@@ -158,11 +181,11 @@ pub fn Clap(comptime Result: type) type {
                                 const long = option.long ?? continue;
 
                                 if (mem.eql(u8, arg, long)) {
-                                    if (option.takes_value) {
+                                    if (option.takes_value) |parser| {
                                         const value = after_eql ?? it.next() ?? return error.OptionMissingValue;
-                                        *getFieldPtr(Result, &result, option.field) = try strToValue(FieldType(Result, option.field), value);
+                                        try parser.parse(&@field(result, option.field), value);
                                     } else {
-                                        *getFieldPtr(Result, &result, option.field) = true;
+                                        @field(result, option.field) = true;
                                     }
 
                                     required = newRequired(option, required, required_index);
@@ -183,106 +206,12 @@ pub fn Clap(comptime Result: type) type {
             return result;
         }
 
-        fn FieldType(comptime T: type, comptime field: []const u8) type {
-            var i = usize(0);
-            inline while (i < @memberCount(T)) : (i += 1) {
-                if (mem.eql(u8, @memberName(T, i), field))
-                    return @memberType(T, i);
-            }
-
-            @compileError("Field not found!");
-        }
-
-        fn getFieldPtr(comptime T: type, res: &T, comptime field: []const u8) &FieldType(T, field) {
-            return @intToPtr(&FieldType(T, field), @ptrToInt(res) + @offsetOf(T, field));
-        }
-
-        fn strToValue(comptime T: type, str: []const u8) !T {
-            const TypeId = builtin.TypeId;
-            switch (@typeId(T)) {
-                TypeId.Type, TypeId.Void, TypeId.NoReturn, TypeId.Pointer,
-                TypeId.Array, TypeId.Struct, TypeId.UndefinedLiteral,
-                TypeId.NullLiteral, TypeId.ErrorUnion, TypeId.ErrorSet,
-                TypeId.Union, TypeId.Fn, TypeId.Namespace, TypeId.Block,
-                TypeId.BoundFn, TypeId.ArgTuple, TypeId.Opaque, TypeId.Promise => @compileError("Type not supported!"),
-
-                TypeId.Bool => {
-                    if (mem.eql(u8, "true", str))
-                        return true;
-                    if (mem.eql(u8, "false", str))
-                        return false;
-
-                    return error.CannotParseStringAsBool;
-                },
-                TypeId.Int, TypeId.IntLiteral => return fmt.parseInt(T, str, 10),
-                TypeId.Float, TypeId.FloatLiteral => @compileError("TODO: Implement str to float"),
-                TypeId.Nullable => {
-                    if (mem.eql(u8, "null", str))
-                        return null;
-
-                    return strToValue(T.Child, str);
-                },
-                TypeId.Enum => @compileError("TODO: Implement str to enum"),
-            }
-        }
-
         fn newRequired(argument: &const Argument, old_required: u128, index: usize) u128 {
             if (argument.required)
                 return old_required & ~(u128(1) << u7(index));
 
             return old_required;
         }
-
-        pub const Builder = struct {
-            result: Self,
-
-            pub fn init(defaults: &const Result) Builder {
-                return Builder {
-                    .result = Self {
-                        .program_name = "",
-                        .author = "",
-                        .version = "",
-                        .about = "",
-                        .command = Command.Builder.init("").build(),
-                        .defaults = *defaults,
-                    }
-                };
-            }
-
-            pub fn programName(builder: &const Builder, name: []const u8) Builder {
-                var res = *builder;
-                res.result.program_name = name;
-                return res;
-            }
-
-            pub fn author(builder: &const Builder, name: []const u8) Builder {
-                var res = *builder;
-                res.result.author = name;
-                return res;
-            }
-
-            pub fn version(builder: &const Builder, version_str: []const u8) Builder {
-                var res = *builder;
-                res.result.author = version_str;
-                return res;
-            }
-
-            pub fn about(builder: &const Builder, text: []const u8) Builder {
-                var res = *builder;
-                res.result.about = text;
-                return res;
-            }
-
-            pub fn command(builder: &const Builder, cmd: &const Command) Builder {
-                var res = *builder;
-                res.result.command = *cmd;
-                return res;
-            }
-
-            pub fn build(builder: &const Builder) Self {
-                return builder.result;
-            }
-        };
     };
 }
 
@@ -292,242 +221,245 @@ pub const Command = struct {
     arguments: []const Argument,
     sub_commands: []const Command,
 
-    pub const Builder = struct {
-        result: Command,
+    pub fn init(command_name: []const u8) Command {
+        return Command {
+            .field = null,
+            .name = command_name,
+            .arguments = []Argument{ },
+            .sub_commands = []Command{ },
+        };
+    }
 
-        pub fn init(command_name: []const u8) Builder {
-            return Builder {
-                .result = Command {
-                    .field = null,
-                    .name = command_name,
-                    .arguments = []Argument{ },
-                    .sub_commands = []Command{ },
-                }
-            };
-        }
+    pub fn with(command: &const Command, comptime field: []const u8, value: var) Command {
+        var res = *command;
+        @field(res, field) = value;
+        return res;
+    }
+};
 
-        pub fn field(builder: &const Builder, field_name: []const u8) Builder {
-            var res = *builder;
-            res.result.field = field_name;
-            return res;
-        }
+const Parser = struct {
+    const UnsafeFunction = &const void;
 
-        pub fn name(builder: &const Builder, n: []const u8) Builder {
-            var res = *builder;
-            res.result.name = n;
-            return res;
-        }
+    FieldType: type,
+    Errors: type,
+    func: UnsafeFunction,
 
-        pub fn arguments(builder: &const Builder, args: []const Argument) Builder {
-            var res = *builder;
-            res.result.arguments = args;
-            return res;
-        }
+    fn init(comptime FieldType: type, comptime Errors: type, func: parseFunc(FieldType, Errors)) Parser {
+        return Parser {
+            .FieldType = FieldType,
+            .Errors = Errors,
+            .func = @ptrCast(UnsafeFunction, func),
+        };
+    }
 
-        pub fn subCommands(builder: &const Builder, commands: []const Command) Builder {
-            var res = *builder;
-            res.result.commands = commands;
-            return res;
-        }
+    fn parse(comptime parser: Parser, field_ptr: takePtr(parser.FieldType), arg: []const u8) parser.Errors!void {
+        return @ptrCast(parseFunc(parser.FieldType, parser.Errors), parser.func)(field_ptr, arg);
+    }
 
-        pub fn build(builder: &const Builder) Command {
-            return builder.result;
-        }
-    };
+    // TODO: This is a workaround, since we don't have pointer reform yet.
+    fn takePtr(comptime T: type) type { return &T; }
+
+    fn parseFunc(comptime FieldType: type, comptime Errors: type) type {
+        return fn(&FieldType, []const u8) Errors!void;
+    }
 };
 
 pub const Argument = struct {
     field: []const u8,
     help: []const u8,
-    takes_value: bool,
+    takes_value: ?Parser,
     required: bool,
     short: ?u8,
     long: ?[]const u8,
 
-    pub const Builder = struct {
-        result: Argument,
+    pub fn field(field_name: []const u8) Argument {
+        return Argument {
+            .field = field_name,
+            .help = "",
+            .takes_value = null,
+            .required = false,
+            .short = null,
+            .long = null,
+        };
+    }
 
-        pub fn init(field_name: []const u8) Builder {
-            return Builder {
-                .result = Argument {
-                    .field = field_name,
-                    .help = "",
-                    .takes_value = false,
-                    .required = false,
-                    .short = null,
-                    .long = null,
-                }
-            };
-        }
+    pub fn arg(s: []const u8) Argument {
+        return Argument {
+            .field = s,
+            .help = "",
+            .takes_value = null,
+            .required = false,
+            .short = if (s.len == 1) s[0] else null,
+            .long = if (s.len != 1) s else null,
+        };
+    }
 
-        pub fn field(builder: &const Builder, field_name: []const u8) Builder {
-            var res = *builder;
-            res.result.field = field_name;
-            return res;
-        }
-
-        pub fn help(builder: &const Builder, text: []const u8) Builder {
-            var res = *builder;
-            res.result.help = text;
-            return res;
-        }
-
-        pub fn takesValue(builder: &const Builder, takes_value: bool) Builder {
-            var res = *builder;
-            res.result.takes_value = takes_value;
-            return res;
-        }
-
-        pub fn required(builder: &const Builder, is_required: bool) Builder {
-            var res = *builder;
-            res.result.required = is_required;
-            return res;
-        }
-
-        pub fn short(builder: &const Builder, name: u8) Builder {
-            var res = *builder;
-            res.result.short = name;
-            return res;
-        }
-
-        pub fn long(builder: &const Builder, name: []const u8) Builder {
-            var res = *builder;
-            res.result.long = name;
-            return res;
-        }
-
-        pub fn build(builder: &const Builder) Argument {
-            return builder.result;
-        }
-    };
+    pub fn with(argument: &const Argument, comptime field_name: []const u8, value: var) Argument {
+        var res = *argument;
+        @field(res, field_name) = value;
+        return res;
+    }
 };
 
-test "clap.parse.Example" {
-    const Color = struct {
-        r: u8, g: u8, b: u8, max: bool
-    };
+pub const parse = struct {
+    pub fn int(comptime Int: type, comptime radix: u8) Parser {
+        const func = struct {
+            fn i(field_ptr: &Int, arg: []const u8) !void {
+                *field_ptr = try fmt.parseInt(Int, arg, radix);
+            }
+        }.i;
+        return Parser.init(
+            Int,
+            @typeOf(func).ReturnType.ErrorSet,
+            func
+        );
+    }
 
-    const Case = struct { args: []const []const u8, res: Color, err: ?error };
-    const cases = []Case {
-        Case {
-            .args = [][]const u8 { "-r", "100", "-g", "100", "-b", "100", },
-            .res = Color { .r = 100, .g = 100, .b = 100, .max = false },
-            .err = null,
-        },
-        Case {
-            .args = [][]const u8 { "--red", "100", "-g", "100", "--blue", "50", },
-            .res = Color { .r = 100, .g = 100, .b = 50, .max = false },
-            .err = null,
-        },
-        Case {
-            .args = [][]const u8 { "--red=100", "-g=100", "--blue=50", },
-            .res = Color { .r = 100, .g = 100, .b = 50, .max = false },
-            .err = null,
-        },
-        Case {
-            .args = [][]const u8 { "-g", "200", "--blue", "100", "--red", "100", },
-            .res = Color { .r = 100, .g = 200, .b = 100, .max = false },
-            .err = null,
-        },
-        Case {
-            .args = [][]const u8 { "-r", "200", "-r", "255" },
-            .res = Color { .r = 255, .g = 0, .b = 0, .max = false },
-            .err = null,
-        },
-        Case {
-            .args = [][]const u8 { "-mr", "100" },
-            .res = Color { .r = 100, .g = 0, .b = 0, .max = true },
-            .err = null,
-        },
-        Case {
-            .args = [][]const u8 { "-mr=100" },
-            .res = Color { .r = 100, .g = 0, .b = 0, .max = true },
-            .err = null,
-        },
-        Case {
-            .args = [][]const u8 { "-g", "200", "-b", "255" },
-            .res = Color { .r = 0, .g = 0, .b = 0, .max = false },
-            .err = error.RequiredArgumentWasntHandled,
-        },
-        Case {
-            .args = [][]const u8 { "-p" },
-            .res = Color { .r = 0, .g = 0, .b = 0, .max = false },
-            .err = error.InvalidArgument,
-        },
-        Case {
-            .args = [][]const u8 { "-g" },
-            .res = Color { .r = 0, .g = 0, .b = 0, .max = false },
-            .err = error.OptionMissingValue,
-        },
-        Case {
-            .args = [][]const u8 { "-" },
-            .res = Color { .r = 0, .g = 0, .b = 0, .max = false },
-            .err = error.FoundShortOptionWithNoName,
-        },
-        Case {
-            .args = [][]const u8 { "-rg", "100" },
-            .res = Color { .r = 0, .g = 0, .b = 0, .max = false },
-            .err = error.OptionMissingValue,
-        },
-    };
+    const string = Parser.init(
+        []const u8,
+        error{},
+        struct {
+            fn s(field_ptr: &[]const u8, arg: []const u8) (error{}!void) {
+                *field_ptr = arg;
+            }
+        }.s
+    );
 
-    const clap = comptime Clap(Color).Builder
-        .init(
-            Color {
-                .r = 0,
-                .b = 0,
-                .g = 0,
-                .max = false,
+    const boolean = Parser.init(
+        []const u8,
+        error{InvalidBoolArg},
+        struct {
+            fn b(comptime T: type, field_ptr: &T, arg: []const u8) (error{InvalidBoolArg}!void) {
+                if (mem.eql(u8, arg, "true")) {
+                    *field_ptr = true;
+                } else if (mem.eql(u8, arg, "false")) {
+                    *field_ptr = false;
+                } else {
+                    return error.InvalidBoolArg;
+                }
+            }
+        }.b
+    );
+};
+
+
+const Options = struct {
+    str: []const u8,
+    int: i64,
+    uint: u64,
+    a: bool,
+    b: bool,
+    cc: bool,
+
+    pub fn with(op: &const Options, comptime field: []const u8, value: var) Options {
+        var res = *op;
+        @field(res, field) = value;
+        return res;
+    }
+};
+
+const default = Options {
+    .str = "",
+    .int = 0,
+    .uint = 0,
+    .a = false,
+    .b = false,
+    .cc = false,
+};
+
+fn testNoErr(comptime clap: &const Clap(Options), args: []const []const u8, expected: &const Options) void {
+    const actual = clap.parse(args) catch |err| { debug.warn("{}\n", @errorName(err)); unreachable; };
+    assert(mem.eql(u8, expected.str, actual.str));
+    assert(expected.int == actual.int);
+    assert(expected.uint == actual.uint);
+    assert(expected.a == actual.a);
+    assert(expected.b == actual.b);
+    assert(expected.cc == actual.cc);
+}
+
+fn testErr(args: []const []const u8, expected: error) void {
+    if (clap.parse(case.args)) |actual| {
+        unreachable;
+    } else |err| {
+        assert(err == expected);
+    }
+}
+
+test "clap.parse: short" {
+    @breakpoint();
+    const clap = comptime Clap(Options).init(default).with("command",
+        Command.init("").with("arguments",
+            []Argument {
+                Argument.arg("a"),
+                Argument.arg("b"),
+                Argument.field("int")
+                    .with("short", 'i')
+                    .with("takes_value", parse.int(i64, 10))
             }
         )
-        .command(
-            Command.Builder
-                .init("color")
-                .arguments(
-                    []Argument {
-                        Argument.Builder
-                            .init("r")
-                            .help("The amount of red in our color")
-                            .short('r')
-                            .long("red")
-                            .takesValue(true)
-                            .required(true)
-                            .build(),
-                        Argument.Builder
-                            .init("g")
-                            .help("The amount of green in our color")
-                            .short('g')
-                            .long("green")
-                            .takesValue(true)
-                            .build(),
-                        Argument.Builder
-                            .init("b")
-                            .help("The amount of blue in our color")
-                            .short('b')
-                            .long("blue")
-                            .takesValue(true)
-                            .build(),
-                        Argument.Builder
-                            .init("max")
-                            .help("Set all values to max")
-                            .short('m')
-                            .long("max")
-                            .build(),
-                    }
-                )
-                .build()
-        )
-        .build();
+    );
 
-    for (cases) |case, i| {
-        if (clap.parse(case.args)) |res| {
-            assert(case.err == null);
-            assert(res.r == case.res.r);
-            assert(res.g == case.res.g);
-            assert(res.b == case.res.b);
-            assert(res.max == case.res.max);
-        } else |err| {
-            assert(err == ??case.err);
-        }
-    }
+    testNoErr(clap, [][]const u8 { "-a" },       default.with("a", true));
+    testNoErr(clap, [][]const u8 { "-a", "-b" }, default.with("a", true).with("b",  true));
+    testNoErr(clap, [][]const u8 { "-i=100" },   default.with("int", 100));
+    testNoErr(clap, [][]const u8 { "-i", "100" },   default.with("int", 100));
+    testNoErr(clap, [][]const u8 { "-ab" },      default.with("a", true).with("b",  true));
+    testNoErr(clap, [][]const u8 { "-abi 100" }, default.with("a", true).with("b", true).with("int",  100));
+    testNoErr(clap, [][]const u8 { "-abi=100" }, default.with("a", true).with("b", true).with("int",  100));
+}
+
+test "clap.parse: long" {
+    @breakpoint();
+    const clap = comptime Clap(Options).init(default).with("command",
+        Command.init("").with("arguments",
+            []Argument {
+                Argument.arg("cc"),
+                Argument.arg("int").with("takes_value", parse.int(i64, 10)),
+                Argument.arg("uint").with("takes_value", parse.int(u64, 10)),
+                Argument.arg("str").with("takes_value", parse.string),
+            }
+        )
+    );
+
+    testNoErr(clap, [][]const u8 { "--cc" },         default.with("cc",  true));
+    testNoErr(clap, [][]const u8 { "--int", "100" }, default.with("int",  100));
+}
+
+test "clap.parse: value bool" {
+    @breakpoint();
+    const clap = comptime Clap(Options).init(default).with("command",
+        Command.init("").with("arguments",
+            []Argument {
+                Argument.field("a"),
+            }
+        )
+    );
+
+    testNoErr(clap, [][]const u8 { "Hello World!" }, default.with("a",  true));
+}
+
+test "clap.parse: value str" {
+    @breakpoint();
+    const clap = comptime Clap(Options).init(default).with("command",
+        Command.init("").with("arguments",
+            []Argument {
+                Argument.field("str").with("takes_value", parse.string),
+            }
+        )
+    );
+
+    testNoErr(clap, [][]const u8 { "Hello World!" }, default.with("str", "Hello World!"));
+}
+
+test "clap.parse: value int" {
+    @breakpoint();
+    const clap = comptime Clap(Options).init(default).with("command",
+        Command.init("").with("arguments",
+            []Argument {
+                Argument.field("int").with("takes_value", parse.int(i64, 10)),
+            }
+        )
+    );
+
+    testNoErr(clap, [][]const u8 { "100" }, default.with("int", 100));
 }
