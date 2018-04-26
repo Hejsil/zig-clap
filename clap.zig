@@ -53,19 +53,31 @@ pub fn Clap(comptime Result: type) type {
 
                 arg: []const u8,
                 kind: Kind,
-                after_eql: ?[]const u8,
             };
 
             const Iterator = struct {
                 index: usize,
                 slice: []const []const u8,
 
+                const Pair = struct {
+                    value: []const u8,
+                    index: usize,
+                };
+
                 pub fn next(it: &this) ?[]const u8 {
+                    const res = it.nextWithIndex() ?? return null;
+                    return res.value;
+                }
+
+                pub fn nextWithIndex(it: &this) ?Pair {
                     if (it.index >= it.slice.len)
                         return null;
 
                     defer it.index += 1;
-                    return it.slice[it.index];
+                    return Pair {
+                        .value = it.slice[it.index],
+                        .index = it.index,
+                    };
                 }
             };
 
@@ -88,9 +100,9 @@ pub fn Clap(comptime Result: type) type {
             var result = *defaults;
 
             var it = Iterator { .index = 0, .slice = arguments };
-            while (it.next()) |item| {
+            while (it.nextWithIndex()) |item| {
                 const arg_info = blk: {
-                    var arg = item;
+                    var arg = item.value;
                     var kind = Arg.Kind.Value;
 
                     if (mem.startsWith(u8, arg, "--")) {
@@ -101,71 +113,79 @@ pub fn Clap(comptime Result: type) type {
                         kind = Arg.Kind.Short;
                     }
 
-                    if (kind == Arg.Kind.Value)
-                        break :blk Arg { .arg = arg, .kind = kind, .after_eql = null };
-
-
-                    if (mem.indexOfScalar(u8, arg, '=')) |index| {
-                        break :blk Arg { .arg = arg[0..index], .kind = kind, .after_eql = arg[index + 1..] };
-                    } else {
-                        break :blk Arg { .arg = arg, .kind = kind, .after_eql = null };
-                    }
+                    break :blk Arg { .arg = arg, .kind = kind };
                 };
                 const arg = arg_info.arg;
+                const arg_index = item.index;
                 const kind = arg_info.kind;
-                const after_eql = arg_info.after_eql;
+                const eql_index = mem.indexOfScalar(u8, arg, '=');
 
                 success: {
+                    // TODO: Revert a lot of if statements when inline loop compiler bugs have been fixed
                     switch (kind) {
                         // TODO: Handle subcommands
                         Arg.Kind.Value => {
                             var required_index = usize(0);
                             inline for (command.arguments) |option| {
                                 defer if (option.required) required_index += 1;
+
                                 if (option.short != null) continue;
                                 if (option.long  != null) continue;
+                                const has_right_index = if (option.index) |index| index == it.index else true;
 
-                                if (option.takes_value) |parser| {
-                                    try parser.parse(&@field(result, option.field), arg);
-                                } else {
-                                    @field(result, option.field) = true;
+                                if (has_right_index) {
+                                    if (option.takes_value) |parser| {
+                                        try parser.parse(&@field(result, option.field), arg);
+                                    } else {
+                                        @field(result, option.field) = true;
+                                    }
+
+                                    required = newRequired(option, required, required_index);
+                                    break :success;
                                 }
-
-                                required = newRequired(option, required, required_index);
-                                break :success;
                             }
                         },
                         Arg.Kind.Short => {
-                            const arg_len = arg.len;
-                            if (arg.len == 0) return error.FoundShortOptionWithNoName;
-                            short_arg_loop: for (arg[0..arg.len - 1]) |short_arg| {
+                            if (arg.len == 0) return error.InvalidArg;
+
+                            const end = (eql_index ?? arg.len) - 1;
+
+                            short_arg_loop:
+                            for (arg[0..end]) |short_arg, i| {
                                 var required_index = usize(0);
+
                                 inline for (command.arguments) |option| {
                                     defer if (option.required) required_index += 1;
-                                    const short = option.short ?? continue;
-                                    if (short_arg == short) {
-                                        if (option.takes_value) |_| return error.OptionMissingValue;
 
-                                        @field(result, option.field) = true;
-                                        required = newRequired(option, required, required_index);
-                                        continue :short_arg_loop;
+                                    const short = option.short ?? continue;
+                                    const has_right_index = if (option.index) |index| index == arg_index else true;
+
+                                    if (has_right_index) {
+                                        if (short_arg == short) {
+                                            if (option.takes_value) |_| return error.OptionMissingValue;
+
+                                            @field(result, option.field) = true;
+                                            required = newRequired(option, required, required_index);
+                                            continue :short_arg_loop;
+                                        }
                                     }
                                 }
-
-                                return error.InvalidArgument;
                             }
 
-                            const last_arg = arg[arg.len - 1];
+                            const last_arg = arg[end];
                             var required_index = usize(0);
                             inline for (command.arguments) |option| {
                                 defer if (option.required) required_index += 1;
-                                const short = option.short ?? continue;
 
-                                if (last_arg == short) {
+                                const short = option.short ?? continue;
+                                const has_right_index = if (option.index) |index| index == arg_index else true;
+
+                                if (has_right_index and last_arg == short) {
                                     if (option.takes_value) |parser| {
-                                        const value = after_eql ?? it.next() ?? return error.OptionMissingValue;
+                                        const value = if (eql_index) |index| arg[index + 1..] else it.next() ?? return error.ArgMissingValue;
                                         try parser.parse(&@field(result, option.field), value);
                                     } else {
+                                        if (eql_index) |_| return error.ArgTakesNoValue;
                                         @field(result, option.field) = true;
                                     }
 
@@ -178,11 +198,13 @@ pub fn Clap(comptime Result: type) type {
                             var required_index = usize(0);
                             inline for (command.arguments) |option| {
                                 defer if (option.required) required_index += 1;
-                                const long = option.long ?? continue;
 
-                                if (mem.eql(u8, arg, long)) {
+                                const long = option.long ?? continue;
+                                const has_right_index = if (option.index) |index| index == arg_index else true;
+
+                                if (has_right_index and mem.eql(u8, arg, long)) {
                                     if (option.takes_value) |parser| {
-                                        const value = after_eql ?? it.next() ?? return error.OptionMissingValue;
+                                        const value = if (eql_index) |index| arg[index + 1..] else it.next() ?? return error.ArgMissingValue;
                                         try parser.parse(&@field(result, option.field), value);
                                     } else {
                                         @field(result, option.field) = true;
@@ -195,12 +217,12 @@ pub fn Clap(comptime Result: type) type {
                         }
                     }
 
-                    return error.InvalidArgument;
+                    return error.InvalidArg;
                 }
             }
 
             if (required != 0) {
-                return error.RequiredArgumentWasntHandled;
+                return error.RequiredArgNotHandled;
             }
 
             return result;
@@ -271,6 +293,7 @@ pub const Argument = struct {
     required: bool,
     short: ?u8,
     long: ?[]const u8,
+    index: ?usize,
 
     pub fn field(field_name: []const u8) Argument {
         return Argument {
@@ -280,18 +303,14 @@ pub const Argument = struct {
             .required = false,
             .short = null,
             .long = null,
+            .index = null,
         };
     }
 
     pub fn arg(s: []const u8) Argument {
-        return Argument {
-            .field = s,
-            .help = "",
-            .takes_value = null,
-            .required = false,
-            .short = if (s.len == 1) s[0] else null,
-            .long = if (s.len != 1) s else null,
-        };
+        return Argument.field(s)
+            .with("short", if (s.len == 1) s[0] else null)
+            .with("long", if (s.len != 1) s else null);
     }
 
     pub fn with(argument: &const Argument, comptime field_name: []const u8, value: var) Argument {
@@ -377,8 +396,8 @@ fn testNoErr(comptime clap: &const Clap(Options), args: []const []const u8, expe
     assert(expected.cc == actual.cc);
 }
 
-fn testErr(args: []const []const u8, expected: error) void {
-    if (clap.parse(case.args)) |actual| {
+fn testErr(comptime clap: &const Clap(Options), args: []const []const u8, expected: error) void {
+    if (clap.parse(args)) |actual| {
         unreachable;
     } else |err| {
         assert(err == expected);
@@ -457,4 +476,18 @@ test "clap.parse: value int" {
     );
 
     testNoErr(clap, [][]const u8 { "100" }, default.with("int", 100));
+}
+
+test "clap.parse: index" {
+        const clap = comptime Clap(Options).init(default).with("command",
+        Command.init("").with("arguments",
+            []Argument {
+                Argument.arg("a").with("index", 0),
+                Argument.arg("b").with("index", 1),
+            }
+        )
+    );
+
+    testNoErr(clap, [][]const u8 { "-a", "-b" }, default.with("a", true).with("b", true));
+    testErr(clap, [][]const u8 { "-b", "-a" }, error.InvalidArg);
 }
