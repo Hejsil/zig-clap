@@ -386,8 +386,7 @@ fn testErr(args: []const []const u8, expected: error) void {
 }
 
 test "clap.parse: short" {
-    @breakpoint();
-    const clap = comptime Clap(Options).init(default).with("command",
+        const clap = comptime Clap(Options).init(default).with("command",
         Command.init("").with("arguments",
             []Argument {
                 Argument.arg("a"),
@@ -409,8 +408,7 @@ test "clap.parse: short" {
 }
 
 test "clap.parse: long" {
-    @breakpoint();
-    const clap = comptime Clap(Options).init(default).with("command",
+        const clap = comptime Clap(Options).init(default).with("command",
         Command.init("").with("arguments",
             []Argument {
                 Argument.arg("cc"),
@@ -426,8 +424,7 @@ test "clap.parse: long" {
 }
 
 test "clap.parse: value bool" {
-    @breakpoint();
-    const clap = comptime Clap(Options).init(default).with("command",
+        const clap = comptime Clap(Options).init(default).with("command",
         Command.init("").with("arguments",
             []Argument {
                 Argument.field("a"),
@@ -439,8 +436,7 @@ test "clap.parse: value bool" {
 }
 
 test "clap.parse: value str" {
-    @breakpoint();
-    const clap = comptime Clap(Options).init(default).with("command",
+        const clap = comptime Clap(Options).init(default).with("command",
         Command.init("").with("arguments",
             []Argument {
                 Argument.field("str").with("takes_value", parse.string),
@@ -452,8 +448,7 @@ test "clap.parse: value str" {
 }
 
 test "clap.parse: value int" {
-    @breakpoint();
-    const clap = comptime Clap(Options).init(default).with("command",
+        const clap = comptime Clap(Options).init(default).with("command",
         Command.init("").with("arguments",
             []Argument {
                 Argument.field("int").with("takes_value", parse.int(i64, 10)),
