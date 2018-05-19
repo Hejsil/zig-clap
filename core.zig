@@ -131,10 +131,10 @@ pub const OsArgIterator = struct {
         };
     }
 
-    fn nextFn(iter: &ArgIterator, allocator: &mem.Allocator) ArgIterator.Error![]const u8 {
+    fn nextFn(iter: &ArgIterator, allocator: &mem.Allocator) ArgIterator.Error!?[]const u8 {
         const self = @fieldParentPtr(OsArgIterator, "iter", iter);
-        if (builtin.os == builtin.Os.Windows) {
-            return try self.args.next(allocator);
+        if (builtin.os == builtin.Os.windows) {
+            return try self.args.next(allocator) ?? return null;
         } else {
             return self.args.nextPoxix();
         }
@@ -161,22 +161,19 @@ pub fn Iterator(comptime Id: type) type {
         params: []const Param(Id),
         inner: &ArgIterator,
         state: State,
-        command: []const u8,
 
-        pub fn init(params: []const Param(Id), inner: &ArgIterator, allocator: &mem.Allocator) !Self {
+        pub fn init(params: []const Param(Id), inner: &ArgIterator, allocator: &mem.Allocator) Self {
             var res = Self {
                 .arena = heap.ArenaAllocator.init(allocator),
                 .params = params,
                 .inner = inner,
                 .state = State.Normal,
-                .command = undefined,
             };
-            res.command = (try res.innerNext()) ?? unreachable;
 
             return res;
         }
 
-        pub fn deinit(iter: &const Self) void {
+        pub fn deinit(iter: &Self) void {
             iter.arena.deinit();
         }
 
@@ -315,7 +312,7 @@ pub fn Iterator(comptime Id: type) type {
 
 fn testNoErr(params: []const Param(u8), args: []const []const u8, ids: []const u8, values: []const ?[]const u8) void {
     var arg_iter = ArgSliceIterator.init(args);
-    var iter = Iterator(u8).init(params, &arg_iter.iter, debug.global_allocator) catch unreachable;
+    var iter = Iterator(u8).init(params, &arg_iter.iter, debug.global_allocator);
 
     var i: usize = 0;
     while (iter.next() catch unreachable) |arg| : (i += 1) {
@@ -337,15 +334,15 @@ test "clap.parse: short" {
         Param(u8).init(2, "c", true),
     };
 
-    testNoErr(params, [][]const u8 { "command", "-a" },          []u8{0},   []?[]const u8{null});
-    testNoErr(params, [][]const u8 { "command", "-a", "-b" },    []u8{0,1}, []?[]const u8{null,null});
-    testNoErr(params, [][]const u8 { "command", "-ab" },         []u8{0,1}, []?[]const u8{null,null});
-    testNoErr(params, [][]const u8 { "command", "-c=100" },      []u8{2},   []?[]const u8{"100"});
-    testNoErr(params, [][]const u8 { "command", "-c100" },       []u8{2},   []?[]const u8{"100"});
-    testNoErr(params, [][]const u8 { "command", "-c", "100" },   []u8{2},   []?[]const u8{"100"});
-    testNoErr(params, [][]const u8 { "command", "-abc", "100" }, []u8{0,1,2}, []?[]const u8{null,null,"100"});
-    testNoErr(params, [][]const u8 { "command", "-abc=100" },    []u8{0,1,2}, []?[]const u8{null,null,"100"});
-    testNoErr(params, [][]const u8 { "command", "-abc100" },     []u8{0,1,2}, []?[]const u8{null,null,"100"});
+    testNoErr(params, [][]const u8 { "-a" },          []u8{0},   []?[]const u8{null});
+    testNoErr(params, [][]const u8 { "-a", "-b" },    []u8{0,1}, []?[]const u8{null,null});
+    testNoErr(params, [][]const u8 { "-ab" },         []u8{0,1}, []?[]const u8{null,null});
+    testNoErr(params, [][]const u8 { "-c=100" },      []u8{2},   []?[]const u8{"100"});
+    testNoErr(params, [][]const u8 { "-c100" },       []u8{2},   []?[]const u8{"100"});
+    testNoErr(params, [][]const u8 { "-c", "100" },   []u8{2},   []?[]const u8{"100"});
+    testNoErr(params, [][]const u8 { "-abc", "100" }, []u8{0,1,2}, []?[]const u8{null,null,"100"});
+    testNoErr(params, [][]const u8 { "-abc=100" },    []u8{0,1,2}, []?[]const u8{null,null,"100"});
+    testNoErr(params, [][]const u8 { "-abc100" },     []u8{0,1,2}, []?[]const u8{null,null,"100"});
 }
 
 test "clap.parse: long" {
@@ -355,10 +352,10 @@ test "clap.parse: long" {
         Param(u8).init(2, "cc", true),
     };
 
-    testNoErr(params, [][]const u8 { "command", "--aa" },         []u8{0},   []?[]const u8{null});
-    testNoErr(params, [][]const u8 { "command", "--aa", "--bb" }, []u8{0,1}, []?[]const u8{null,null});
-    testNoErr(params, [][]const u8 { "command", "--cc=100" },     []u8{2},   []?[]const u8{"100"});
-    testNoErr(params, [][]const u8 { "command", "--cc", "100" },  []u8{2},   []?[]const u8{"100"});
+    testNoErr(params, [][]const u8 { "--aa" },         []u8{0},   []?[]const u8{null});
+    testNoErr(params, [][]const u8 { "--aa", "--bb" }, []u8{0,1}, []?[]const u8{null,null});
+    testNoErr(params, [][]const u8 { "--cc=100" },     []u8{2},   []?[]const u8{"100"});
+    testNoErr(params, [][]const u8 { "--cc", "100" },  []u8{2},   []?[]const u8{"100"});
 }
 
 test "clap.parse: both" {
@@ -368,17 +365,17 @@ test "clap.parse: both" {
         Param(u8).both(2, 'c', "cc", true),
     };
 
-    testNoErr(params, [][]const u8 { "command", "-a" },           []u8{0},     []?[]const u8{null});
-    testNoErr(params, [][]const u8 { "command", "-a", "-b" },     []u8{0,1},   []?[]const u8{null,null});
-    testNoErr(params, [][]const u8 { "command", "-ab" },          []u8{0,1},   []?[]const u8{null,null});
-    testNoErr(params, [][]const u8 { "command", "-c=100" },       []u8{2},     []?[]const u8{"100"});
-    testNoErr(params, [][]const u8 { "command", "-c100" },        []u8{2},     []?[]const u8{"100"});
-    testNoErr(params, [][]const u8 { "command", "-c", "100" },    []u8{2},     []?[]const u8{"100"});
-    testNoErr(params, [][]const u8 { "command", "-abc", "100" },  []u8{0,1,2}, []?[]const u8{null,null,"100"});
-    testNoErr(params, [][]const u8 { "command", "-abc=100" },     []u8{0,1,2}, []?[]const u8{null,null,"100"});
-    testNoErr(params, [][]const u8 { "command", "-abc100" },      []u8{0,1,2}, []?[]const u8{null,null,"100"});
-    testNoErr(params, [][]const u8 { "command", "--aa" },         []u8{0},     []?[]const u8{null});
-    testNoErr(params, [][]const u8 { "command", "--aa", "--bb" }, []u8{0,1},   []?[]const u8{null,null});
-    testNoErr(params, [][]const u8 { "command", "--cc=100" },     []u8{2},     []?[]const u8{"100"});
-    testNoErr(params, [][]const u8 { "command", "--cc", "100" },  []u8{2},     []?[]const u8{"100"});
+    testNoErr(params, [][]const u8 { "-a" },           []u8{0},     []?[]const u8{null});
+    testNoErr(params, [][]const u8 { "-a", "-b" },     []u8{0,1},   []?[]const u8{null,null});
+    testNoErr(params, [][]const u8 { "-ab" },          []u8{0,1},   []?[]const u8{null,null});
+    testNoErr(params, [][]const u8 { "-c=100" },       []u8{2},     []?[]const u8{"100"});
+    testNoErr(params, [][]const u8 { "-c100" },        []u8{2},     []?[]const u8{"100"});
+    testNoErr(params, [][]const u8 { "-c", "100" },    []u8{2},     []?[]const u8{"100"});
+    testNoErr(params, [][]const u8 { "-abc", "100" },  []u8{0,1,2}, []?[]const u8{null,null,"100"});
+    testNoErr(params, [][]const u8 { "-abc=100" },     []u8{0,1,2}, []?[]const u8{null,null,"100"});
+    testNoErr(params, [][]const u8 { "-abc100" },      []u8{0,1,2}, []?[]const u8{null,null,"100"});
+    testNoErr(params, [][]const u8 { "--aa" },         []u8{0},     []?[]const u8{null});
+    testNoErr(params, [][]const u8 { "--aa", "--bb" }, []u8{0,1},   []?[]const u8{null,null});
+    testNoErr(params, [][]const u8 { "--cc=100" },     []u8{2},     []?[]const u8{"100"});
+    testNoErr(params, [][]const u8 { "--cc", "100" },  []u8{2},     []?[]const u8{"100"});
 }

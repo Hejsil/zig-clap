@@ -1,12 +1,13 @@
 const std  = @import("std");
-const clap = @import("clap.zig");
+const core = @import("core.zig");
+const clap = @import("extended.zig");
 
 const debug = std.debug;
 const os    = std.os;
 
-const Clap     = clap.Clap;
-const Command  = clap.Command;
-const Argument = clap.Argument;
+const Clap   = clap.Clap;
+const Param  = clap.Param;
+const Parser = clap.Parser;
 
 const Options = struct {
     print_values: bool,
@@ -34,46 +35,34 @@ const Options = struct {
 // d = V=5
 
 pub fn main() !void {
-    const parser = comptime Clap(Options).init(
-            Options {
-                .print_values = false,
-                .a = 0,
-                .b = 0,
-                .c = 0,
-                .d = "",
-            }
-        )
-        .with("program_name", "My Test Command")
-        .with("author", "Hejsil")
-        .with("version", "v1")
-        .with("about", "Prints some values to the screen... Maybe.")
-        .with("command", Command.init("command")
-            .with("arguments",
-                []Argument {
-                    Argument.arg("a")
-                        .with("help", "Set the a field of Option.")
-                        .with("takes_value", clap.parse.int(i64, 10)),
-                    Argument.arg("b")
-                        .with("help", "Set the b field of Option.")
-                        .with("takes_value", clap.parse.int(u64, 10)),
-                    Argument.arg("c")
-                        .with("help", "Set the c field of Option.")
-                        .with("takes_value", clap.parse.int(u8, 10)),
-                    Argument.arg("d")
-                        .with("help", "Set the d field of Option.")
-                        .with("takes_value", clap.parse.string),
-                    Argument.field("print_values")
-                        .with("help", "Print all not 0 values.")
-                        .with("short", 'p')
-                        .with("long", "print-values"),
-                }
-            )
-        );
+    const parser = comptime Clap(Options) {
+        .defaults = Options {
+            .print_values = false,
+            .a = 0,
+            .b = 0,
+            .c = 0,
+            .d = "",
+        },
+        .params = []Param {
+            Param.init("a")
+                .with("takes_value", Parser.int(i64, 10)),
+            Param.init("b")
+                .with("takes_value", Parser.int(u64, 10)),
+            Param.init("c")
+                .with("takes_value", Parser.int(u8, 10)),
+            Param.init("d")
+                .with("takes_value", Parser.string),
+            Param.init("print_values")
+                .with("short", 'p')
+                .with("long", "print-values"),
+        }
+    };
 
-    const args = try os.argsAlloc(debug.global_allocator);
-    defer os.argsFree(debug.global_allocator, args);
+    var arg_iter = core.OsArgIterator.init();
+    const iter = &arg_iter.iter;
+    const command = iter.next(debug.global_allocator);
 
-    const options = try parser.parse(args[1..]);
+    const options = try parser.parse(debug.global_allocator, iter);
 
     if (options.print_values) {
         if (options.a != 0) debug.warn("a = {}\n", options.a);
