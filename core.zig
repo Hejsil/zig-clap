@@ -3,7 +3,8 @@ const builtin = @import("builtin");
 
 const os = std.os;
 const heap = std.heap;
-const is_windows = builtin.os == Os.windows;
+const mem = std.mem;
+const debug = std.debug;
 
 /// Represents a parameter for the command line.
 /// Parameters come in three kinds:
@@ -22,8 +23,8 @@ const is_windows = builtin.os == Os.windows;
 ///     * They can take a value two different ways.
 ///       * "--long-arg value"
 ///       * "--long-arg=value"
-///   * Value ("some-value"): Should be used as the primary of the program, like a filename or an
-///                           expression to parse.
+///   * Value ("some-value"): Should be used as the primary parameter of the program, like a
+///                           filename or an expression to parse.
 pub fn Param(comptime Id: type) type {
     return struct {
         const Self = this;
@@ -37,12 +38,21 @@ pub fn Param(comptime Id: type) type {
         /// If ::name.len == 0, then it's a value parameter: "some-command value".
         /// If ::name.len == 1, then it's a short parameter: "some-command -s".
         /// If ::name.len > 1, then it's a long parameter: "some-command --long".
-        pub fn init(id: Id, name: []const u8) Self {
-            return {
+        pub fn init(id: Id, name: []const u8, takes_value: bool) Self {
+            return Self{
                 .id = id,
                 .short = if (name.len == 1) name[0] else null,
                 .long = if (name.len > 1) name else null,
-                .takes_value = false,
+                .takes_value = takes_value,
+            };
+        }
+
+        pub fn both(id: Id, short: u8, long: []const u8, takes_value: bool) Self {
+            return Self{
+                .id = id,
+                .short = short,
+                .long = long,
+                .takes_value = takes_value,
             };
         }
 
@@ -73,6 +83,64 @@ pub fn Arg(comptime Id: type) type {
     };
 }
 
+pub const ArgIterator = struct {
+    const Error = error{OutOfMemory};
+
+    nextFn: fn(iter: &ArgIterator, allocator: &mem.Allocator) Error!?[]const u8,
+
+    pub fn next(iter: &ArgIterator, allocator: &mem.Allocator) Error!?[]const u8 {
+        return iter.nextFn(iter, allocator);
+    }
+};
+
+pub const ArgSliceIterator = struct {
+    args: []const []const u8,
+    index: usize,
+    iter: ArgIterator,
+
+    pub fn init(args: []const []const u8) ArgSliceIterator {
+        return ArgSliceIterator {
+            .args = args,
+            .index = 0,
+            .iter = ArgIterator {
+                .nextFn = nextFn,
+            },
+        };
+    }
+
+    fn nextFn(iter: &ArgIterator, allocator: &mem.Allocator) ArgIterator.Error!?[]const u8 {
+        const self = @fieldParentPtr(ArgSliceIterator, "iter", iter);
+        if (self.args.len <= self.index)
+            return null;
+
+        defer self.index += 1;
+        return self.args[self.index];
+    }
+};
+
+pub const OsArgIterator = struct {
+    args: os.ArgIterator,
+    iter: ArgIterator,
+
+    pub fn init() OsArgIterator {
+        return OsArgIterator {
+            .args = os.args(),
+            .iter = ArgIterator {
+                .nextFn = nextFn,
+            },
+        };
+    }
+
+    fn nextFn(iter: &ArgIterator, allocator: &mem.Allocator) ArgIterator.Error![]const u8 {
+        const self = @fieldParentPtr(OsArgIterator, "iter", iter);
+        if (builtin.os == builtin.Os.Windows) {
+            return try self.args.next(allocator);
+        } else {
+            return self.args.nextPoxix();
+        }
+    }
+};
+
 /// A ::CustomIterator with a default Windows buffer size.
 pub fn Iterator(comptime Id: type) type {
     return struct {
@@ -85,24 +153,25 @@ pub fn Iterator(comptime Id: type) type {
             const Chaining = struct {
                 arg: []const u8,
                 index: usize,
-                next: &const Param,
+                param: &const Param(Id),
             };
         };
 
-        arena: &heap.ArenaAllocator,
-        params: Param(Id),
-        args: os.ArgIterator,
+        arena: heap.ArenaAllocator,
+        params: []const Param(Id),
+        inner: &ArgIterator,
         state: State,
         command: []const u8,
 
-        pub fn init(params: []const Param(Id), allocator: &mem.Allocator) !Self {
+        pub fn init(params: []const Param(Id), inner: &ArgIterator, allocator: &mem.Allocator) !Self {
             var res = Self {
-                .allocator = heap.ArenaAllocator.init(allocator),
+                .arena = heap.ArenaAllocator.init(allocator),
                 .params = params,
-                .args = os.args(),
+                .inner = inner,
+                .state = State.Normal,
                 .command = undefined,
             };
-            res.command = try res.innerNext();
+            res.command = (try res.innerNext()) ?? unreachable;
 
             return res;
         }
@@ -129,10 +198,10 @@ pub fn Iterator(comptime Id: type) type {
 
                         if (mem.startsWith(u8, arg, "--")) {
                             arg = arg[2..];
-                            kind = Arg.Kind.Long;
+                            kind = ArgInfo.Kind.Long;
                         } else if (mem.startsWith(u8, arg, "-")) {
                             arg = arg[1..];
-                            kind = Arg.Kind.Short;
+                            kind = ArgInfo.Kind.Short;
                         }
 
                         if (arg.len == 0)
@@ -143,20 +212,34 @@ pub fn Iterator(comptime Id: type) type {
 
                     const arg = arg_info.arg;
                     const kind = arg_info.kind;
+                    const eql_index = mem.indexOfScalar(u8, arg, '=');
 
                     for (iter.params) |*param| {
                         switch (kind) {
-                            Arg.Kind.Long => {
+                            ArgInfo.Kind.Long => {
                                 const long = param.long ?? continue;
-                                if (!mem.eql(u8, arg, long))
-                                    continue;
-                                if (!param.takes_value)
-                                    return Arg(Id).init(param.id, null);
+                                const name = if (eql_index) |i| arg[0..i] else arg;
+                                const maybe_value = if (eql_index) |i| arg[i + 1..] else null;
 
-                                const value = (try iter.innerNext()) ?? return error.MissingValue;
+                                if (!mem.eql(u8, name, long))
+                                    continue;
+                                if (!param.takes_value) {
+                                    if (maybe_value != null)
+                                        return error.DoesntTakeValue;
+
+                                    return Arg(Id).init(param.id, null);
+                                }
+
+                                const value = blk: {
+                                    if (maybe_value) |v|
+                                        break :blk v;
+
+                                    break :blk (try iter.innerNext()) ?? return error.MissingValue;
+                                };
+
                                 return Arg(Id).init(param.id, value);
                             },
-                            Arg.Kind.Short => {
+                            ArgInfo.Kind.Short => {
                                 const short = param.short ?? continue;
                                 if (short != arg[0])
                                     continue;
@@ -164,10 +247,10 @@ pub fn Iterator(comptime Id: type) type {
                                 return try iter.chainging(State.Chaining {
                                     .arg = full_arg,
                                     .index = (full_arg.len - arg.len) + 1,
-                                    .next = param,
+                                    .param = param,
                                 });
                             },
-                            Arg.Kind.Value => {
+                            ArgInfo.Kind.Value => {
                                 if (param.long) |_| continue;
                                 if (param.short) |_| continue;
 
@@ -175,17 +258,21 @@ pub fn Iterator(comptime Id: type) type {
                             }
                         }
                     }
+
+                    return error.InvalidArgument;
                 },
-                State.Chaining => |state| return try iter.chainging(state),
+                @TagType(State).Chaining => |state| return try iter.chainging(state),
             }
         }
 
-        fn chainging(iter: &const Self, state: &const State.Chaining) !?Arg(Id) {
+        fn chainging(iter: &Self, state: &const State.Chaining) !?Arg(Id) {
             const arg = state.arg;
             const index = state.index;
             const curr_param = state.param;
 
             if (curr_param.takes_value) {
+                iter.state = State.Normal;
+
                 if (arg.len <= index) {
                     const value = (try iter.innerNext()) ?? return error.MissingValue;
                     return Arg(Id).init(curr_param.id, value);
@@ -208,7 +295,7 @@ pub fn Iterator(comptime Id: type) type {
                 if (short != arg[index])
                     continue;
 
-                iter.State = State { .Chaining = State.Chaining {
+                iter.state = State { .Chaining = State.Chaining {
                     .arg = arg,
                     .index = index + 1,
                     .param = param,
@@ -220,12 +307,78 @@ pub fn Iterator(comptime Id: type) type {
             return error.InvalidArgument;
         }
 
-        fn innerNext(iter: &Self) os.ArgIterator.NextError!?[]const u8 {
-            if (builtin.os == Os.windows) {
-                return try iter.args.next(&iter.arena.allocator);
-            } else {
-                return iter.args.nextPosix();
-            }
+        fn innerNext(iter: &Self) !?[]const u8 {
+            return try iter.inner.next(&iter.arena.allocator);
         }
+    };
+}
+
+fn testNoErr(params: []const Param(u8), args: []const []const u8, ids: []const u8, values: []const ?[]const u8) void {
+    var arg_iter = ArgSliceIterator.init(args);
+    var iter = Iterator(u8).init(params, &arg_iter.iter, debug.global_allocator) catch unreachable;
+
+    var i: usize = 0;
+    while (iter.next() catch unreachable) |arg| : (i += 1) {
+        debug.assert(ids[i] == arg.id);
+        const expected_value = values[i] ?? {
+            debug.assert(arg.value == null);
+            continue;
+        };
+        const actual_value = arg.value ?? unreachable;
+
+        debug.assert(mem.eql(u8, expected_value, actual_value));
     }
+}
+
+test "clap.parse: short" {
+    const params = []Param(u8) {
+        Param(u8).init(0, "a", false),
+        Param(u8).init(1, "b", false),
+        Param(u8).init(2, "c", true),
+    };
+
+    testNoErr(params, [][]const u8 { "command", "-a" },          []u8{0},   []?[]const u8{null});
+    testNoErr(params, [][]const u8 { "command", "-a", "-b" },    []u8{0,1}, []?[]const u8{null,null});
+    testNoErr(params, [][]const u8 { "command", "-ab" },         []u8{0,1}, []?[]const u8{null,null});
+    testNoErr(params, [][]const u8 { "command", "-c=100" },      []u8{2},   []?[]const u8{"100"});
+    testNoErr(params, [][]const u8 { "command", "-c100" },       []u8{2},   []?[]const u8{"100"});
+    testNoErr(params, [][]const u8 { "command", "-c", "100" },   []u8{2},   []?[]const u8{"100"});
+    testNoErr(params, [][]const u8 { "command", "-abc", "100" }, []u8{0,1,2}, []?[]const u8{null,null,"100"});
+    testNoErr(params, [][]const u8 { "command", "-abc=100" },    []u8{0,1,2}, []?[]const u8{null,null,"100"});
+    testNoErr(params, [][]const u8 { "command", "-abc100" },     []u8{0,1,2}, []?[]const u8{null,null,"100"});
+}
+
+test "clap.parse: long" {
+    const params = []Param(u8) {
+        Param(u8).init(0, "aa", false),
+        Param(u8).init(1, "bb", false),
+        Param(u8).init(2, "cc", true),
+    };
+
+    testNoErr(params, [][]const u8 { "command", "--aa" },         []u8{0},   []?[]const u8{null});
+    testNoErr(params, [][]const u8 { "command", "--aa", "--bb" }, []u8{0,1}, []?[]const u8{null,null});
+    testNoErr(params, [][]const u8 { "command", "--cc=100" },     []u8{2},   []?[]const u8{"100"});
+    testNoErr(params, [][]const u8 { "command", "--cc", "100" },  []u8{2},   []?[]const u8{"100"});
+}
+
+test "clap.parse: both" {
+    const params = []Param(u8) {
+        Param(u8).both(0, 'a', "aa", false),
+        Param(u8).both(1, 'b', "bb", false),
+        Param(u8).both(2, 'c', "cc", true),
+    };
+
+    testNoErr(params, [][]const u8 { "command", "-a" },           []u8{0},     []?[]const u8{null});
+    testNoErr(params, [][]const u8 { "command", "-a", "-b" },     []u8{0,1},   []?[]const u8{null,null});
+    testNoErr(params, [][]const u8 { "command", "-ab" },          []u8{0,1},   []?[]const u8{null,null});
+    testNoErr(params, [][]const u8 { "command", "-c=100" },       []u8{2},     []?[]const u8{"100"});
+    testNoErr(params, [][]const u8 { "command", "-c100" },        []u8{2},     []?[]const u8{"100"});
+    testNoErr(params, [][]const u8 { "command", "-c", "100" },    []u8{2},     []?[]const u8{"100"});
+    testNoErr(params, [][]const u8 { "command", "-abc", "100" },  []u8{0,1,2}, []?[]const u8{null,null,"100"});
+    testNoErr(params, [][]const u8 { "command", "-abc=100" },     []u8{0,1,2}, []?[]const u8{null,null,"100"});
+    testNoErr(params, [][]const u8 { "command", "-abc100" },      []u8{0,1,2}, []?[]const u8{null,null,"100"});
+    testNoErr(params, [][]const u8 { "command", "--aa" },         []u8{0},     []?[]const u8{null});
+    testNoErr(params, [][]const u8 { "command", "--aa", "--bb" }, []u8{0,1},   []?[]const u8{null,null});
+    testNoErr(params, [][]const u8 { "command", "--cc=100" },     []u8{2},     []?[]const u8{"100"});
+    testNoErr(params, [][]const u8 { "command", "--cc", "100" },  []u8{2},     []?[]const u8{"100"});
 }
