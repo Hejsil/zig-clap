@@ -1,6 +1,6 @@
 # zig-clap
 
-A non allocating, fast and easy to use command line argument parser library for Zig.
+An easy to use command line argument parser library for Zig.
 
 ## Features
 
