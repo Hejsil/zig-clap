@@ -1,6 +1,7 @@
+pub const core = @import("core.zig");
+
 const builtin = @import("builtin");
 const std     = @import("std");
-const core    = @import("core.zig");
 
 const mem   = std.mem;
 const fmt   = std.fmt;
@@ -17,8 +18,45 @@ pub const Param = struct {
     required: bool,
     position: ?usize,
 
-    pub fn init(name: []const u8) Param {
-        return Param {
+    pub fn short(s: u8) Param {
+        return Param{
+            .field = []u8{s},
+            .short = s,
+            .long = null,
+            .takes_value = null,
+            .required = false,
+            .position = null,
+        };
+    }
+
+    pub fn long(l: []const u8) Param {
+        return Param{
+            .field = l,
+            .short = null,
+            .long = l,
+            .takes_value = null,
+            .required = false,
+            .position = null,
+        };
+    }
+
+    pub fn value(f: []const u8) Param {
+        return Param{
+            .field = f,
+            .short = null,
+            .long = null,
+            .takes_value = null,
+            .required = false,
+            .position = null,
+        };
+    }
+
+    /// Initialize a ::Param.
+    /// If ::name.len == 0, then it's a value parameter: "value".
+    /// If ::name.len == 1, then it's a short parameter: "-s".
+    /// If ::name.len > 1, then it's a long parameter: "--long".
+    pub fn smart(name: []const u8) Param {
+        return Param{
             .field = name,
             .short = if (name.len == 1) name[0] else null,
             .long = if (name.len > 1) name else null,
@@ -28,9 +66,9 @@ pub const Param = struct {
         };
     }
 
-    pub fn with(param: &const Param, comptime field_name: []const u8, value: var) Param {
+    pub fn with(param: &const Param, comptime field_name: []const u8, v: var) Param {
         var res = *param;
-        @field(res, field_name) = value;
+        @field(res, field_name) = v;
         return res;
     }
 };
@@ -50,6 +88,7 @@ pub fn Clap(comptime Result: type) type {
                 for (clap.params) |p, i| {
                     res[i] = core.Param(usize) {
                         .id = i,
+                        .command = null,
                         .short = p.short,
                         .long = p.long,
                         .takes_value = p.takes_value != null,
@@ -189,13 +228,17 @@ fn testErr(comptime clap: &const Clap(Options), args: []const []const u8, expect
     }
 }
 
-test "clap.parse: short" {
+test "clap.core" {
+    _ = core;
+}
+
+test "clap: short" {
     const clap = comptime Clap(Options) {
         .defaults = default,
         .params = []Param {
-            Param.init("a"),
-            Param.init("b"),
-            Param.init("int")
+            Param.smart("a"),
+            Param.smart("b"),
+            Param.smart("int")
                 .with("short", 'i')
                 .with("takes_value", Parser.int(i64, 10))
         }
@@ -212,14 +255,14 @@ test "clap.parse: short" {
     testNoErr(clap, [][]const u8 { "-abi100" }, default.with("a", true).with("b", true).with("int",  100));
 }
 
-test "clap.parse: long" {
+test "clap: long" {
     const clap = comptime Clap(Options) {
         .defaults = default,
         .params = []Param {
-            Param.init("cc"),
-            Param.init("int").with("takes_value", Parser.int(i64, 10)),
-            Param.init("uint").with("takes_value", Parser.int(u64, 10)),
-            Param.init("str").with("takes_value", Parser.string),
+            Param.smart("cc"),
+            Param.smart("int").with("takes_value", Parser.int(i64, 10)),
+            Param.smart("uint").with("takes_value", Parser.int(u64, 10)),
+            Param.smart("str").with("takes_value", Parser.string),
         }
     };
 
@@ -227,45 +270,45 @@ test "clap.parse: long" {
     testNoErr(clap, [][]const u8 { "--int", "100" }, default.with("int",  100));
 }
 
-test "clap.parse: value bool" {
+test "clap: value bool" {
     const clap = comptime Clap(Options) {
         .defaults = default,
         .params = []Param {
-            Param.init("a"),
+            Param.smart("a"),
         }
     };
 
     testNoErr(clap, [][]const u8 { "-a" }, default.with("a",  true));
 }
 
-test "clap.parse: value str" {
+test "clap: value str" {
     const clap = comptime Clap(Options) {
         .defaults = default,
         .params = []Param {
-            Param.init("str").with("takes_value", Parser.string),
+            Param.smart("str").with("takes_value", Parser.string),
         }
     };
 
     testNoErr(clap, [][]const u8 { "--str", "Hello World!" }, default.with("str", "Hello World!"));
 }
 
-test "clap.parse: value int" {
+test "clap: value int" {
     const clap = comptime Clap(Options) {
         .defaults = default,
         .params = []Param {
-            Param.init("int").with("takes_value", Parser.int(i64, 10)),
+            Param.smart("int").with("takes_value", Parser.int(i64, 10)),
         }
     };
 
     testNoErr(clap, [][]const u8 { "--int", "100" }, default.with("int", 100));
 }
 
-test "clap.parse: position" {
+test "clap: position" {
     const clap = comptime Clap(Options) {
         .defaults = default,
         .params = []Param {
-            Param.init("a").with("position", 0),
-            Param.init("b").with("position", 1),
+            Param.smart("a").with("position", 0),
+            Param.smart("b").with("position", 1),
         }
     };
 

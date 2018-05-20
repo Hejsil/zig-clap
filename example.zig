@@ -1,13 +1,8 @@
 const std  = @import("std");
-const core = @import("core.zig");
-const clap = @import("extended.zig");
+const clap = @import("index.zig");
 
 const debug = std.debug;
 const os    = std.os;
-
-const Clap   = clap.Clap;
-const Param  = clap.Param;
-const Parser = clap.Parser;
 
 const Options = struct {
     print_values: bool,
@@ -35,7 +30,7 @@ const Options = struct {
 // d = V=5
 
 pub fn main() !void {
-    const parser = comptime Clap(Options) {
+    const parser = comptime clap.Clap(Options) {
         .defaults = Options {
             .print_values = false,
             .a = 0,
@@ -43,22 +38,22 @@ pub fn main() !void {
             .c = 0,
             .d = "",
         },
-        .params = []Param {
-            Param.init("a")
-                .with("takes_value", Parser.int(i64, 10)),
-            Param.init("b")
-                .with("takes_value", Parser.int(u64, 10)),
-            Param.init("c")
-                .with("takes_value", Parser.int(u8, 10)),
-            Param.init("d")
-                .with("takes_value", Parser.string),
-            Param.init("print_values")
+        .params = []clap.Param {
+            clap.Param.smart("a")
+                .with("takes_value", clap.Parser.int(i64, 10)),
+            clap.Param.smart("b")
+                .with("takes_value", clap.Parser.int(u64, 10)),
+            clap.Param.smart("c")
+                .with("takes_value", clap.Parser.int(u8, 10)),
+            clap.Param.smart("d")
+                .with("takes_value", clap.Parser.string),
+            clap.Param.smart("print_values")
                 .with("short", 'p')
                 .with("long", "print-values"),
         }
     };
 
-    var arg_iter = core.OsArgIterator.init();
+    var arg_iter = clap.core.OsArgIterator.init();
     const iter = &arg_iter.iter;
     const command = iter.next(debug.global_allocator);
 

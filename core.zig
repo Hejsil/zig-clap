@@ -18,47 +18,84 @@ const debug = std.debug;
 ///         * "-abc value"
 ///         * "-abc=value"
 ///         * "-abcvalue"
-///   * Long ("--long-arg"): Should be used for less common parameters, or when no single character
+///   * Long ("--long-param"): Should be used for less common parameters, or when no single character
 ///                          can describe the paramter.
 ///     * They can take a value two different ways.
-///       * "--long-arg value"
-///       * "--long-arg=value"
-///   * Value ("some-value"): Should be used as the primary parameter of the program, like a
-///                           filename or an expression to parse.
+///       * "--long-param value"
+///       * "--long-param=value"
+///   * Command ("command"): Should be used as for sub-commands and other keywords.
+///     * They can take a value two different ways.
+///       * "command value"
+///       * "command=value"
+///   * Value ("value"): Should be used as the primary parameter of the program, like a filename or
+///                      an expression to parse.
 pub fn Param(comptime Id: type) type {
     return struct {
         const Self = this;
 
         id: Id,
+        command: ?[]const u8,
         short: ?u8,
         long: ?[]const u8,
         takes_value: bool,
 
-        /// Initialize a ::Param.
-        /// If ::name.len == 0, then it's a value parameter: "some-command value".
-        /// If ::name.len == 1, then it's a short parameter: "some-command -s".
-        /// If ::name.len > 1, then it's a long parameter: "some-command --long".
-        pub fn init(id: Id, name: []const u8, takes_value: bool) Self {
+        pub fn short(id: Id, s: u8, takes_value: bool) Self {
             return Self{
                 .id = id,
+                .command = null,
+                .short = s,
+                .long = null,
+                .takes_value = takes_value,
+            };
+        }
+
+        pub fn long(id: Id, l: []const u8, takes_value: bool) Self {
+            return Self{
+                .id = id,
+                .command = null,
+                .short = null,
+                .long = l,
+                .takes_value = takes_value,
+            };
+        }
+
+        pub fn command(id: Id, c: []const u8, takes_value: bool) Self {
+            return Self{
+                .id = id,
+                .command = c,
+                .short = null,
+                .long = null,
+                .takes_value = takes_value,
+            };
+        }
+
+        pub fn value(id: Id) Self {
+            return Self{
+                .id = id,
+                .command = null,
+                .short = null,
+                .long = null,
+                .takes_value = true,
+            };
+        }
+
+        /// Initialize a ::Param.
+        /// If ::name.len == 0, then it's a value parameter: "value".
+        /// If ::name.len == 1, then it's a short parameter: "-s".
+        /// If ::name.len > 1, then it's a long parameter: "--long".
+        pub fn smart(id: Id, name: []const u8, takes_value: bool) Self {
+            return Self{
+                .id = id,
+                .command = null,
                 .short = if (name.len == 1) name[0] else null,
                 .long = if (name.len > 1) name else null,
                 .takes_value = takes_value,
             };
         }
 
-        pub fn both(id: Id, short: u8, long: []const u8, takes_value: bool) Self {
-            return Self{
-                .id = id,
-                .short = short,
-                .long = long,
-                .takes_value = takes_value,
-            };
-        }
-
-        pub fn with(param: &const Self, comptime field_name: []const u8, value: var) Self {
+        pub fn with(param: &const Self, comptime field_name: []const u8, v: var) Self {
             var res = *param;
-            @field(res, field_name) = value;
+            @field(res, field_name) = v;
             return res;
         }
     };
@@ -136,7 +173,7 @@ pub const OsArgIterator = struct {
         if (builtin.os == builtin.Os.windows) {
             return try self.args.next(allocator) ?? return null;
         } else {
-            return self.args.nextPoxix();
+            return self.args.nextPosix();
         }
     }
 };
@@ -180,7 +217,7 @@ pub fn Iterator(comptime Id: type) type {
         /// Get the next ::Arg that matches a ::Param.
         pub fn next(iter: &Self) !?Arg(Id) {
             const ArgInfo = struct {
-                const Kind = enum { Long, Short, Value };
+                const Kind = enum { Long, Short, Command };
 
                 arg: []const u8,
                 kind: Kind,
@@ -191,7 +228,7 @@ pub fn Iterator(comptime Id: type) type {
                     const full_arg = (try iter.innerNext()) ?? return null;
                     const arg_info = blk: {
                         var arg = full_arg;
-                        var kind = ArgInfo.Kind.Value;
+                        var kind = ArgInfo.Kind.Command;
 
                         if (mem.startsWith(u8, arg, "--")) {
                             arg = arg[2..];
@@ -213,12 +250,17 @@ pub fn Iterator(comptime Id: type) type {
 
                     for (iter.params) |*param| {
                         switch (kind) {
+                            ArgInfo.Kind.Command,
                             ArgInfo.Kind.Long => {
-                                const long = param.long ?? continue;
+                                const match = switch (kind) {
+                                    ArgInfo.Kind.Command => param.command ?? continue,
+                                    ArgInfo.Kind.Long =>  param.long ?? continue,
+                                    else => unreachable,
+                                };
                                 const name = if (eql_index) |i| arg[0..i] else arg;
                                 const maybe_value = if (eql_index) |i| arg[i + 1..] else null;
 
-                                if (!mem.eql(u8, name, long))
+                                if (!mem.eql(u8, name, match))
                                     continue;
                                 if (!param.takes_value) {
                                     if (maybe_value != null)
@@ -247,12 +289,17 @@ pub fn Iterator(comptime Id: type) type {
                                     .param = param,
                                 });
                             },
-                            ArgInfo.Kind.Value => {
-                                if (param.long) |_| continue;
-                                if (param.short) |_| continue;
+                        }
+                    }
 
-                                return Arg(Id).init(param.id, arg);
-                            }
+                    // We do a final pass to look for value parameters matches
+                    if (kind == ArgInfo.Kind.Command) {
+                        for (iter.params) |*param| {
+                            if (param.short) |_| continue;
+                            if (param.long) |_| continue;
+                            if (param.command) |_| continue;
+
+                            return Arg(Id).init(param.id, arg);
                         }
                     }
 
@@ -327,11 +374,11 @@ fn testNoErr(params: []const Param(u8), args: []const []const u8, ids: []const u
     }
 }
 
-test "clap.parse: short" {
+test "clap.core: short" {
     const params = []Param(u8) {
-        Param(u8).init(0, "a", false),
-        Param(u8).init(1, "b", false),
-        Param(u8).init(2, "c", true),
+        Param(u8).smart(0, "a", false),
+        Param(u8).smart(1, "b", false),
+        Param(u8).smart(2, "c", true),
     };
 
     testNoErr(params, [][]const u8 { "-a" },          []u8{0},   []?[]const u8{null});
@@ -345,11 +392,11 @@ test "clap.parse: short" {
     testNoErr(params, [][]const u8 { "-abc100" },     []u8{0,1,2}, []?[]const u8{null,null,"100"});
 }
 
-test "clap.parse: long" {
+test "clap.core: long" {
     const params = []Param(u8) {
-        Param(u8).init(0, "aa", false),
-        Param(u8).init(1, "bb", false),
-        Param(u8).init(2, "cc", true),
+        Param(u8).smart(0, "aa", false),
+        Param(u8).smart(1, "bb", false),
+        Param(u8).smart(2, "cc", true),
     };
 
     testNoErr(params, [][]const u8 { "--aa" },         []u8{0},   []?[]const u8{null});
@@ -358,11 +405,39 @@ test "clap.parse: long" {
     testNoErr(params, [][]const u8 { "--cc", "100" },  []u8{2},   []?[]const u8{"100"});
 }
 
-test "clap.parse: both" {
+test "clap.core: command" {
     const params = []Param(u8) {
-        Param(u8).both(0, 'a', "aa", false),
-        Param(u8).both(1, 'b', "bb", false),
-        Param(u8).both(2, 'c', "cc", true),
+        Param(u8).command(0, "aa", false),
+        Param(u8).command(1, "bb", false),
+        Param(u8).command(2, "cc", true),
+    };
+
+    testNoErr(params, [][]const u8 { "aa" },        []u8{0},   []?[]const u8{null});
+    testNoErr(params, [][]const u8 { "aa", "bb" },  []u8{0,1}, []?[]const u8{null,null});
+    testNoErr(params, [][]const u8 { "cc=100" },    []u8{2},   []?[]const u8{"100"});
+    testNoErr(params, [][]const u8 { "cc", "100" }, []u8{2},   []?[]const u8{"100"});
+}
+
+test "clap.core: value" {
+    const params = []Param(u8) {
+        Param(u8).value(0),
+    };
+
+    testNoErr(params, [][]const u8 { "aa" }, []u8{0}, []?[]const u8{"aa"});
+}
+
+test "clap.core: all" {
+    const params = []Param(u8) {
+        Param(u8).short(0, 'a', false)
+            .with("long", "aa"[0..])
+            .with("command", "aa"[0..]),
+        Param(u8).short(1, 'b', false)
+            .with("long", "bb"[0..])
+            .with("command", "bb"[0..]),
+        Param(u8).short(2, 'c', true)
+            .with("long", "cc"[0..])
+            .with("command", "cc"[0..]),
+        Param(u8).value(3),
     };
 
     testNoErr(params, [][]const u8 { "-a" },           []u8{0},     []?[]const u8{null});
@@ -378,4 +453,9 @@ test "clap.parse: both" {
     testNoErr(params, [][]const u8 { "--aa", "--bb" }, []u8{0,1},   []?[]const u8{null,null});
     testNoErr(params, [][]const u8 { "--cc=100" },     []u8{2},     []?[]const u8{"100"});
     testNoErr(params, [][]const u8 { "--cc", "100" },  []u8{2},     []?[]const u8{"100"});
+    testNoErr(params, [][]const u8 { "aa" },           []u8{0},     []?[]const u8{null});
+    testNoErr(params, [][]const u8 { "aa", "bb" },     []u8{0,1},   []?[]const u8{null,null});
+    testNoErr(params, [][]const u8 { "cc=100" },       []u8{2},     []?[]const u8{"100"});
+    testNoErr(params, [][]const u8 { "cc", "100" },    []u8{2},     []?[]const u8{"100"});
+    testNoErr(params, [][]const u8 { "dd" },           []u8{3},     []?[]const u8{"dd"});
 }
