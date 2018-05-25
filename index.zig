@@ -119,9 +119,9 @@ pub fn Clap(comptime Result: type) type {
                         }
 
                         if (param.takes_value) |parser| {
-                            try parser.parse(&@field(result, param.field), ??arg.value);
+                            try parser.parse(getFieldPtr(&result, param.field), ??arg.value);
                         } else {
-                            @field(result, param.field) = true;
+                            *getFieldPtr(&result, param.field) = true;
                         }
                         handled[i] = true;
                     }
@@ -129,6 +129,23 @@ pub fn Clap(comptime Result: type) type {
             }
 
             return result;
+        }
+
+        fn GetFieldPtrReturn(comptime Struct: type, comptime field: []const u8) type {
+            var inst: Struct = undefined;
+            const dot_index = comptime mem.indexOfScalar(u8, field, '.') ?? {
+                return @typeOf(&@field(inst, field));
+            };
+
+            return GetFieldPtrReturn(@typeOf(@field(inst, field[0..dot_index])), field[dot_index + 1..]);
+        }
+
+        fn getFieldPtr(curr: var, comptime field: []const u8) GetFieldPtrReturn(@typeOf(curr).Child, field) {
+            const dot_index = comptime mem.indexOfScalar(u8, field, '.') ?? {
+                return &@field(curr, field);
+            };
+
+            return getFieldPtr(&@field(curr, field[0..dot_index]), field[dot_index + 1..]);
         }
     };
 }
@@ -148,12 +165,12 @@ pub const Parser = struct {
         };
     }
 
-    fn parse(comptime parser: Parser, field_ptr: takePtr(parser.FieldType), arg: []const u8) parser.Errors!void {
+    fn parse(comptime parser: Parser, field_ptr: TakePtr(parser.FieldType), arg: []const u8) parser.Errors!void {
         return @ptrCast(parseFunc(parser.FieldType, parser.Errors), parser.func)(field_ptr, arg);
     }
 
     // TODO: This is a workaround, since we don't have pointer reform yet.
-    fn takePtr(comptime T: type) type { return &T; }
+    fn TakePtr(comptime T: type) type { return &T; }
 
     fn parseFunc(comptime FieldType: type, comptime Errors: type) type {
         return fn(&FieldType, []const u8) Errors!void;
@@ -314,4 +331,25 @@ test "clap: position" {
 
     testNoErr(clap, [][]const u8 { "-a", "-b" }, default.with("a", true).with("b", true));
     testErr(clap, [][]const u8 { "-b", "-a" }, error.InvalidPosition);
+}
+
+test "clap: sub fields" {
+    const B = struct {
+        a: bool,
+    };
+    const A = struct {
+        b: B,
+    };
+
+    const clap = comptime Clap(A) {
+        .defaults = A { .b = B { .a = false } },
+        .params = []Param {
+            Param.short('a')
+                .with("field", "b.a"),
+        }
+    };
+
+    var arg_iter = core.ArgSliceIterator.init([][]const u8{ "-a" });
+    const res = clap.parse(debug.global_allocator, &arg_iter.iter) catch unreachable;
+    debug.assert(res.b.a == true);
 }
