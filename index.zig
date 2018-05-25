@@ -110,22 +110,22 @@ pub fn Clap(comptime Result: type) type {
             var pos: usize = 0;
             var iter = core.Iterator(usize).init(core_params, arg_iter, allocator);
             defer iter.deinit();
+
+            arg_loop:
             while (try iter.next()) |arg| : (pos += 1) {
                 inline for(clap.params) |param, i| {
-                    if (arg.id == i) {
-                        if (param.position) |expected| {
-                            if (expected != pos)
-                                return error.InvalidPosition;
-                        }
-
+                    if (arg.id == i and (param.position ?? pos) == pos) {
                         if (param.takes_value) |parser| {
                             try parser.parse(getFieldPtr(&result, param.field), ??arg.value);
                         } else {
                             *getFieldPtr(&result, param.field) = true;
                         }
                         handled[i] = true;
+                        continue :arg_loop;
                     }
                 }
+
+                return error.InvalidArgument;
             }
 
             return result;
@@ -330,7 +330,7 @@ test "clap: position" {
     };
 
     testNoErr(clap, [][]const u8 { "-a", "-b" }, default.with("a", true).with("b", true));
-    testErr(clap, [][]const u8 { "-b", "-a" }, error.InvalidPosition);
+    testErr(clap, [][]const u8 { "-b", "-a" }, error.InvalidArgument);
 }
 
 test "clap: sub fields" {
