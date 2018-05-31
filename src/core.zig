@@ -217,26 +217,26 @@ pub fn Clap(comptime Id: type) type {
 
         arena: heap.ArenaAllocator,
         params: []const Param(Id),
-        inner: &ArgIterator,
+        iter: &ArgIterator,
         state: State,
 
-        pub fn init(params: []const Param(Id), inner: &ArgIterator, allocator: &mem.Allocator) Self {
+        pub fn init(params: []const Param(Id), iter: &ArgIterator, allocator: &mem.Allocator) Self {
             var res = Self {
                 .arena = heap.ArenaAllocator.init(allocator),
                 .params = params,
-                .inner = inner,
+                .iter = iter,
                 .state = State.Normal,
             };
 
             return res;
         }
 
-        pub fn deinit(iter: &Self) void {
-            iter.arena.deinit();
+        pub fn deinit(clap: &Self) void {
+            clap.arena.deinit();
         }
 
         /// Get the next ::Arg that matches a ::Param.
-        pub fn next(iter: &Self) !?Arg(Id) {
+        pub fn next(clap: &Self) !?Arg(Id) {
             const ArgInfo = struct {
                 const Kind = enum { Long, Short, Bare };
 
@@ -244,9 +244,9 @@ pub fn Clap(comptime Id: type) type {
                 kind: Kind,
             };
 
-            switch (iter.state) {
+            switch (clap.state) {
                 State.Normal => {
-                    const full_arg = (try iter.innerNext()) ?? return null;
+                    const full_arg = (try clap.nextNoParse()) ?? return null;
                     const arg_info = blk: {
                         var arg = full_arg;
                         var kind = ArgInfo.Kind.Bare;
@@ -272,7 +272,7 @@ pub fn Clap(comptime Id: type) type {
                     switch (kind) {
                         ArgInfo.Kind.Bare,
                         ArgInfo.Kind.Long => {
-                            for (iter.params) |*param| {
+                            for (clap.params) |*param| {
                                 const match = switch (kind) {
                                     ArgInfo.Kind.Bare => param.names.bare ?? continue,
                                     ArgInfo.Kind.Long => param.names.long ?? continue,
@@ -294,14 +294,14 @@ pub fn Clap(comptime Id: type) type {
                                     if (maybe_value) |v|
                                         break :blk v;
 
-                                    break :blk (try iter.innerNext()) ?? return error.MissingValue;
+                                    break :blk (try clap.nextNoParse()) ?? return error.MissingValue;
                                 };
 
                                 return Arg(Id).init(param.id, value);
                             }
                         },
                         ArgInfo.Kind.Short => {
-                            return try iter.chainging(State.Chaining {
+                            return try clap.chainging(State.Chaining {
                                 .arg = full_arg,
                                 .index = (full_arg.len - arg.len),
                             });
@@ -310,7 +310,7 @@ pub fn Clap(comptime Id: type) type {
 
                     // We do a final pass to look for value parameters matches
                     if (kind == ArgInfo.Kind.Bare) {
-                        for (iter.params) |*param| {
+                        for (clap.params) |*param| {
                             if (param.names.bare) |_| continue;
                             if (param.names.short) |_| continue;
                             if (param.names.long) |_| continue;
@@ -321,26 +321,26 @@ pub fn Clap(comptime Id: type) type {
 
                     return error.InvalidArgument;
                 },
-                @TagType(State).Chaining => |state| return try iter.chainging(state),
+                @TagType(State).Chaining => |state| return try clap.chainging(state),
             }
         }
 
-        fn chainging(iter: &Self, state: &const State.Chaining) !?Arg(Id) {
+        fn chainging(clap: &Self, state: &const State.Chaining) !?Arg(Id) {
             const arg = state.arg;
             const index = state.index;
             const next_index = index + 1;
 
-            for (iter.params) |param| {
+            for (clap.params) |param| {
                 const short = param.names.short ?? continue;
                 if (short != arg[index])
                     continue;
 
-                // Before we return, we have to set the new state of the iterator
+                // Before we return, we have to set the new state of the clap
                 defer {
                     if (arg.len <= next_index or param.takes_value) {
-                        iter.state = State.Normal;
+                        clap.state = State.Normal;
                     } else {
-                        iter.state = State { .Chaining = State.Chaining {
+                        clap.state = State { .Chaining = State.Chaining {
                             .arg = arg,
                             .index = next_index,
                         }};
@@ -351,7 +351,7 @@ pub fn Clap(comptime Id: type) type {
                     return Arg(Id).init(param.id, null);
 
                 if (arg.len <= next_index) {
-                    const value = (try iter.innerNext()) ?? return error.MissingValue;
+                    const value = (try clap.nextNoParse()) ?? return error.MissingValue;
                     return Arg(Id).init(param.id, value);
                 }
 
@@ -365,8 +365,10 @@ pub fn Clap(comptime Id: type) type {
             return error.InvalidArgument;
         }
 
-        fn innerNext(iter: &Self) !?[]const u8 {
-            return try iter.inner.next(&iter.arena.allocator);
+        // Returns the next arg in the underlying arg iterator
+        pub fn nextNoParse(clap: &Self) !?[]const u8 {
+            clap.state = State.Normal;
+            return try clap.iter.next(&clap.arena.allocator);
         }
     };
 }
