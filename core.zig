@@ -94,7 +94,7 @@ pub fn Param(comptime Id: type) type {
         }
 
         pub fn with(param: &const Self, comptime field_name: []const u8, v: var) Self {
-            var res = *param;
+            var res = param.*;
             @field(res, field_name) = v;
             return res;
         }

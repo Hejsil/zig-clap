@@ -10,6 +10,8 @@ const io    = std.io;
 
 const assert = debug.assert;
 
+const Opaque = @OpaqueType();
+
 pub const Param = struct {
     field: []const u8,
     short: ?u8,
@@ -67,88 +69,149 @@ pub const Param = struct {
     }
 
     pub fn with(param: &const Param, comptime field_name: []const u8, v: var) Param {
-        var res = *param;
+        var res = param.*;
         @field(res, field_name) = v;
         return res;
     }
 };
 
-pub fn Clap(comptime Result: type) type {
-    return struct {
-        const Self = this;
+pub const Command = struct {
+    field: []const u8,
+    name: []const u8,
+    params: []const Param,
+    sub_commands: []const Command,
 
-        defaults: Result,
-        params: []const Param,
+    Result: type,
+    defaults: &const Opaque,
+    parent: ?&const Command,
 
-        pub fn parse(comptime clap: &const Self, allocator: &mem.Allocator, arg_iter: &core.ArgIterator) !Result {
-            var result = clap.defaults;
-            const core_params = comptime blk: {
-                var res: [clap.params.len]core.Param(usize) = undefined;
+    pub fn init(name: []const u8, comptime Result: type, defaults: &const Result, params: []const Param, sub_commands: []const Command) Command {
+        return Command{
+            .field = name,
+            .name = name,
+            .params = params,
+            .sub_commands = sub_commands,
+            .Result = Result,
+            .defaults = @ptrCast(&const Opaque, defaults),
+            .parent = null,
+        };
+    }
 
-                for (clap.params) |p, i| {
-                    res[i] = core.Param(usize) {
-                        .id = i,
-                        .command = null,
-                        .short = p.short,
-                        .long = p.long,
-                        .takes_value = p.takes_value != null,
-                    };
-                }
+    pub fn with(command: &const Command, comptime field_name: []const u8, v: var) Param {
+        var res = command.*;
+        @field(res, field_name) = v;
+        return res;
+    }
 
-                break :blk res;
-            };
+    pub fn parse(comptime command: &const Command, allocator: &mem.Allocator, arg_iter: &core.ArgIterator) !command.Result {
+        const Parent = struct {};
+        var parent = Parent{};
+        return command.parseHelper(&parent, allocator, arg_iter);
+    }
 
-            var handled = comptime blk: {
-                var res: [clap.params.len]bool = undefined;
-                for (clap.params) |p, i| {
-                    res[i] = !p.required;
-                }
+    fn parseHelper(comptime command: &const Command, parent: var, allocator: &mem.Allocator, arg_iter: &core.ArgIterator) !command.Result {
+        const Result = struct {
+            parent: @typeOf(parent),
+            result: command.Result,
+        };
 
-                break :blk res;
-            };
+        var result = Result{
+            .parent = parent,
+            .result = @ptrCast(&const command.Result, command.defaults).*,
+        };
 
-            var pos: usize = 0;
-            var iter = core.Iterator(usize).init(core_params, arg_iter, allocator);
-            defer iter.deinit();
+        // In order for us to wrap the core api, we have to translate clap.Param into core.Param.
+        const core_params = comptime blk: {
+            var res: [command.params.len + command.sub_commands.len]core.Param(usize) = undefined;
 
-            arg_loop:
-            while (try iter.next()) |arg| : (pos += 1) {
-                inline for(clap.params) |param, i| {
-                    if (arg.id == i and (param.position ?? pos) == pos) {
-                        if (param.takes_value) |parser| {
-                            try parser.parse(getFieldPtr(&result, param.field), ??arg.value);
-                        } else {
-                            *getFieldPtr(&result, param.field) = true;
-                        }
-                        handled[i] = true;
-                        continue :arg_loop;
-                    }
-                }
-
-                return error.InvalidArgument;
+            for (command.params) |p, i| {
+                const id = i;
+                res[id] = core.Param(usize) {
+                    .id = id,
+                    .command = null,
+                    .short = p.short,
+                    .long = p.long,
+                    .takes_value = p.takes_value != null,
+                };
             }
 
-            return result;
+            for (command.sub_commands) |c, i| {
+                const id = i + command.params.len;
+                res[id] = core.Param(usize) {
+                    .id = id,
+                    .command = c.name,
+                    .short = null,
+                    .long = null,
+                    .takes_value = false,
+                };
+            }
+
+            break :blk res;
+        };
+
+        var handled = comptime blk: {
+            var res: [command.params.len]bool = undefined;
+            for (command.params) |p, i| {
+                res[i] = !p.required;
+            }
+
+            break :blk res;
+        };
+
+        var pos: usize = 0;
+        var iter = core.Iterator(usize).init(core_params, arg_iter, allocator);
+        defer iter.deinit();
+
+        arg_loop:
+        while (try iter.next()) |arg| : (pos += 1) {
+            inline for(command.params) |param, i| {
+                comptime const field = "result." ++ param.field;
+
+                if (arg.id == i and (param.position ?? pos) == pos) {
+                    if (param.takes_value) |parser| {
+                        try parser.parse(getFieldPtr(&result, field), ??arg.value);
+                    } else {
+                        getFieldPtr(&result, field).* = true;
+                    }
+                    handled[i] = true;
+                    continue :arg_loop;
+                }
+            }
+
+            inline for(command.sub_commands) |c, i| {
+                comptime const field = "result." ++ c.field;
+                comptime var sub_command = c;
+                sub_command.parent = command;
+
+                if (arg.id == i + command.params.len) {
+                    getFieldPtr(&result, field).* = try sub_command.parseHelper(&result, allocator, arg_iter);
+                    continue :arg_loop;
+                }
+            }
+
+            return error.InvalidArgument;
         }
 
-        fn GetFieldPtrReturn(comptime Struct: type, comptime field: []const u8) type {
-            var inst: Struct = undefined;
-            const dot_index = comptime mem.indexOfScalar(u8, field, '.') ?? {
-                return @typeOf(&@field(inst, field));
-            };
+        return result.result;
+    }
 
-            return GetFieldPtrReturn(@typeOf(@field(inst, field[0..dot_index])), field[dot_index + 1..]);
-        }
+    fn GetFieldPtrReturn(comptime Struct: type, comptime field: []const u8) type {
+        var inst: Struct = undefined;
+        const dot_index = comptime mem.indexOfScalar(u8, field, '.') ?? {
+            return @typeOf(&@field(inst, field));
+        };
 
-        fn getFieldPtr(curr: var, comptime field: []const u8) GetFieldPtrReturn(@typeOf(curr).Child, field) {
-            const dot_index = comptime mem.indexOfScalar(u8, field, '.') ?? {
-                return &@field(curr, field);
-            };
+        return GetFieldPtrReturn(@typeOf(@field(inst, field[0..dot_index])), field[dot_index + 1..]);
+    }
 
-            return getFieldPtr(&@field(curr, field[0..dot_index]), field[dot_index + 1..]);
-        }
-    };
-}
+    fn getFieldPtr(curr: var, comptime field: []const u8) GetFieldPtrReturn(@typeOf(curr).Child, field) {
+        const dot_index = comptime mem.indexOfScalar(u8, field, '.') ?? {
+            return &@field(curr, field);
+        };
+
+        return getFieldPtr(&@field(curr, field[0..dot_index]), field[dot_index + 1..]);
+    }
+};
 
 pub const Parser = struct {
     const UnsafeFunction = &const void;
@@ -179,7 +242,7 @@ pub const Parser = struct {
     pub fn int(comptime Int: type, comptime radix: u8) Parser {
         const func = struct {
             fn i(field_ptr: &Int, arg: []const u8) !void {
-                *field_ptr = try fmt.parseInt(Int, arg, radix);
+                field_ptr.* = try fmt.parseInt(Int, arg, radix);
             }
         }.i;
         return Parser.init(
@@ -194,7 +257,7 @@ pub const Parser = struct {
         error{},
         struct {
             fn s(field_ptr: &[]const u8, arg: []const u8) (error{}!void) {
-                *field_ptr = arg;
+                field_ptr.* = arg;
             }
         }.s
     );
@@ -208,9 +271,22 @@ const Options = struct {
     a: bool,
     b: bool,
     cc: bool,
+    sub: &const SubOptions,
 
     pub fn with(op: &const Options, comptime field: []const u8, value: var) Options {
-        var res = *op;
+        var res = op.*;
+        @field(res, field) = value;
+        return res;
+    }
+};
+
+const SubOptions = struct {
+    a: bool,
+    b: u64,
+    qq: bool,
+
+    pub fn with(op: &const SubOptions, comptime field: []const u8, value: var) SubOptions {
+        var res = op.*;
         @field(res, field) = value;
         return res;
     }
@@ -223,117 +299,142 @@ const default = Options {
     .a = false,
     .b = false,
     .cc = false,
+    .sub = SubOptions{
+        .a = false,
+        .b = 0,
+        .qq = false,
+    },
 };
 
-fn testNoErr(comptime clap: &const Clap(Options), args: []const []const u8, expected: &const Options) void {
+fn testNoErr(comptime command: &const Command, args: []const []const u8, expected: &const command.Result) void {
     var arg_iter = core.ArgSliceIterator.init(args);
-    const actual = clap.parse(debug.global_allocator, &arg_iter.iter) catch unreachable;
+    const actual = command.parse(debug.global_allocator, &arg_iter.iter) catch unreachable;
     assert(mem.eql(u8, expected.str, actual.str));
     assert(expected.int == actual.int);
     assert(expected.uint == actual.uint);
     assert(expected.a == actual.a);
     assert(expected.b == actual.b);
     assert(expected.cc == actual.cc);
+    assert(expected.sub.a == actual.sub.a);
+    assert(expected.sub.b == actual.sub.b);
 }
 
-fn testErr(comptime clap: &const Clap(Options), args: []const []const u8, expected: error) void {
+fn testErr(comptime command: &const Command, args: []const []const u8, expected: error) void {
     var arg_iter = core.ArgSliceIterator.init(args);
-    if (clap.parse(debug.global_allocator, &arg_iter.iter)) |actual| {
+    if (command.parse(debug.global_allocator, &arg_iter.iter)) |actual| {
         unreachable;
     } else |err| {
         assert(err == expected);
     }
 }
 
-test "clap.core" {
+test "command.core" {
     _ = core;
 }
 
-test "clap: short" {
-    const clap = comptime Clap(Options) {
-        .defaults = default,
-        .params = []Param {
+test "command: short" {
+    const command = comptime Command.init(
+        "",
+        Options,
+        default,
+        []Param {
             Param.smart("a"),
             Param.smart("b"),
             Param.smart("int")
                 .with("short", 'i')
-                .with("takes_value", Parser.int(i64, 10))
-        }
-    };
+                .with("takes_value", Parser.int(i64, 10)),
+        },
+        []Command{},
+    );
 
-    testNoErr(clap, [][]const u8 { "-a" },       default.with("a", true));
-    testNoErr(clap, [][]const u8 { "-a", "-b" }, default.with("a", true).with("b",  true));
-    testNoErr(clap, [][]const u8 { "-i=100" },   default.with("int", 100));
-    testNoErr(clap, [][]const u8 { "-i100" },   default.with("int", 100));
-    testNoErr(clap, [][]const u8 { "-i", "100" },   default.with("int", 100));
-    testNoErr(clap, [][]const u8 { "-ab" },      default.with("a", true).with("b",  true));
-    testNoErr(clap, [][]const u8 { "-abi", "100" }, default.with("a", true).with("b", true).with("int",  100));
-    testNoErr(clap, [][]const u8 { "-abi=100" }, default.with("a", true).with("b", true).with("int",  100));
-    testNoErr(clap, [][]const u8 { "-abi100" }, default.with("a", true).with("b", true).with("int",  100));
+    testNoErr(command, [][]const u8 { "-a" },       default.with("a", true));
+    testNoErr(command, [][]const u8 { "-a", "-b" }, default.with("a", true).with("b",  true));
+    testNoErr(command, [][]const u8 { "-i=100" },   default.with("int", 100));
+    testNoErr(command, [][]const u8 { "-i100" },   default.with("int", 100));
+    testNoErr(command, [][]const u8 { "-i", "100" },   default.with("int", 100));
+    testNoErr(command, [][]const u8 { "-ab" },      default.with("a", true).with("b",  true));
+    testNoErr(command, [][]const u8 { "-abi", "100" }, default.with("a", true).with("b", true).with("int",  100));
+    testNoErr(command, [][]const u8 { "-abi=100" }, default.with("a", true).with("b", true).with("int",  100));
+    testNoErr(command, [][]const u8 { "-abi100" }, default.with("a", true).with("b", true).with("int",  100));
 }
 
-test "clap: long" {
-    const clap = comptime Clap(Options) {
-        .defaults = default,
-        .params = []Param {
+test "command: long" {
+    const command = comptime Command.init(
+        "",
+        Options,
+        default,
+        []Param {
             Param.smart("cc"),
             Param.smart("int").with("takes_value", Parser.int(i64, 10)),
             Param.smart("uint").with("takes_value", Parser.int(u64, 10)),
             Param.smart("str").with("takes_value", Parser.string),
-        }
-    };
+        },
+        []Command{},
+    );
 
-    testNoErr(clap, [][]const u8 { "--cc" },         default.with("cc",  true));
-    testNoErr(clap, [][]const u8 { "--int", "100" }, default.with("int",  100));
+    testNoErr(command, [][]const u8 { "--cc" },         default.with("cc",  true));
+    testNoErr(command, [][]const u8 { "--int", "100" }, default.with("int",  100));
 }
 
-test "clap: value bool" {
-    const clap = comptime Clap(Options) {
-        .defaults = default,
-        .params = []Param {
+test "command: value bool" {
+    const command = comptime Command.init(
+        "",
+        Options,
+        default,
+        []Param {
             Param.smart("a"),
-        }
-    };
+        },
+        []Command{},
+    );
 
-    testNoErr(clap, [][]const u8 { "-a" }, default.with("a",  true));
+    testNoErr(command, [][]const u8 { "-a" }, default.with("a",  true));
 }
 
-test "clap: value str" {
-    const clap = comptime Clap(Options) {
-        .defaults = default,
-        .params = []Param {
+test "command: value str" {
+    const command = comptime Command.init(
+        "",
+        Options,
+        default,
+        []Param {
             Param.smart("str").with("takes_value", Parser.string),
-        }
-    };
+        },
+        []Command{},
+    );
 
-    testNoErr(clap, [][]const u8 { "--str", "Hello World!" }, default.with("str", "Hello World!"));
+    testNoErr(command, [][]const u8 { "--str", "Hello World!" }, default.with("str", "Hello World!"));
 }
 
-test "clap: value int" {
-    const clap = comptime Clap(Options) {
-        .defaults = default,
-        .params = []Param {
+test "command: value int" {
+    const command = comptime Command.init(
+        "",
+        Options,
+        default,
+        []Param {
             Param.smart("int").with("takes_value", Parser.int(i64, 10)),
-        }
-    };
+        },
+        []Command{},
+    );
 
-    testNoErr(clap, [][]const u8 { "--int", "100" }, default.with("int", 100));
+    testNoErr(command, [][]const u8 { "--int", "100" }, default.with("int", 100));
 }
 
-test "clap: position" {
-    const clap = comptime Clap(Options) {
-        .defaults = default,
-        .params = []Param {
+test "command: position" {
+    const command = comptime Command.init(
+        "",
+        Options,
+        default,
+        []Param {
             Param.smart("a").with("position", 0),
             Param.smart("b").with("position", 1),
-        }
-    };
+        },
+        []Command{},
+    );
 
-    testNoErr(clap, [][]const u8 { "-a", "-b" }, default.with("a", true).with("b", true));
-    testErr(clap, [][]const u8 { "-b", "-a" }, error.InvalidArgument);
+    testNoErr(command, [][]const u8 { "-a", "-b" }, default.with("a", true).with("b", true));
+    testErr(command, [][]const u8 { "-b", "-a" }, error.InvalidArgument);
 }
 
-test "clap: sub fields" {
+test "command: sub fields" {
     const B = struct {
         a: bool,
     };
@@ -341,15 +442,50 @@ test "clap: sub fields" {
         b: B,
     };
 
-    const clap = comptime Clap(A) {
-        .defaults = A { .b = B { .a = false } },
-        .params = []Param {
+    const command = comptime Command.init(
+        "",
+        A,
+        A { .b = B { .a = false } },
+        []Param {
             Param.short('a')
                 .with("field", "b.a"),
-        }
-    };
+        },
+        []Command{},
+    );
 
     var arg_iter = core.ArgSliceIterator.init([][]const u8{ "-a" });
-    const res = clap.parse(debug.global_allocator, &arg_iter.iter) catch unreachable;
+    const res = command.parse(debug.global_allocator, &arg_iter.iter) catch unreachable;
     debug.assert(res.b.a == true);
+}
+
+test "command: sub commands" {
+    const command = comptime Command.init(
+        "",
+        Options,
+        default,
+        []Param {
+            Param.smart("a"),
+            Param.smart("b"),
+        },
+        []Command{
+            Command.init(
+                "sub",
+                SubOptions,
+                default.sub,
+                []Param {
+                    Param.smart("a"),
+                    Param.smart("b")
+                        .with("takes_value", Parser.int(u64, 10)),
+                },
+                []Command{},
+            ),
+        },
+    );
+
+    debug.warn("{c}", ??command.params[0].short);
+
+    testNoErr(command, [][]const u8 { "sub", "-a" }, default.with("sub", default.sub.with("a", true)));
+    testNoErr(command, [][]const u8 { "sub", "-b", "100" }, default.with("sub", default.sub.with("b", 100)));
+    testNoErr(command, [][]const u8 { "-a", "sub", "-a" }, default.with("a", true).with("sub", default.sub.with("a", true)));
+    testErr(command, [][]const u8 { "-qq", "sub" }, error.InvalidArgument);
 }
