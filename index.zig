@@ -128,10 +128,12 @@ pub const Command = struct {
                 const id = i;
                 res[id] = core.Param(usize) {
                     .id = id,
-                    .command = null,
-                    .short = p.short,
-                    .long = p.long,
                     .takes_value = p.takes_value != null,
+                    .names = core.Names{
+                        .bare = null,
+                        .short = p.short,
+                        .long = p.long,
+                    },
                 };
             }
 
@@ -139,10 +141,8 @@ pub const Command = struct {
                 const id = i + command.params.len;
                 res[id] = core.Param(usize) {
                     .id = id,
-                    .command = c.name,
-                    .short = null,
-                    .long = null,
                     .takes_value = false,
+                    .names = core.Names.bare(c.name),
                 };
             }
 
@@ -159,7 +159,7 @@ pub const Command = struct {
         };
 
         var pos: usize = 0;
-        var iter = core.Iterator(usize).init(core_params, arg_iter, allocator);
+        var iter = core.Clap(usize).init(core_params, arg_iter, allocator);
         defer iter.deinit();
 
         arg_loop:
