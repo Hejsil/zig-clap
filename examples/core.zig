@@ -7,8 +7,10 @@ const mem = std.mem;
 const Names = clap.Names;
 const Param = clap.Param;
 
+const ArgError = clap.OsArgIterator.Error;
+
 // TODO: More specific error in this func type.
-const Command = fn(&mem.Allocator, &clap.ArgIterator) error!void;
+const Command = fn(&mem.Allocator, &clap.ArgIterator(ArgError)) error!void;
 
 const params = []Param(Command){
     Param(Command).init(help, false, Names.prefix("help")),
@@ -52,11 +54,12 @@ pub fn main() !void {
 
     const allocator = &arena.allocator;
 
-    var args = clap.OsArgIterator.init();
-    var parser = clap.Clap(Command).init(params, &args.iter, allocator);
-    defer parser.deinit();
+    var args = clap.OsArgIterator.init(allocator);
+    defer args.deinit();
 
-    const exe = try parser.nextNoParse();
+    const exe = try args.iter.next();
+    var parser = clap.Clap(Command, ArgError).init(params, &args.iter);
+
     const maybe_arg = parser.next() catch |err| b: {
         debug.warn("{}.\n", @errorName(err));
         // debug.warn(usage); TODO: error: evaluation exceeded 1000 backwards branches
@@ -71,7 +74,7 @@ pub fn main() !void {
     try arg.param.id(allocator, parser.iter);
 }
 
-pub fn help(allocator: &mem.Allocator, args: &clap.ArgIterator) (error{}!void) {
+pub fn help(allocator: &mem.Allocator, args: &clap.ArgIterator(ArgError)) (error{}!void) {
     // debug.warn(usage); TODO: error: evaluation exceeded 1000 backwards branches
 }
 
@@ -144,7 +147,7 @@ const missing_build_file =
     \\
 ;
 
-fn cmdBuild(allocator: &mem.Allocator, args: &clap.ArgIterator) !void {
+fn cmdBuild(allocator: &mem.Allocator, args: &clap.ArgIterator(ArgError)) !void {
     var init = false;
     var build_file: []const u8 = "build.zig";
     var cache_dir: []const u8 = "zig-cache";
@@ -157,8 +160,7 @@ fn cmdBuild(allocator: &mem.Allocator, args: &clap.ArgIterator) !void {
     var verbose_llvm_ir = false;
     var verbose_cimport = false;
 
-    var parser = clap.Clap(Build).init(build_params, args, allocator);
-    defer parser.deinit();
+    var parser = clap.Clap(Build, ArgError).init(build_params, args);
 
     while (parser.next() catch |err| {
         debug.warn("{}.\n", @errorName(err));
@@ -321,17 +323,17 @@ const build_generic_usage =
 ;
 
 
-fn cmdBuildExe(allocator: &mem.Allocator, args: &clap.ArgIterator) (error{}!void) {
+fn cmdBuildExe(allocator: &mem.Allocator, args: &clap.ArgIterator(ArgError)) (error{}!void) {
 }
 
 // cmd:build-lib ///////////////////////////////////////////////////////////////////////////////////
 
-fn cmdBuildLib(allocator: &mem.Allocator, args: &clap.ArgIterator) (error{}!void) {
+fn cmdBuildLib(allocator: &mem.Allocator, args: &clap.ArgIterator(ArgError)) (error{}!void) {
 }
 
 // cmd:build-obj ///////////////////////////////////////////////////////////////////////////////////
 
-fn cmdBuildObj(allocator: &mem.Allocator, args: &clap.ArgIterator) (error{}!void) {
+fn cmdBuildObj(allocator: &mem.Allocator, args: &clap.ArgIterator(ArgError)) (error{}!void) {
 }
 
 // cmd:fmt /////////////////////////////////////////////////////////////////////////////////////////
@@ -348,17 +350,17 @@ const usage_fmt =
     \\
 ;
 
-fn cmdFmt(allocator: &mem.Allocator, args: &clap.ArgIterator) (error{}!void) {
+fn cmdFmt(allocator: &mem.Allocator, args: &clap.ArgIterator(ArgError)) (error{}!void) {
 }
 
 // cmd:targets /////////////////////////////////////////////////////////////////////////////////////
 
-fn cmdTargets(allocator: &mem.Allocator, args: &clap.ArgIterator) (error{}!void) {
+fn cmdTargets(allocator: &mem.Allocator, args: &clap.ArgIterator(ArgError)) (error{}!void) {
 }
 
 // cmd:version /////////////////////////////////////////////////////////////////////////////////////
 
-fn cmdVersion(allocator: &mem.Allocator, args: &clap.ArgIterator) (error{}!void) {
+fn cmdVersion(allocator: &mem.Allocator, args: &clap.ArgIterator(ArgError)) (error{}!void) {
 }
 
 // cmd:test ////////////////////////////////////////////////////////////////////////////////////////
@@ -372,7 +374,7 @@ const usage_test =
     \\
 ;
 
-fn cmdTest(allocator: &mem.Allocator, args: &clap.ArgIterator) (error{}!void) {
+fn cmdTest(allocator: &mem.Allocator, args: &clap.ArgIterator(ArgError)) (error{}!void) {
 }
 
 // cmd:run /////////////////////////////////////////////////////////////////////////////////////////
@@ -388,7 +390,7 @@ const usage_run =
     \\
 ;
 
-fn cmdRun(allocator: &mem.Allocator, args: &clap.ArgIterator) (error{}!void) {
+fn cmdRun(allocator: &mem.Allocator, args: &clap.ArgIterator(ArgError)) (error{}!void) {
 }
 
 // cmd:translate-c /////////////////////////////////////////////////////////////////////////////////
@@ -404,7 +406,7 @@ const usage_translate_c =
     \\
 ;
 
-fn cmdTranslateC(allocator: &mem.Allocator, args: &clap.ArgIterator) (error{}!void) {
+fn cmdTranslateC(allocator: &mem.Allocator, args: &clap.ArgIterator(ArgError)) (error{}!void) {
 }
 
 // cmd:zen /////////////////////////////////////////////////////////////////////////////////////////
@@ -426,7 +428,7 @@ const info_zen =
     \\
 ;
 
-fn cmdZen(allocator: &mem.Allocator, args: &clap.ArgIterator) (error{}!void) {
+fn cmdZen(allocator: &mem.Allocator, args: &clap.ArgIterator(ArgError)) (error{}!void) {
 }
 
 // cmd:internal ////////////////////////////////////////////////////////////////////////////////////
@@ -440,5 +442,5 @@ const usage_internal =
     \\
 ;
 
-fn cmdInternal(allocator: &mem.Allocator, args: &clap.ArgIterator) (error{}!void) {
+fn cmdInternal(allocator: &mem.Allocator, args: &clap.ArgIterator(ArgError)) (error{}!void) {
 }

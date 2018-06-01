@@ -136,34 +136,39 @@ pub fn Arg(comptime Id: type) type {
 }
 
 /// A interface for iterating over command line arguments
-pub const ArgIterator = struct {
-    const Error = error{OutOfMemory};
+pub fn ArgIterator(comptime E: type) type {
+    return struct {
+        const Self = this;
+        const Error = E;
 
-    nextFn: fn(iter: &ArgIterator, allocator: &mem.Allocator) Error!?[]const u8,
+        nextFn: fn(iter: &Self) Error!?[]const u8,
 
-    pub fn next(iter: &ArgIterator, allocator: &mem.Allocator) Error!?[]const u8 {
-        return iter.nextFn(iter, allocator);
-    }
-};
+        pub fn next(iter: &Self) Error!?[]const u8 {
+            return iter.nextFn(iter);
+        }
+    };
+}
 
 /// An ::ArgIterator, which iterates over a slice of arguments.
 /// This implementation does not allocate.
 pub const ArgSliceIterator = struct {
+    const Error = error{};
+
     args: []const []const u8,
     index: usize,
-    iter: ArgIterator,
+    iter: ArgIterator(Error),
 
     pub fn init(args: []const []const u8) ArgSliceIterator {
         return ArgSliceIterator {
             .args = args,
             .index = 0,
-            .iter = ArgIterator {
+            .iter = ArgIterator(Error) {
                 .nextFn = nextFn,
             },
         };
     }
 
-    fn nextFn(iter: &ArgIterator, allocator: &mem.Allocator) ArgIterator.Error!?[]const u8 {
+    fn nextFn(iter: &ArgIterator(Error)) Error!?[]const u8 {
         const self = @fieldParentPtr(ArgSliceIterator, "iter", iter);
         if (self.args.len <= self.index)
             return null;
@@ -176,22 +181,30 @@ pub const ArgSliceIterator = struct {
 /// An ::ArgIterator, which wraps the ArgIterator in ::std.
 /// On windows, this iterator allocates.
 pub const OsArgIterator = struct {
-    args: os.ArgIterator,
-    iter: ArgIterator,
+    const Error = os.ArgIterator.NextError;
 
-    pub fn init() OsArgIterator {
+    arena: heap.ArenaAllocator,
+    args: os.ArgIterator,
+    iter: ArgIterator(Error),
+
+    pub fn init(allocator: &mem.Allocator) OsArgIterator {
         return OsArgIterator {
+            .arena = heap.ArenaAllocator.init(allocator),
             .args = os.args(),
-            .iter = ArgIterator {
+            .iter = ArgIterator(Error) {
                 .nextFn = nextFn,
             },
         };
     }
 
-    fn nextFn(iter: &ArgIterator, allocator: &mem.Allocator) ArgIterator.Error!?[]const u8 {
+    pub fn deinit(iter: &OsArgIterator) void {
+        iter.arena.deinit();
+    }
+
+    fn nextFn(iter: &ArgIterator(Error)) Error!?[]const u8 {
         const self = @fieldParentPtr(OsArgIterator, "iter", iter);
         if (builtin.os == builtin.Os.windows) {
-            return try self.args.next(allocator) ?? return null;
+            return try self.args.next(self.allocator) ?? return null;
         } else {
             return self.args.nextPosix();
         }
@@ -201,7 +214,7 @@ pub const OsArgIterator = struct {
 /// A command line argument parser which, given an ::ArgIterator, will parse arguments according
 /// to the ::params. ::Clap parses in an iterating manner, so you have to use a loop together with
 /// ::Clap.next to parse all the arguments of your program.
-pub fn Clap(comptime Id: type) type {
+pub fn Clap(comptime Id: type, comptime ArgError: type) type {
     return struct {
         const Self = this;
 
@@ -215,24 +228,18 @@ pub fn Clap(comptime Id: type) type {
             };
         };
 
-        arena: heap.ArenaAllocator,
         params: []const Param(Id),
-        iter: &ArgIterator,
+        iter: &ArgIterator(ArgError),
         state: State,
 
-        pub fn init(params: []const Param(Id), iter: &ArgIterator, allocator: &mem.Allocator) Self {
+        pub fn init(params: []const Param(Id), iter: &ArgIterator(ArgError)) Self {
             var res = Self {
-                .arena = heap.ArenaAllocator.init(allocator),
                 .params = params,
                 .iter = iter,
                 .state = State.Normal,
             };
 
             return res;
-        }
-
-        pub fn deinit(clap: &Self) void {
-            clap.arena.deinit();
         }
 
         /// Get the next ::Arg that matches a ::Param.
@@ -246,7 +253,7 @@ pub fn Clap(comptime Id: type) type {
 
             switch (clap.state) {
                 State.Normal => {
-                    const full_arg = (try clap.nextNoParse()) ?? return null;
+                    const full_arg = (try clap.iter.next()) ?? return null;
                     const arg_info = blk: {
                         var arg = full_arg;
                         var kind = ArgInfo.Kind.Bare;
@@ -294,7 +301,7 @@ pub fn Clap(comptime Id: type) type {
                                     if (maybe_value) |v|
                                         break :blk v;
 
-                                    break :blk (try clap.nextNoParse()) ?? return error.MissingValue;
+                                    break :blk (try clap.iter.next()) ?? return error.MissingValue;
                                 };
 
                                 return Arg(Id).init(param, value);
@@ -351,7 +358,7 @@ pub fn Clap(comptime Id: type) type {
                     return Arg(Id).init(param, null);
 
                 if (arg.len <= next_index) {
-                    const value = (try clap.nextNoParse()) ?? return error.MissingValue;
+                    const value = (try clap.iter.next()) ?? return error.MissingValue;
                     return Arg(Id).init(param, value);
                 }
 
@@ -363,12 +370,6 @@ pub fn Clap(comptime Id: type) type {
             }
 
             return error.InvalidArgument;
-        }
-
-        // Returns the next arg in the underlying arg iterator
-        pub fn nextNoParse(clap: &Self) !?[]const u8 {
-            clap.state = State.Normal;
-            return try clap.iter.next(&clap.arena.allocator);
         }
     };
 }

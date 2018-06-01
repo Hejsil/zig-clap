@@ -14,7 +14,7 @@ const Clap = core.Clap;
 
 fn testNoErr(params: []const Param(u8), args: []const []const u8, ids: []const u8, values: []const ?[]const u8) void {
     var arg_iter = ArgSliceIterator.init(args);
-    var iter = Clap(u8).init(params, &arg_iter.iter, debug.global_allocator);
+    var iter = Clap(u8, ArgSliceIterator.Error).init(params, &arg_iter.iter);
 
     var i: usize = 0;
     while (iter.next() catch unreachable) |arg| : (i += 1) {

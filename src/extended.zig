@@ -103,13 +103,13 @@ pub const Command = struct {
         return res;
     }
 
-    pub fn parse(comptime command: &const Command, allocator: &mem.Allocator, arg_iter: &core.ArgIterator) !command.Result {
+    pub fn parse(comptime command: &const Command, allocator: &mem.Allocator, arg_iter: var) !command.Result {
         const Parent = struct {};
         var parent = Parent{};
         return command.parseHelper(&parent, allocator, arg_iter);
     }
 
-    fn parseHelper(comptime command: &const Command, parent: var, allocator: &mem.Allocator, arg_iter: &core.ArgIterator) !command.Result {
+    fn parseHelper(comptime command: &const Command, parent: var, allocator: &mem.Allocator, arg_iter: var) !command.Result {
         const Result = struct {
             parent: @typeOf(parent),
             result: command.Result,
@@ -159,11 +159,10 @@ pub const Command = struct {
         };
 
         var pos: usize = 0;
-        var iter = core.Clap(usize).init(core_params, arg_iter, allocator);
-        defer iter.deinit();
+        var clap = core.Clap(usize, @typeOf(arg_iter.*).Error).init(core_params, arg_iter);
 
         arg_loop:
-        while (try iter.next()) |arg| : (pos += 1) {
+        while (try clap.next()) |arg| : (pos += 1) {
             inline for(command.params) |param, i| {
                 comptime const field = "result." ++ param.field;
 
