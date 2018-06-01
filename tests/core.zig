@@ -18,7 +18,7 @@ fn testNoErr(params: []const Param(u8), args: []const []const u8, ids: []const u
 
     var i: usize = 0;
     while (iter.next() catch unreachable) |arg| : (i += 1) {
-        debug.assert(ids[i] == arg.id);
+        debug.assert(ids[i] == arg.param.id);
         const expected_value = values[i] ?? {
             debug.assert(arg.value == null);
             continue;

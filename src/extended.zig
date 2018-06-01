@@ -167,7 +167,7 @@ pub const Command = struct {
             inline for(command.params) |param, i| {
                 comptime const field = "result." ++ param.field;
 
-                if (arg.id == i and (param.position ?? pos) == pos) {
+                if (arg.param.id == i and (param.position ?? pos) == pos) {
                     if (param.takes_value) |parser| {
                         try parser.parse(getFieldPtr(&result, field), ??arg.value);
                     } else {
@@ -183,7 +183,7 @@ pub const Command = struct {
                 comptime var sub_command = c;
                 sub_command.parent = command;
 
-                if (arg.id == i + command.params.len) {
+                if (arg.param.id == i + command.params.len) {
                     getFieldPtr(&result, field).* = try sub_command.parseHelper(&result, allocator, arg_iter);
                     continue :arg_loop;
                 }
