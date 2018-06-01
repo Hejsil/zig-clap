@@ -266,8 +266,10 @@ pub fn Clap(comptime Id: type, comptime ArgError: type) type {
                             kind = ArgInfo.Kind.Short;
                         }
 
-                        if (arg.len == 0)
-                            return error.ArgWithNoName;
+                        // We allow long arguments to go without a name.
+                        // This allows the user to use "--" for something important
+                        if (kind != ArgInfo.Kind.Long and arg.len == 0)
+                            return error.InvalidArgument;
 
                         break :blk ArgInfo { .arg = arg, .kind = kind };
                     };

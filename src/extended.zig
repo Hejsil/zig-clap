@@ -10,205 +10,33 @@ const io    = std.io;
 
 const assert = debug.assert;
 
-const Opaque = @OpaqueType();
-
 pub const Param = struct {
     field: []const u8,
-    short: ?u8,
-    long: ?[]const u8,
-    takes_value: ?Parser,
+    names: core.Names,
+    kind: Kind,
     required: bool,
     position: ?usize,
 
-    pub fn short(s: u8) Param {
-        return Param{
-            .field = []u8{s},
-            .short = s,
-            .long = null,
-            .takes_value = null,
-            .required = false,
-            .position = null,
-        };
-    }
-
-    pub fn long(l: []const u8) Param {
-        return Param{
-            .field = l,
-            .short = null,
-            .long = l,
-            .takes_value = null,
-            .required = false,
-            .position = null,
-        };
-    }
-
-    pub fn value(f: []const u8) Param {
-        return Param{
-            .field = f,
-            .short = null,
-            .long = null,
-            .takes_value = null,
-            .required = false,
-            .position = null,
-        };
-    }
-
-    /// Initialize a ::Param.
-    /// If ::name.len == 0, then it's a value parameter: "value".
-    /// If ::name.len == 1, then it's a short parameter: "-s".
-    /// If ::name.len > 1, then it's a long parameter: "--long".
-    pub fn smart(name: []const u8) Param {
-        return Param{
-            .field = name,
-            .short = if (name.len == 1) name[0] else null,
-            .long = if (name.len > 1) name else null,
-            .takes_value = null,
-            .required = false,
-            .position = null,
-        };
-    }
-
-    pub fn with(param: &const Param, comptime field_name: []const u8, v: var) Param {
-        var res = param.*;
-        @field(res, field_name) = v;
-        return res;
-    }
+    pub const Kind = union(enum) {
+        Flag,
+        Option: Parser,
+        SubCommand: Command,
+    };
 };
 
+const Opaque = @OpaqueType();
 pub const Command = struct {
-    field: []const u8,
-    name: []const u8,
     params: []const Param,
-    sub_commands: []const Command,
 
     Result: type,
-    defaults: &const Opaque,
-    parent: ?&const Command,
+    default: &const Opaque,
 
-    pub fn init(name: []const u8, comptime Result: type, defaults: &const Result, params: []const Param, sub_commands: []const Command) Command {
+    pub fn init(comptime Result: type, default: &const Result, params: []const Param) Command {
         return Command{
-            .field = name,
-            .name = name,
             .params = params,
-            .sub_commands = sub_commands,
             .Result = Result,
-            .defaults = @ptrCast(&const Opaque, defaults),
-            .parent = null,
+            .default = @ptrCast(&const Opaque, default),
         };
-    }
-
-    pub fn with(command: &const Command, comptime field_name: []const u8, v: var) Param {
-        var res = command.*;
-        @field(res, field_name) = v;
-        return res;
-    }
-
-    pub fn parse(comptime command: &const Command, allocator: &mem.Allocator, arg_iter: var) !command.Result {
-        const Parent = struct {};
-        var parent = Parent{};
-        return command.parseHelper(&parent, allocator, arg_iter);
-    }
-
-    fn parseHelper(comptime command: &const Command, parent: var, allocator: &mem.Allocator, arg_iter: var) !command.Result {
-        const Result = struct {
-            parent: @typeOf(parent),
-            result: command.Result,
-        };
-
-        var result = Result{
-            .parent = parent,
-            .result = @ptrCast(&const command.Result, command.defaults).*,
-        };
-
-        // In order for us to wrap the core api, we have to translate clap.Param into core.Param.
-        const core_params = comptime blk: {
-            var res: [command.params.len + command.sub_commands.len]core.Param(usize) = undefined;
-
-            for (command.params) |p, i| {
-                const id = i;
-                res[id] = core.Param(usize) {
-                    .id = id,
-                    .takes_value = p.takes_value != null,
-                    .names = core.Names{
-                        .bare = null,
-                        .short = p.short,
-                        .long = p.long,
-                    },
-                };
-            }
-
-            for (command.sub_commands) |c, i| {
-                const id = i + command.params.len;
-                res[id] = core.Param(usize) {
-                    .id = id,
-                    .takes_value = false,
-                    .names = core.Names.bare(c.name),
-                };
-            }
-
-            break :blk res;
-        };
-
-        var handled = comptime blk: {
-            var res: [command.params.len]bool = undefined;
-            for (command.params) |p, i| {
-                res[i] = !p.required;
-            }
-
-            break :blk res;
-        };
-
-        var pos: usize = 0;
-        var clap = core.Clap(usize, @typeOf(arg_iter.*).Error).init(core_params, arg_iter);
-
-        arg_loop:
-        while (try clap.next()) |arg| : (pos += 1) {
-            inline for(command.params) |param, i| {
-                comptime const field = "result." ++ param.field;
-
-                if (arg.param.id == i and (param.position ?? pos) == pos) {
-                    if (param.takes_value) |parser| {
-                        try parser.parse(getFieldPtr(&result, field), ??arg.value);
-                    } else {
-                        getFieldPtr(&result, field).* = true;
-                    }
-                    handled[i] = true;
-                    continue :arg_loop;
-                }
-            }
-
-            inline for(command.sub_commands) |c, i| {
-                comptime const field = "result." ++ c.field;
-                comptime var sub_command = c;
-                sub_command.parent = command;
-
-                if (arg.param.id == i + command.params.len) {
-                    getFieldPtr(&result, field).* = try sub_command.parseHelper(&result, allocator, arg_iter);
-                    continue :arg_loop;
-                }
-            }
-
-            return error.InvalidArgument;
-        }
-
-        return result.result;
-    }
-
-    fn GetFieldPtrReturn(comptime Struct: type, comptime field: []const u8) type {
-        var inst: Struct = undefined;
-        const dot_index = comptime mem.indexOfScalar(u8, field, '.') ?? {
-            return @typeOf(&@field(inst, field));
-        };
-
-        return GetFieldPtrReturn(@typeOf(@field(inst, field[0..dot_index])), field[dot_index + 1..]);
-    }
-
-    fn getFieldPtr(curr: var, comptime field: []const u8) GetFieldPtrReturn(@typeOf(curr).Child, field) {
-        const dot_index = comptime mem.indexOfScalar(u8, field, '.') ?? {
-            return &@field(curr, field);
-        };
-
-        return getFieldPtr(&@field(curr, field[0..dot_index]), field[dot_index + 1..]);
     }
 };
 
@@ -261,3 +89,112 @@ pub const Parser = struct {
         }.s
     );
 };
+
+pub fn Clap(comptime Result: type) type {
+    return struct {
+        const Self = this;
+
+        default: Result,
+        params: []const Param,
+
+        pub fn parse(
+            comptime clap: &const Self,
+            comptime Error: type,
+            iter: &core.ArgIterator(Error),
+        ) !Result {
+            // We initialize the core.Clap without any params, and fill them out in parseHelper.
+            var c = core.Clap(usize, Error).init([]core.Param(usize){}, iter);
+
+            const top_level_command = comptime Command.init(Result, &clap.default, clap.params);
+            return try parseHelper(top_level_command, Error, &c);
+        }
+
+        fn parseHelper(
+            comptime command: &const Command,
+            comptime Error: type,
+            clap: &core.Clap(usize, Error),
+        ) !command.Result {
+            var result = @ptrCast(&const command.Result, command.default).*;
+
+            var handled = comptime blk: {
+                var res: [command.params.len]bool = undefined;
+                for (command.params) |p, i| {
+                    res[i] = !p.required;
+                }
+
+                break :blk res;
+            };
+
+            // We replace the current clap with the commands parameters, so that we preserve the that
+            // claps state. This is important, as core.Clap could be in a Chaining state, and
+            // constructing a new core.Clap would skip the last chaining arguments.
+            clap.params = comptime blk: {
+                var res: [command.params.len]core.Param(usize) = undefined;
+
+                for (command.params) |p, i| {
+                    const id = i;
+                    res[id] = core.Param(usize) {
+                        .id = id,
+                        .takes_value = p.kind == Param.Kind.Option,
+                        .names = p.names,
+                    };
+                }
+
+                break :blk res;
+            };
+
+            var pos: usize = 0;
+
+            arg_loop:
+            while (try clap.next()) |arg| : (pos += 1) {
+                inline for(command.params) |param, i| {
+                    if (arg.param.id == i and (param.position ?? pos) == pos) {
+                        handled[i] = true;
+
+                        switch (param.kind) {
+                            Param.Kind.Flag => {
+                                getFieldPtr(&result, param.field).* = true;
+                            },
+                            Param.Kind.Option => |parser| {
+                                try parser.parse(getFieldPtr(&result, param.field), ??arg.value);
+                            },
+                            Param.Kind.SubCommand => |sub_command| {
+                                getFieldPtr(&result, param.field).* = try sub_command.parseHelper(Error, clap);
+
+                                // After parsing a subcommand, there should be no arguments left.
+                                break :arg_loop;
+                            },
+                        }
+                        continue :arg_loop;
+                    }
+                }
+
+                return error.InvalidArgument;
+            }
+
+            for (handled) |h| {
+                if (!h)
+                    return error.ParamNotHandled;
+            }
+
+            return result;
+        }
+
+        fn GetFieldPtrReturn(comptime Struct: type, comptime field: []const u8) type {
+            var inst: Struct = undefined;
+            const dot_index = comptime mem.indexOfScalar(u8, field, '.') ?? {
+                return @typeOf(&@field(inst, field));
+            };
+
+            return GetFieldPtrReturn(@typeOf(@field(inst, field[0..dot_index])), field[dot_index + 1..]);
+        }
+
+        fn getFieldPtr(curr: var, comptime field: []const u8) GetFieldPtrReturn(@typeOf(curr).Child, field) {
+            const dot_index = comptime mem.indexOfScalar(u8, field, '.') ?? {
+                return &@field(curr, field);
+            };
+
+            return getFieldPtr(&@field(curr, field[0..dot_index]), field[dot_index + 1..]);
+        }
+    };
+}
