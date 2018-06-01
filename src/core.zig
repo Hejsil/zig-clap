@@ -123,12 +123,12 @@ pub fn Arg(comptime Id: type) type {
     return struct {
         const Self = this;
 
-        id: Id,
+        param: &const Param(Id),
         value: ?[]const u8,
 
-        pub fn init(id: Id, value: ?[]const u8) Self {
+        pub fn init(param: &const Param(Id), value: ?[]const u8) Self {
             return Self {
-                .id = id,
+                .param = param,
                 .value = value,
             };
         }
@@ -287,7 +287,7 @@ pub fn Clap(comptime Id: type) type {
                                     if (maybe_value != null)
                                         return error.DoesntTakeValue;
 
-                                    return Arg(Id).init(param.id, null);
+                                    return Arg(Id).init(param, null);
                                 }
 
                                 const value = blk: {
@@ -297,7 +297,7 @@ pub fn Clap(comptime Id: type) type {
                                     break :blk (try clap.nextNoParse()) ?? return error.MissingValue;
                                 };
 
-                                return Arg(Id).init(param.id, value);
+                                return Arg(Id).init(param, value);
                             }
                         },
                         ArgInfo.Kind.Short => {
@@ -315,7 +315,7 @@ pub fn Clap(comptime Id: type) type {
                             if (param.names.short) |_| continue;
                             if (param.names.long) |_| continue;
 
-                            return Arg(Id).init(param.id, arg);
+                            return Arg(Id).init(param, arg);
                         }
                     }
 
@@ -330,7 +330,7 @@ pub fn Clap(comptime Id: type) type {
             const index = state.index;
             const next_index = index + 1;
 
-            for (clap.params) |param| {
+            for (clap.params) |*param| {
                 const short = param.names.short ?? continue;
                 if (short != arg[index])
                     continue;
@@ -348,18 +348,18 @@ pub fn Clap(comptime Id: type) type {
                 }
 
                 if (!param.takes_value)
-                    return Arg(Id).init(param.id, null);
+                    return Arg(Id).init(param, null);
 
                 if (arg.len <= next_index) {
                     const value = (try clap.nextNoParse()) ?? return error.MissingValue;
-                    return Arg(Id).init(param.id, value);
+                    return Arg(Id).init(param, value);
                 }
 
                 if (arg[next_index] == '=') {
-                    return Arg(Id).init(param.id, arg[next_index + 1..]);
+                    return Arg(Id).init(param, arg[next_index + 1..]);
                 }
 
-                return Arg(Id).init(param.id, arg[next_index..]);
+                return Arg(Id).init(param, arg[next_index..]);
             }
 
             return error.InvalidArgument;

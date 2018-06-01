@@ -7,32 +7,21 @@ const mem = std.mem;
 const Names = clap.Names;
 const Param = clap.Param;
 
-const Command = enum {
-    Help,
-    Build,
-    BuildExe,
-    BuildLib,
-    BuildObj,
-    Fmt,
-    Run,
-    Targets,
-    Test,
-    Version,
-    Zen,
-};
+// TODO: More specific error in this func type.
+const Command = fn(&mem.Allocator, &clap.ArgIterator) error!void;
 
 const params = []Param(Command){
-    Param(Command).init(Command.Help, false, Names.prefix("help")),
-    Param(Command).init(Command.Build, false, Names.bare("build")),
-    Param(Command).init(Command.BuildExe, false, Names.bare("build-exe")),
-    Param(Command).init(Command.BuildLib, false, Names.bare("build-lib")),
-    Param(Command).init(Command.BuildObj, false, Names.bare("build-obj")),
-    Param(Command).init(Command.Fmt, false, Names.bare("fmt")),
-    Param(Command).init(Command.Run, false, Names.bare("run")),
-    Param(Command).init(Command.Targets, false, Names.bare("targets")),
-    Param(Command).init(Command.Test, false, Names.bare("test")),
-    Param(Command).init(Command.Version, false, Names.bare("version")),
-    Param(Command).init(Command.Zen, false, Names.bare("zen")),
+    Param(Command).init(help, false, Names.prefix("help")),
+    Param(Command).init(cmdBuild, false, Names.bare("build")),
+    Param(Command).init(cmdBuildExe, false, Names.bare("build-exe")),
+    Param(Command).init(cmdBuildLib, false, Names.bare("build-lib")),
+    Param(Command).init(cmdBuildObj, false, Names.bare("build-obj")),
+    Param(Command).init(cmdFmt, false, Names.bare("fmt")),
+    Param(Command).init(cmdRun, false, Names.bare("run")),
+    Param(Command).init(cmdTargets, false, Names.bare("targets")),
+    Param(Command).init(cmdTest, false, Names.bare("test")),
+    Param(Command).init(cmdVersion, false, Names.bare("version")),
+    Param(Command).init(cmdZen, false, Names.bare("zen")),
 };
 
 const usage =
@@ -79,24 +68,16 @@ pub fn main() !void {
         return error.NoCommandFound;
     };
 
-    switch (arg.id) {
-        Command.Help => return, // debug.warn(usage), TODO: error: evaluation exceeded 1000 backwards branches
-        Command.Build => try cmdBuild(allocator, parser.iter),
-        Command.BuildExe,
-        Command.BuildLib,
-        Command.BuildObj,
-        Command.Fmt,
-        Command.Run,
-        Command.Targets,
-        Command.Test,
-        Command.Version,
-        Command.Zen => unreachable,
-    }
+    try arg.param.id(allocator, parser.iter);
+}
+
+pub fn help(allocator: &mem.Allocator, args: &clap.ArgIterator) (error{}!void) {
+    // debug.warn(usage); TODO: error: evaluation exceeded 1000 backwards branches
 }
 
 // cmd:build ///////////////////////////////////////////////////////////////////////////////////////
 
-const BuildArg = enum {
+const Build = enum {
     Help,
     Init,
     BuildFile,
@@ -111,20 +92,20 @@ const BuildArg = enum {
     VerboseCImport,
 };
 
-const build_params = []Param(BuildArg){
-    Param(BuildArg).init(BuildArg.Help, false, Names.prefix("help")),
-    Param(BuildArg).init(BuildArg.Init, false, Names.long("init")),
-    Param(BuildArg).init(BuildArg.BuildFile, true, Names.long("build-file")),
-    Param(BuildArg).init(BuildArg.CacheDir, true, Names.long("cache-dir")),
-    Param(BuildArg).init(BuildArg.Verbose, false, Names.prefix("verbose")),
-    Param(BuildArg).init(BuildArg.Prefix, true, Names.long("prefix")),
+const build_params = []Param(Build){
+    Param(Build).init(Build.Help, false, Names.prefix("help")),
+    Param(Build).init(Build.Init, false, Names.long("init")),
+    Param(Build).init(Build.BuildFile, true, Names.long("build-file")),
+    Param(Build).init(Build.CacheDir, true, Names.long("cache-dir")),
+    Param(Build).init(Build.Verbose, false, Names.prefix("verbose")),
+    Param(Build).init(Build.Prefix, true, Names.long("prefix")),
 
-    Param(BuildArg).init(BuildArg.VerboseTokenize, false, Names.prefix("verbose-tokenize")),
-    Param(BuildArg).init(BuildArg.VerboseAst, false, Names.prefix("verbose-ast")),
-    Param(BuildArg).init(BuildArg.VerboseLink, false, Names.prefix("verbose-link")),
-    Param(BuildArg).init(BuildArg.VerboseIr, false, Names.prefix("verbose-ir")),
-    Param(BuildArg).init(BuildArg.VerboseLlvmIr, false, Names.prefix("verbose-llvm-ir")),
-    Param(BuildArg).init(BuildArg.VerboseCImport, false, Names.prefix("verbose-cimport")),
+    Param(Build).init(Build.VerboseTokenize, false, Names.prefix("verbose-tokenize")),
+    Param(Build).init(Build.VerboseAst, false, Names.prefix("verbose-ast")),
+    Param(Build).init(Build.VerboseLink, false, Names.prefix("verbose-link")),
+    Param(Build).init(Build.VerboseIr, false, Names.prefix("verbose-ir")),
+    Param(Build).init(Build.VerboseLlvmIr, false, Names.prefix("verbose-llvm-ir")),
+    Param(Build).init(Build.VerboseCImport, false, Names.prefix("verbose-cimport")),
 };
 
 const build_usage =
@@ -176,26 +157,26 @@ fn cmdBuild(allocator: &mem.Allocator, args: &clap.ArgIterator) !void {
     var verbose_llvm_ir = false;
     var verbose_cimport = false;
 
-    var parser = clap.Clap(BuildArg).init(build_params, args, allocator);
+    var parser = clap.Clap(Build).init(build_params, args, allocator);
     defer parser.deinit();
 
     while (parser.next() catch |err| {
         debug.warn("{}.\n", @errorName(err));
         // debug.warn(build_usage); TODO: error: evaluation exceeded 1000 backwards branches
         return err;
-    }) |arg| switch (arg.id) {
-        BuildArg.Help => return, // debug.warn(build_usage) TODO: error: evaluation exceeded 1000 backwards branches,
-        BuildArg.Init => init = true,
-        BuildArg.BuildFile => build_file = ??arg.value,
-        BuildArg.CacheDir => cache_dir = ??arg.value,
-        BuildArg.Verbose => verbose = true,
-        BuildArg.Prefix => prefix = ??arg.value,
-        BuildArg.VerboseTokenize => verbose_tokenize = true,
-        BuildArg.VerboseAst => verbose_ast = true,
-        BuildArg.VerboseLink => verbose_link = true,
-        BuildArg.VerboseIr => verbose_ir = true,
-        BuildArg.VerboseLlvmIr => verbose_llvm_ir = true,
-        BuildArg.VerboseCImport => verbose_cimport = true,
+    }) |arg| switch (arg.param.id) {
+        Build.Help => return, // debug.warn(build_usage) TODO: error: evaluation exceeded 1000 backwards branches,
+        Build.Init => init = true,
+        Build.BuildFile => build_file = ??arg.value,
+        Build.CacheDir => cache_dir = ??arg.value,
+        Build.Verbose => verbose = true,
+        Build.Prefix => prefix = ??arg.value,
+        Build.VerboseTokenize => verbose_tokenize = true,
+        Build.VerboseAst => verbose_ast = true,
+        Build.VerboseLink => verbose_link = true,
+        Build.VerboseIr => verbose_ir = true,
+        Build.VerboseLlvmIr => verbose_llvm_ir = true,
+        Build.VerboseCImport => verbose_cimport = true,
     };
 
     debug.warn("command: build\n");
@@ -270,8 +251,8 @@ const BuildGeneric = enum {
     VerPatch,
 };
 
-const build_generic_params = []Param(BuildArg){
-    Param(BuildArg).init(BuildArg.Help, false, Names.prefix("help")),
+const build_generic_params = []Param(BuildGeneric){
+    Param(BuildGeneric).init(BuildGeneric.Help, false, Names.prefix("help")),
 };
 
 const build_generic_usage =
@@ -338,3 +319,126 @@ const build_generic_usage =
     \\
     \\
 ;
+
+
+fn cmdBuildExe(allocator: &mem.Allocator, args: &clap.ArgIterator) (error{}!void) {
+}
+
+// cmd:build-lib ///////////////////////////////////////////////////////////////////////////////////
+
+fn cmdBuildLib(allocator: &mem.Allocator, args: &clap.ArgIterator) (error{}!void) {
+}
+
+// cmd:build-obj ///////////////////////////////////////////////////////////////////////////////////
+
+fn cmdBuildObj(allocator: &mem.Allocator, args: &clap.ArgIterator) (error{}!void) {
+}
+
+// cmd:fmt /////////////////////////////////////////////////////////////////////////////////////////
+
+const usage_fmt =
+    \\usage: zig fmt [file]...
+    \\
+    \\   Formats the input files and modifies them in-place.
+    \\
+    \\Options:
+    \\   --help                 Print this help and exit
+    \\   --color [auto|off|on]  Enable or disable colored error messages
+    \\
+    \\
+;
+
+fn cmdFmt(allocator: &mem.Allocator, args: &clap.ArgIterator) (error{}!void) {
+}
+
+// cmd:targets /////////////////////////////////////////////////////////////////////////////////////
+
+fn cmdTargets(allocator: &mem.Allocator, args: &clap.ArgIterator) (error{}!void) {
+}
+
+// cmd:version /////////////////////////////////////////////////////////////////////////////////////
+
+fn cmdVersion(allocator: &mem.Allocator, args: &clap.ArgIterator) (error{}!void) {
+}
+
+// cmd:test ////////////////////////////////////////////////////////////////////////////////////////
+
+const usage_test =
+    \\usage: zig test [file]...
+    \\
+    \\Options:
+    \\   --help                 Print this help and exit
+    \\
+    \\
+;
+
+fn cmdTest(allocator: &mem.Allocator, args: &clap.ArgIterator) (error{}!void) {
+}
+
+// cmd:run /////////////////////////////////////////////////////////////////////////////////////////
+
+// Run should be simple and not expose the full set of arguments provided by build-exe. If specific
+// build requirements are need, the user should `build-exe` then `run` manually.
+const usage_run =
+    \\usage: zig run [file] -- <runtime args>
+    \\
+    \\Options:
+    \\   --help                 Print this help and exit
+    \\
+    \\
+;
+
+fn cmdRun(allocator: &mem.Allocator, args: &clap.ArgIterator) (error{}!void) {
+}
+
+// cmd:translate-c /////////////////////////////////////////////////////////////////////////////////
+
+const usage_translate_c =
+    \\usage: zig translate-c [file]
+    \\
+    \\Options:
+    \\  --help                       Print this help and exit
+    \\  --enable-timing-info         Print timing diagnostics
+    \\  --output [path]              Output file to write generated zig file (default: stdout)
+    \\
+    \\
+;
+
+fn cmdTranslateC(allocator: &mem.Allocator, args: &clap.ArgIterator) (error{}!void) {
+}
+
+// cmd:zen /////////////////////////////////////////////////////////////////////////////////////////
+
+const info_zen =
+    \\
+    \\ * Communicate intent precisely.
+    \\ * Edge cases matter.
+    \\ * Favor reading code over writing code.
+    \\ * Only one obvious way to do things.
+    \\ * Runtime crashes are better than bugs.
+    \\ * Compile errors are better than runtime crashes.
+    \\ * Incremental improvements.
+    \\ * Avoid local maximums.
+    \\ * Reduce the amount one must remember.
+    \\ * Minimize energy spent on coding style.
+    \\ * Together we serve end users.
+    \\
+    \\
+;
+
+fn cmdZen(allocator: &mem.Allocator, args: &clap.ArgIterator) (error{}!void) {
+}
+
+// cmd:internal ////////////////////////////////////////////////////////////////////////////////////
+
+const usage_internal =
+    \\usage: zig internal [subcommand]
+    \\
+    \\Sub-Commands:
+    \\  build-info                   Print static compiler build-info
+    \\
+    \\
+;
+
+fn cmdInternal(allocator: &mem.Allocator, args: &clap.ArgIterator) (error{}!void) {
+}
