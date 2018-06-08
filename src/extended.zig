@@ -13,14 +13,62 @@ const assert = debug.assert;
 pub const Param = struct {
     field: []const u8,
     names: core.Names,
+    settings: Settings,
     kind: Kind,
-    required: bool,
-    position: ?usize,
+
+    pub fn flag(field: []const u8, names: *const core.Names, settings: *const Settings) Param {
+        return Param{
+            .field = field,
+            .names = names.*,
+            .settings = settings.*,
+            .kind = Kind.Flag,
+        };
+    }
+
+    pub fn option(
+        field: []const u8,
+        names: *const core.Names,
+        settings: *const Settings,
+        comptime parser: *const Parser,
+    ) Param {
+        return Param{
+            .field = field,
+            .names = names.*,
+            .settings = settings.*,
+            .kind = Kind{ .Option = parser.* },
+        };
+    }
+
+    pub fn subcommand(
+        field: []const u8,
+        names: *const core.Names,
+        settings: *const Settings,
+        comptime command: *const Command,
+    ) Param {
+        return Param{
+            .field = field,
+            .names = names.*,
+            .settings = settings.*,
+            .kind = Kind{ .Subcommand = Command.* },
+        };
+    }
 
     pub const Kind = union(enum) {
         Flag,
         Option: Parser,
-        SubCommand: Command,
+        Subcommand: Command,
+    };
+
+    pub const Settings = struct {
+        required: bool,
+        position: ?usize,
+
+        pub fn default() Settings {
+            return Settings{
+                .required = false,
+                .position = null,
+            };
+        }
     };
 };
 
@@ -116,7 +164,7 @@ pub fn Clap(comptime Result: type) type {
             var handled = comptime blk: {
                 var res: [command.params.len]bool = undefined;
                 for (command.params) |p, i| {
-                    res[i] = !p.required;
+                    res[i] = !p.settings.required;
                 }
 
                 break :blk res;
@@ -145,7 +193,7 @@ pub fn Clap(comptime Result: type) type {
             arg_loop:
             while (try clap.next()) |arg| : (pos += 1) {
                 inline for(command.params) |param, i| {
-                    if (arg.param.id == i and (param.position ?? pos) == pos) {
+                    if (arg.param.id == i and (param.settings.position ?? pos) == pos) {
                         handled[i] = true;
 
                         switch (param.kind) {
@@ -155,7 +203,7 @@ pub fn Clap(comptime Result: type) type {
                             Param.Kind.Option => |parser| {
                                 try parser.parse(getFieldPtr(&result, param.field), ??arg.value);
                             },
-                            Param.Kind.SubCommand => |sub_command| {
+                            Param.Kind.Subcommand => |sub_command| {
                                 getFieldPtr(&result, param.field).* = try sub_command.parseHelper(Error, clap);
 
                                 // After parsing a subcommand, there should be no arguments left.

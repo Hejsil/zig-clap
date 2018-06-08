@@ -98,20 +98,11 @@ test "clap.extended: short" {
             .b = 0,
         },
         .params = []Param{
-            Param{
-                .field = "a",
-                .names = Names.short('a'),
-                .kind = Param.Kind.Flag,
+            Param.flag("a", Names.short('a'), Param.Settings{
                 .required = true,
                 .position = 0,
-            },
-            Param{
-                .field = "b",
-                .names = Names.short('b'),
-                .kind = Param.Kind{ .Option = Parser.int(u8, 10) },
-                .required = false,
-                .position = null,
-            },
+            }),
+            Param.option("b", Names.short('b'), Param.Settings.default(), &Parser.int(u8, 10)),
         }
     };
 
@@ -201,20 +192,11 @@ test "clap.extended: long" {
             .b = 0,
         },
         .params = []Param{
-            Param{
-                .field = "a",
-                .names = Names.long("a"),
-                .kind = Param.Kind.Flag,
+            Param.flag("a", Names.long("a"), Param.Settings{
                 .required = true,
                 .position = 0,
-            },
-            Param{
-                .field = "b",
-                .names = Names.long("b"),
-                .kind = Param.Kind{ .Option = Parser.int(u8, 10) },
-                .required = false,
-                .position = null,
-            },
+            }),
+            Param.option("b", Names.long("b"), Param.Settings.default(), &Parser.int(u8, 10)),
         }
     };
 
@@ -280,20 +262,11 @@ test "clap.extended: bare" {
             .b = 0,
         },
         .params = []Param{
-            Param{
-                .field = "a",
-                .names = Names.bare("a"),
-                .kind = Param.Kind.Flag,
+            Param.flag("a", Names.bare("a"), Param.Settings{
                 .required = true,
                 .position = 0,
-            },
-            Param{
-                .field = "b",
-                .names = Names.bare("b"),
-                .kind = Param.Kind{ .Option = Parser.int(u8, 10) },
-                .required = false,
-                .position = null,
-            },
+            }),
+            Param.option("b", Names.bare("b"), Param.Settings.default(), &Parser.int(u8, 10)),
         }
     };
 
