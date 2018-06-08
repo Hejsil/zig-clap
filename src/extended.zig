@@ -29,25 +29,25 @@ pub const Command = struct {
     params: []const Param,
 
     Result: type,
-    default: &const Opaque,
+    default: *const Opaque,
 
-    pub fn init(comptime Result: type, default: &const Result, params: []const Param) Command {
+    pub fn init(comptime Result: type, default: *const Result, params: []const Param) Command {
         return Command{
             .params = params,
             .Result = Result,
-            .default = @ptrCast(&const Opaque, default),
+            .default = @ptrCast(*const Opaque, default),
         };
     }
 };
 
 pub const Parser = struct {
-    const UnsafeFunction = &const void;
+    const UnsafeFunction = *const void;
 
     FieldType: type,
     Errors: type,
     func: UnsafeFunction,
 
-    pub fn init(comptime FieldType: type, comptime Errors: type, func: parseFunc(FieldType, Errors)) Parser {
+    pub fn init(comptime FieldType: type, comptime Errors: type, func: ParseFunc(FieldType, Errors)) Parser {
         return Parser {
             .FieldType = FieldType,
             .Errors = Errors,
@@ -55,20 +55,17 @@ pub const Parser = struct {
         };
     }
 
-    fn parse(comptime parser: Parser, field_ptr: TakePtr(parser.FieldType), arg: []const u8) parser.Errors!void {
-        return @ptrCast(parseFunc(parser.FieldType, parser.Errors), parser.func)(field_ptr, arg);
+    fn parse(comptime parser: Parser, field_ptr: *parser.FieldType, arg: []const u8) parser.Errors!void {
+        return @ptrCast(ParseFunc(parser.FieldType, parser.Errors), parser.func)(field_ptr, arg);
     }
 
-    // TODO: This is a workaround, since we don't have pointer reform yet.
-    fn TakePtr(comptime T: type) type { return &T; }
-
-    fn parseFunc(comptime FieldType: type, comptime Errors: type) type {
-        return fn(&FieldType, []const u8) Errors!void;
+    fn ParseFunc(comptime FieldType: type, comptime Errors: type) type {
+        return fn(*FieldType, []const u8) Errors!void;
     }
 
     pub fn int(comptime Int: type, comptime radix: u8) Parser {
         const func = struct {
-            fn i(field_ptr: &Int, arg: []const u8) !void {
+            fn i(field_ptr: *Int, arg: []const u8) !void {
                 field_ptr.* = try fmt.parseInt(Int, arg, radix);
             }
         }.i;
@@ -83,7 +80,7 @@ pub const Parser = struct {
         []const u8,
         error{},
         struct {
-            fn s(field_ptr: &[]const u8, arg: []const u8) (error{}!void) {
+            fn s(field_ptr: *[]const u8, arg: []const u8) (error{}!void) {
                 field_ptr.* = arg;
             }
         }.s
@@ -98,23 +95,23 @@ pub fn Clap(comptime Result: type) type {
         params: []const Param,
 
         pub fn parse(
-            comptime clap: &const Self,
+            comptime clap: *const Self,
             comptime Error: type,
-            iter: &core.ArgIterator(Error),
+            iter: *core.ArgIterator(Error),
         ) !Result {
             // We initialize the core.Clap without any params, and fill them out in parseHelper.
             var c = core.Clap(usize, Error).init([]core.Param(usize){}, iter);
 
             const top_level_command = comptime Command.init(Result, &clap.default, clap.params);
-            return try parseHelper(top_level_command, Error, &c);
+            return try parseHelper(&top_level_command, Error, &c);
         }
 
         fn parseHelper(
-            comptime command: &const Command,
+            comptime command: *const Command,
             comptime Error: type,
-            clap: &core.Clap(usize, Error),
+            clap: *core.Clap(usize, Error),
         ) !command.Result {
-            var result = @ptrCast(&const command.Result, command.default).*;
+            var result = @ptrCast(*const command.Result, command.default).*;
 
             var handled = comptime blk: {
                 var res: [command.params.len]bool = undefined;

@@ -99,7 +99,7 @@ pub fn Param(comptime Id: type) type {
         takes_value: bool,
         names: Names,
 
-        pub fn init(id: Id, takes_value: bool, names: &const Names) Self {
+        pub fn init(id: Id, takes_value: bool, names: *const Names) Self {
             // Assert, that if the param have no name, then it has to take
             // a value.
             debug.assert(
@@ -123,10 +123,10 @@ pub fn Arg(comptime Id: type) type {
     return struct {
         const Self = this;
 
-        param: &const Param(Id),
+        param: *const Param(Id),
         value: ?[]const u8,
 
-        pub fn init(param: &const Param(Id), value: ?[]const u8) Self {
+        pub fn init(param: *const Param(Id), value: ?[]const u8) Self {
             return Self {
                 .param = param,
                 .value = value,
@@ -141,9 +141,9 @@ pub fn ArgIterator(comptime E: type) type {
         const Self = this;
         const Error = E;
 
-        nextFn: fn(iter: &Self) Error!?[]const u8,
+        nextFn: fn(iter: *Self) Error!?[]const u8,
 
-        pub fn next(iter: &Self) Error!?[]const u8 {
+        pub fn next(iter: *Self) Error!?[]const u8 {
             return iter.nextFn(iter);
         }
     };
@@ -168,7 +168,7 @@ pub const ArgSliceIterator = struct {
         };
     }
 
-    fn nextFn(iter: &ArgIterator(Error)) Error!?[]const u8 {
+    fn nextFn(iter: *ArgIterator(Error)) Error!?[]const u8 {
         const self = @fieldParentPtr(ArgSliceIterator, "iter", iter);
         if (self.args.len <= self.index)
             return null;
@@ -187,7 +187,7 @@ pub const OsArgIterator = struct {
     args: os.ArgIterator,
     iter: ArgIterator(Error),
 
-    pub fn init(allocator: &mem.Allocator) OsArgIterator {
+    pub fn init(allocator: *mem.Allocator) OsArgIterator {
         return OsArgIterator {
             .arena = heap.ArenaAllocator.init(allocator),
             .args = os.args(),
@@ -197,11 +197,11 @@ pub const OsArgIterator = struct {
         };
     }
 
-    pub fn deinit(iter: &OsArgIterator) void {
+    pub fn deinit(iter: *OsArgIterator) void {
         iter.arena.deinit();
     }
 
-    fn nextFn(iter: &ArgIterator(Error)) Error!?[]const u8 {
+    fn nextFn(iter: *ArgIterator(Error)) Error!?[]const u8 {
         const self = @fieldParentPtr(OsArgIterator, "iter", iter);
         if (builtin.os == builtin.Os.windows) {
             return try self.args.next(self.allocator) ?? return null;
@@ -229,10 +229,10 @@ pub fn Clap(comptime Id: type, comptime ArgError: type) type {
         };
 
         params: []const Param(Id),
-        iter: &ArgIterator(ArgError),
+        iter: *ArgIterator(ArgError),
         state: State,
 
-        pub fn init(params: []const Param(Id), iter: &ArgIterator(ArgError)) Self {
+        pub fn init(params: []const Param(Id), iter: *ArgIterator(ArgError)) Self {
             var res = Self {
                 .params = params,
                 .iter = iter,
@@ -243,7 +243,7 @@ pub fn Clap(comptime Id: type, comptime ArgError: type) type {
         }
 
         /// Get the next ::Arg that matches a ::Param.
-        pub fn next(clap: &Self) !?Arg(Id) {
+        pub fn next(clap: *Self) !?Arg(Id) {
             const ArgInfo = struct {
                 const Kind = enum { Long, Short, Bare };
 
@@ -334,7 +334,7 @@ pub fn Clap(comptime Id: type, comptime ArgError: type) type {
             }
         }
 
-        fn chainging(clap: &Self, state: &const State.Chaining) !?Arg(Id) {
+        fn chainging(clap: *Self, state: *const State.Chaining) !?Arg(Id) {
             const arg = state.arg;
             const index = state.index;
             const next_index = index + 1;

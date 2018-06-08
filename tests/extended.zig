@@ -45,7 +45,7 @@ pub fn Test(comptime Expect: type) type {
             Fail: error,
         };
 
-        pub fn success(args: []const []const u8, expected: &const Expect) Self {
+        pub fn success(args: []const []const u8, expected: *const Expect) Self {
             return Self{
                 .args = args,
                 .kind = Kind{
@@ -63,7 +63,7 @@ pub fn Test(comptime Expect: type) type {
             };
         }
 
-        pub fn run(t: &const Self, comptime parser: var) void {
+        pub fn run(t: *const Self, comptime parser: var) void {
             var iter = ArgSliceIterator.init(t.args);
             const actual = parser.parse(ArgSliceIterator.Error, &iter.iter);
 
