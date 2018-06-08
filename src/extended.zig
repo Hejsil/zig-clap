@@ -16,40 +16,48 @@ pub const Param = struct {
     settings: Settings,
     kind: Kind,
 
-    pub fn flag(field: []const u8, names: *const core.Names, settings: *const Settings) Param {
-        return Param{
-            .field = field,
-            .names = names.*,
-            .settings = settings.*,
-            .kind = Kind.Flag,
-        };
+    required: bool,
+    position: ?usize,
+
+    pub fn flag(field: []const u8, names: *const core.Names) Param {
+        return init(
+            field,
+            names,
+            Kind.Flag,
+        );
     }
 
     pub fn option(
         field: []const u8,
         names: *const core.Names,
-        settings: *const Settings,
         comptime parser: *const Parser,
     ) Param {
-        return Param{
-            .field = field,
-            .names = names.*,
-            .settings = settings.*,
-            .kind = Kind{ .Option = parser.* },
-        };
+        return init(
+            field,
+            names,
+            Kind{ .Option = parser.* },
+        );
     }
 
     pub fn subcommand(
         field: []const u8,
         names: *const core.Names,
-        settings: *const Settings,
         comptime command: *const Command,
     ) Param {
+        return init(
+            field,
+            names,
+            Kind{ .Subcommand = command.* },
+        );
+    }
+
+    pub fn init(field: []const u8, names: *const core.Names, kind: *const Kind) Param {
         return Param{
             .field = field,
             .names = names.*,
-            .settings = settings.*,
-            .kind = Kind{ .Subcommand = Command.* },
+            .kind = kind.*,
+            .required = false,
+            .position = null,
         };
     }
 
@@ -57,18 +65,6 @@ pub const Param = struct {
         Flag,
         Option: Parser,
         Subcommand: Command,
-    };
-
-    pub const Settings = struct {
-        required: bool,
-        position: ?usize,
-
-        pub fn default() Settings {
-            return Settings{
-                .required = false,
-                .position = null,
-            };
-        }
     };
 };
 

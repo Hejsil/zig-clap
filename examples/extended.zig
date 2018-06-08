@@ -1,2 +1,0 @@
-
-pub fn main() void {}

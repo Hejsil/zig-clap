@@ -79,11 +79,13 @@ test "clap.extended: short" {
             .b = 0,
         },
         .params = []Param{
-            Param.flag("a", Names.short('a'), Param.Settings{
-                .required = true,
-                .position = 0,
-            }),
-            Param.option("b", Names.short('b'), Param.Settings.default(), &Parser.int(u8, 10)),
+            p: {
+                var res = Param.flag("a", Names.short('a'));
+                res.required = true;
+                res.position = 0;
+                break :p res;
+            },
+            Param.option("b", Names.short('b'), &Parser.int(u8, 10)),
         }
     };
 
@@ -173,11 +175,13 @@ test "clap.extended: long" {
             .b = 0,
         },
         .params = []Param{
-            Param.flag("a", Names.long("a"), Param.Settings{
-                .required = true,
-                .position = 0,
-            }),
-            Param.option("b", Names.long("b"), Param.Settings.default(), &Parser.int(u8, 10)),
+            p: {
+                var res = Param.long("a", Names.short('a'));
+                res.required = true;
+                res.position = 0;
+                break :p res;
+            },
+            Param.option("b", Names.long('b'), &Parser.int(u8, 10)),
         }
     };
 
@@ -243,11 +247,13 @@ test "clap.extended: bare" {
             .b = 0,
         },
         .params = []Param{
-            Param.flag("a", Names.bare("a"), Param.Settings{
-                .required = true,
-                .position = 0,
-            }),
-            Param.option("b", Names.bare("b"), Param.Settings.default(), &Parser.int(u8, 10)),
+            p: {
+                var res = Param.bare("a", Names.short('a'));
+                res.required = true;
+                res.position = 0;
+                break :p res;
+            },
+            Param.option("b", Names.bare('b'), &Parser.int(u8, 10)),
         }
     };
 
