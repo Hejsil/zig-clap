@@ -14,25 +14,6 @@ const Clap = extended.Clap;
 const Param = extended.Param;
 const Parser = extended.Parser;
 
-fn success(comptime parser: var, expect: var, args: []const []const u8) void {
-    var iter = ArgSliceIterator.init(args);
-    const actual = parser.parse(ArgSliceIterator.Error, &iter.iter) catch unreachable;
-
-    const T = @typeOf(expect).Child;
-    inline for (@typeInfo(T).Struct.fields) |field| {
-        assert(@field(expect, field.name) == @field(actual, field.name));
-    }
-}
-
-fn fail(comptime parser: var, expect: error, args: []const []const u8) void {
-    var iter = ArgSliceIterator.init(args);
-    if (parser.parse(ArgSliceIterator.Error, &iter.iter)) |_| {
-        unreachable;
-    } else |actual| {
-        assert(expect == actual);
-    }
-}
-
 pub fn Test(comptime Expect: type) type {
     return struct {
         const Self = this;
