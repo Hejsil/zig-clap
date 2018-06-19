@@ -29,18 +29,14 @@ pub fn Test(comptime Expect: type) type {
         pub fn success(args: []const []const u8, expected: *const Expect) Self {
             return Self{
                 .args = args,
-                .kind = Kind{
-                    .Success = expected.*,
-                },
+                .kind = Kind{ .Success = expected.* },
             };
         }
 
         pub fn fail(args: []const []const u8, err: error) Self {
             return Self{
                 .args = args,
-                .kind = Kind{
-                    .Fail = err,
-                },
+                .kind = Kind{ .Fail = err },
             };
         }
 
@@ -86,74 +82,74 @@ test "clap.extended: short" {
                 break :p res;
             },
             Param.option("b", Names.short('b'), &Parser.int(u8, 10)),
-        }
+        },
     };
 
     const T = Test(S);
     const tests = []T{
         T.success(
-            [][]const u8 { "-a" },
+            [][]const u8{"-a"},
             S{
                 .a = true,
                 .b = 0,
             },
         ),
         T.success(
-            [][]const u8 { "-a", "-b", "100" },
+            [][]const u8{ "-a", "-b", "100" },
             S{
                 .a = true,
                 .b = 100,
             },
         ),
         T.success(
-            [][]const u8 { "-a", "-b=100" },
+            [][]const u8{ "-a", "-b=100" },
             S{
                 .a = true,
                 .b = 100,
             },
         ),
         T.success(
-            [][]const u8 { "-a", "-b100" },
+            [][]const u8{ "-a", "-b100" },
             S{
                 .a = true,
                 .b = 100,
             },
         ),
         T.success(
-            [][]const u8 { "-ab", "100" },
+            [][]const u8{ "-ab", "100" },
             S{
                 .a = true,
                 .b = 100,
             },
         ),
         T.success(
-            [][]const u8 { "-ab=100" },
+            [][]const u8{"-ab=100"},
             S{
                 .a = true,
                 .b = 100,
             },
         ),
         T.success(
-            [][]const u8 { "-ab100" },
+            [][]const u8{"-ab100"},
             S{
                 .a = true,
                 .b = 100,
             },
         ),
         T.fail(
-            [][]const u8 { "-q" },
+            [][]const u8{"-q"},
             error.InvalidArgument,
         ),
         T.fail(
-            [][]const u8 { "--a" },
+            [][]const u8{"--a"},
             error.InvalidArgument,
         ),
         T.fail(
-            [][]const u8 { "-b=100" },
+            [][]const u8{"-b=100"},
             error.ParamNotHandled,
         ),
         T.fail(
-            [][]const u8 { "-b=100", "-a" },
+            [][]const u8{ "-b=100", "-a" },
             error.InvalidArgument,
         ),
     };
@@ -182,50 +178,50 @@ test "clap.extended: long" {
                 break :p res;
             },
             Param.option("b", Names.long('b'), &Parser.int(u8, 10)),
-        }
+        },
     };
 
     const T = Test(S);
     const tests = []T{
         T.success(
-            [][]const u8 { "--a" },
+            [][]const u8{"--a"},
             S{
                 .a = true,
                 .b = 0,
             },
         ),
         T.success(
-            [][]const u8 { "--a", "--b", "100" },
+            [][]const u8{ "--a", "--b", "100" },
             S{
                 .a = true,
                 .b = 100,
             },
         ),
         T.success(
-            [][]const u8 { "--a", "--b=100" },
+            [][]const u8{ "--a", "--b=100" },
             S{
                 .a = true,
                 .b = 100,
             },
         ),
         T.fail(
-            [][]const u8 { "--a=100" },
+            [][]const u8{"--a=100"},
             error.DoesntTakeValue,
         ),
         T.fail(
-            [][]const u8 { "--q" },
+            [][]const u8{"--q"},
             error.InvalidArgument,
         ),
         T.fail(
-            [][]const u8 { "-a" },
+            [][]const u8{"-a"},
             error.InvalidArgument,
         ),
         T.fail(
-            [][]const u8 { "--b=100" },
+            [][]const u8{"--b=100"},
             error.ParamNotHandled,
         ),
         T.fail(
-            [][]const u8 { "--b=100", "--a" },
+            [][]const u8{ "--b=100", "--a" },
             error.InvalidArgument,
         ),
     };
@@ -254,50 +250,50 @@ test "clap.extended: bare" {
                 break :p res;
             },
             Param.option("b", Names.bare('b'), &Parser.int(u8, 10)),
-        }
+        },
     };
 
     const T = Test(S);
     const tests = []T{
         T.success(
-            [][]const u8 { "a" },
+            [][]const u8{"a"},
             S{
                 .a = true,
                 .b = 0,
             },
         ),
         T.success(
-            [][]const u8 { "a", "b", "100" },
+            [][]const u8{ "a", "b", "100" },
             S{
                 .a = true,
                 .b = 100,
             },
         ),
         T.success(
-            [][]const u8 { "a", "b=100" },
+            [][]const u8{ "a", "b=100" },
             S{
                 .a = true,
                 .b = 100,
             },
         ),
         T.fail(
-            [][]const u8 { "a=100" },
+            [][]const u8{"a=100"},
             error.DoesntTakeValue,
         ),
         T.fail(
-            [][]const u8 { "--a" },
+            [][]const u8{"--a"},
             error.InvalidArgument,
         ),
         T.fail(
-            [][]const u8 { "-a" },
+            [][]const u8{"-a"},
             error.InvalidArgument,
         ),
         T.fail(
-            [][]const u8 { "b=100" },
+            [][]const u8{"b=100"},
             error.ParamNotHandled,
         ),
         T.fail(
-            [][]const u8 { "b=100", "--a" },
+            [][]const u8{ "b=100", "--a" },
             error.InvalidArgument,
         ),
     };

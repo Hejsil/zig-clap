@@ -102,12 +102,10 @@ pub fn Param(comptime Id: type) type {
         pub fn init(id: Id, takes_value: bool, names: *const Names) Self {
             // Assert, that if the param have no name, then it has to take
             // a value.
-            debug.assert(
-                names.bare != null or
+            debug.assert(names.bare != null or
                 names.long != null or
                 names.short != null or
-                takes_value
-            );
+                takes_value);
 
             return Self{
                 .id = id,
@@ -127,7 +125,7 @@ pub fn Arg(comptime Id: type) type {
         value: ?[]const u8,
 
         pub fn init(param: *const Param(Id), value: ?[]const u8) Self {
-            return Self {
+            return Self{
                 .param = param,
                 .value = value,
             };
@@ -141,7 +139,7 @@ pub fn ArgIterator(comptime E: type) type {
         const Self = this;
         const Error = E;
 
-        nextFn: fn(iter: *Self) Error!?[]const u8,
+        nextFn: fn (iter: *Self) Error!?[]const u8,
 
         pub fn next(iter: *Self) Error!?[]const u8 {
             return iter.nextFn(iter);
@@ -159,12 +157,10 @@ pub const ArgSliceIterator = struct {
     iter: ArgIterator(Error),
 
     pub fn init(args: []const []const u8) ArgSliceIterator {
-        return ArgSliceIterator {
+        return ArgSliceIterator{
             .args = args,
             .index = 0,
-            .iter = ArgIterator(Error) {
-                .nextFn = nextFn,
-            },
+            .iter = ArgIterator(Error){ .nextFn = nextFn },
         };
     }
 
@@ -188,12 +184,10 @@ pub const OsArgIterator = struct {
     iter: ArgIterator(Error),
 
     pub fn init(allocator: *mem.Allocator) OsArgIterator {
-        return OsArgIterator {
+        return OsArgIterator{
             .arena = heap.ArenaAllocator.init(allocator),
             .args = os.args(),
-            .iter = ArgIterator(Error) {
-                .nextFn = nextFn,
-            },
+            .iter = ArgIterator(Error){ .nextFn = nextFn },
         };
     }
 
@@ -204,7 +198,7 @@ pub const OsArgIterator = struct {
     fn nextFn(iter: *ArgIterator(Error)) Error!?[]const u8 {
         const self = @fieldParentPtr(OsArgIterator, "iter", iter);
         if (builtin.os == builtin.Os.windows) {
-            return try self.args.next(self.allocator) ?? return null;
+            return try self.args.next(self.allocator) orelse return null;
         } else {
             return self.args.nextPosix();
         }
@@ -233,7 +227,7 @@ pub fn Clap(comptime Id: type, comptime ArgError: type) type {
         state: State,
 
         pub fn init(params: []const Param(Id), iter: *ArgIterator(ArgError)) Self {
-            var res = Self {
+            var res = Self{
                 .params = params,
                 .iter = iter,
                 .state = State.Normal,
@@ -245,7 +239,11 @@ pub fn Clap(comptime Id: type, comptime ArgError: type) type {
         /// Get the next ::Arg that matches a ::Param.
         pub fn next(clap: *Self) !?Arg(Id) {
             const ArgInfo = struct {
-                const Kind = enum { Long, Short, Bare };
+                const Kind = enum {
+                    Long,
+                    Short,
+                    Bare,
+                };
 
                 arg: []const u8,
                 kind: Kind,
@@ -253,7 +251,7 @@ pub fn Clap(comptime Id: type, comptime ArgError: type) type {
 
             switch (clap.state) {
                 State.Normal => {
-                    const full_arg = (try clap.iter.next()) ?? return null;
+                    const full_arg = (try clap.iter.next()) orelse return null;
                     const arg_info = blk: {
                         var arg = full_arg;
                         var kind = ArgInfo.Kind.Bare;
@@ -271,7 +269,7 @@ pub fn Clap(comptime Id: type, comptime ArgError: type) type {
                         if (kind != ArgInfo.Kind.Long and arg.len == 0)
                             return error.InvalidArgument;
 
-                        break :blk ArgInfo { .arg = arg, .kind = kind };
+                        break :blk ArgInfo{ .arg = arg, .kind = kind };
                     };
 
                     const arg = arg_info.arg;
@@ -279,16 +277,15 @@ pub fn Clap(comptime Id: type, comptime ArgError: type) type {
                     const eql_index = mem.indexOfScalar(u8, arg, '=');
 
                     switch (kind) {
-                        ArgInfo.Kind.Bare,
-                        ArgInfo.Kind.Long => {
+                        ArgInfo.Kind.Bare, ArgInfo.Kind.Long => {
                             for (clap.params) |*param| {
                                 const match = switch (kind) {
-                                    ArgInfo.Kind.Bare => param.names.bare ?? continue,
-                                    ArgInfo.Kind.Long => param.names.long ?? continue,
+                                    ArgInfo.Kind.Bare => param.names.bare orelse continue,
+                                    ArgInfo.Kind.Long => param.names.long orelse continue,
                                     else => unreachable,
                                 };
                                 const name = if (eql_index) |i| arg[0..i] else arg;
-                                const maybe_value = if (eql_index) |i| arg[i + 1..] else null;
+                                const maybe_value = if (eql_index) |i| arg[i + 1 ..] else null;
 
                                 if (!mem.eql(u8, name, match))
                                     continue;
@@ -303,14 +300,14 @@ pub fn Clap(comptime Id: type, comptime ArgError: type) type {
                                     if (maybe_value) |v|
                                         break :blk v;
 
-                                    break :blk (try clap.iter.next()) ?? return error.MissingValue;
+                                    break :blk (try clap.iter.next()) orelse return error.MissingValue;
                                 };
 
                                 return Arg(Id).init(param, value);
                             }
                         },
                         ArgInfo.Kind.Short => {
-                            return try clap.chainging(State.Chaining {
+                            return try clap.chainging(State.Chaining{
                                 .arg = full_arg,
                                 .index = (full_arg.len - arg.len),
                             });
@@ -340,7 +337,7 @@ pub fn Clap(comptime Id: type, comptime ArgError: type) type {
             const next_index = index + 1;
 
             for (clap.params) |*param| {
-                const short = param.names.short ?? continue;
+                const short = param.names.short orelse continue;
                 if (short != arg[index])
                     continue;
 
@@ -349,10 +346,12 @@ pub fn Clap(comptime Id: type, comptime ArgError: type) type {
                     if (arg.len <= next_index or param.takes_value) {
                         clap.state = State.Normal;
                     } else {
-                        clap.state = State { .Chaining = State.Chaining {
-                            .arg = arg,
-                            .index = next_index,
-                        }};
+                        clap.state = State{
+                            .Chaining = State.Chaining{
+                                .arg = arg,
+                                .index = next_index,
+                            },
+                        };
                     }
                 }
 
@@ -360,12 +359,12 @@ pub fn Clap(comptime Id: type, comptime ArgError: type) type {
                     return Arg(Id).init(param, null);
 
                 if (arg.len <= next_index) {
-                    const value = (try clap.iter.next()) ?? return error.MissingValue;
+                    const value = (try clap.iter.next()) orelse return error.MissingValue;
                     return Arg(Id).init(param, value);
                 }
 
                 if (arg[next_index] == '=') {
-                    return Arg(Id).init(param, arg[next_index + 1..]);
+                    return Arg(Id).init(param, arg[next_index + 1 ..]);
                 }
 
                 return Arg(Id).init(param, arg[next_index..]);

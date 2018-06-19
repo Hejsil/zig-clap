@@ -1,12 +1,12 @@
 pub const core = @import("core.zig");
 
 const builtin = @import("builtin");
-const std     = @import("std");
+const std = @import("std");
 
-const mem   = std.mem;
-const fmt   = std.fmt;
+const mem = std.mem;
+const fmt = std.fmt;
 const debug = std.debug;
-const io    = std.io;
+const io = std.io;
 
 const assert = debug.assert;
 
@@ -92,7 +92,7 @@ pub const Parser = struct {
     func: UnsafeFunction,
 
     pub fn init(comptime FieldType: type, comptime Errors: type, func: ParseFunc(FieldType, Errors)) Parser {
-        return Parser {
+        return Parser{
             .FieldType = FieldType,
             .Errors = Errors,
             .func = @ptrCast(UnsafeFunction, func),
@@ -104,7 +104,7 @@ pub const Parser = struct {
     }
 
     fn ParseFunc(comptime FieldType: type, comptime Errors: type) type {
-        return fn(*FieldType, []const u8) Errors!void;
+        return fn (*FieldType, []const u8) Errors!void;
     }
 
     pub fn int(comptime Int: type, comptime radix: u8) Parser {
@@ -113,22 +113,14 @@ pub const Parser = struct {
                 field_ptr.* = try fmt.parseInt(Int, arg, radix);
             }
         }.i;
-        return Parser.init(
-            Int,
-            @typeOf(func).ReturnType.ErrorSet,
-            func
-        );
+        return Parser.init(Int, @typeOf(func).ReturnType.ErrorSet, func);
     }
 
-    const string = Parser.init(
-        []const u8,
-        error{},
-        struct {
-            fn s(field_ptr: *[]const u8, arg: []const u8) (error{}!void) {
-                field_ptr.* = arg;
-            }
-        }.s
-    );
+    const string = Parser.init([]const u8, error{}, struct {
+        fn s(field_ptr: *[]const u8, arg: []const u8) (error{}!void) {
+            field_ptr.* = arg;
+        }
+    }.s);
 };
 
 pub fn Clap(comptime Result: type) type {
@@ -174,7 +166,7 @@ pub fn Clap(comptime Result: type) type {
 
                 for (command.params) |p, i| {
                     const id = i;
-                    res[id] = core.Param(usize) {
+                    res[id] = core.Param(usize){
                         .id = id,
                         .takes_value = p.kind == Param.Kind.Option,
                         .names = p.names,
@@ -186,10 +178,9 @@ pub fn Clap(comptime Result: type) type {
 
             var pos: usize = 0;
 
-            arg_loop:
-            while (try clap.next()) |arg| : (pos += 1) {
-                inline for(command.params) |param, i| {
-                    if (arg.param.id == i and (param.settings.position ?? pos) == pos) {
+            arg_loop: while (try clap.next()) |arg| : (pos += 1) {
+                inline for (command.params) |param, i| {
+                    if (arg.param.id == i and (param.settings.position orelse pos) == pos) {
                         handled[i] = true;
 
                         switch (param.kind) {
@@ -197,7 +188,7 @@ pub fn Clap(comptime Result: type) type {
                                 getFieldPtr(&result, param.field).* = true;
                             },
                             Param.Kind.Option => |parser| {
-                                try parser.parse(getFieldPtr(&result, param.field), ??arg.value);
+                                try parser.parse(getFieldPtr(&result, param.field), arg.value.?);
                             },
                             Param.Kind.Subcommand => |sub_command| {
                                 getFieldPtr(&result, param.field).* = try sub_command.parseHelper(Error, clap);
@@ -223,19 +214,19 @@ pub fn Clap(comptime Result: type) type {
 
         fn GetFieldPtrReturn(comptime Struct: type, comptime field: []const u8) type {
             var inst: Struct = undefined;
-            const dot_index = comptime mem.indexOfScalar(u8, field, '.') ?? {
+            const dot_index = comptime mem.indexOfScalar(u8, field, '.') orelse {
                 return @typeOf(&@field(inst, field));
             };
 
-            return GetFieldPtrReturn(@typeOf(@field(inst, field[0..dot_index])), field[dot_index + 1..]);
+            return GetFieldPtrReturn(@typeOf(@field(inst, field[0..dot_index])), field[dot_index + 1 ..]);
         }
 
         fn getFieldPtr(curr: var, comptime field: []const u8) GetFieldPtrReturn(@typeOf(curr).Child, field) {
-            const dot_index = comptime mem.indexOfScalar(u8, field, '.') ?? {
+            const dot_index = comptime mem.indexOfScalar(u8, field, '.') orelse {
                 return &@field(curr, field);
             };
 
-            return getFieldPtr(&@field(curr, field[0..dot_index]), field[dot_index + 1..]);
+            return getFieldPtr(&@field(curr, field[0..dot_index]), field[dot_index + 1 ..]);
         }
     };
 }

@@ -5,7 +5,7 @@ pub fn build(b: *Builder) void {
 
     {
         const example_step = b.step("examples", "Build all examples");
-        const examples = [][]const u8 {};
+        const examples = [][]const u8{};
 
         b.default_step.dependOn(example_step);
         inline for (examples) |example| {
@@ -22,7 +22,7 @@ pub fn build(b: *Builder) void {
 
     {
         const test_step = b.step("tests", "Run all tests");
-        const tests = [][]const u8 {
+        const tests = [][]const u8{
             "core",
             "extended",
         };
@@ -38,6 +38,5 @@ pub fn build(b: *Builder) void {
             step.dependOn(&t.step);
             test_step.dependOn(step);
         }
-
     }
 }
