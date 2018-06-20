@@ -99,7 +99,7 @@ pub fn Param(comptime Id: type) type {
         takes_value: bool,
         names: Names,
 
-        pub fn init(id: Id, takes_value: bool, names: *const Names) Self {
+        pub fn init(id: Id, takes_value: bool, names: Names) Self {
             // Assert, that if the param have no name, then it has to take
             // a value.
             debug.assert(names.bare != null or
@@ -110,7 +110,7 @@ pub fn Param(comptime Id: type) type {
             return Self{
                 .id = id,
                 .takes_value = takes_value,
-                .names = names.*,
+                .names = names,
             };
         }
     };
@@ -331,7 +331,7 @@ pub fn Clap(comptime Id: type, comptime ArgError: type) type {
             }
         }
 
-        fn chainging(clap: *Self, state: *const State.Chaining) !?Arg(Id) {
+        fn chainging(clap: *Self, state: State.Chaining) !?Arg(Id) {
             const arg = state.arg;
             const index = state.index;
             const next_index = index + 1;

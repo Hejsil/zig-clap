@@ -26,10 +26,10 @@ pub fn Test(comptime Expect: type) type {
             Fail: error,
         };
 
-        pub fn success(args: []const []const u8, expected: *const Expect) Self {
+        pub fn success(args: []const []const u8, expected: Expect) Self {
             return Self{
                 .args = args,
-                .kind = Kind{ .Success = expected.* },
+                .kind = Kind{ .Success = expected },
             };
         }
 
@@ -40,7 +40,7 @@ pub fn Test(comptime Expect: type) type {
             };
         }
 
-        pub fn run(t: *const Self, comptime parser: var) void {
+        pub fn run(t: Self, comptime parser: var) void {
             var iter = ArgSliceIterator.init(t.args);
             const actual = parser.parse(ArgSliceIterator.Error, &iter.iter);
 
@@ -81,7 +81,7 @@ test "clap.extended: short" {
                 res.position = 0;
                 break :p res;
             },
-            Param.option("b", Names.short('b'), &Parser.int(u8, 10)),
+            Param.option("b", Names.short('b'), Parser.int(u8, 10)),
         },
     };
 
@@ -172,12 +172,12 @@ test "clap.extended: long" {
         },
         .params = []Param{
             p: {
-                var res = Param.long("a", Names.short('a'));
+                var res = Param.flag("a", Names.long("a"));
                 res.required = true;
                 res.position = 0;
                 break :p res;
             },
-            Param.option("b", Names.long('b'), &Parser.int(u8, 10)),
+            Param.option("b", Names.long("b"), Parser.int(u8, 10)),
         },
     };
 
@@ -244,12 +244,12 @@ test "clap.extended: bare" {
         },
         .params = []Param{
             p: {
-                var res = Param.bare("a", Names.short('a'));
+                var res = Param.flag("a", Names.bare("a"));
                 res.required = true;
                 res.position = 0;
                 break :p res;
             },
-            Param.option("b", Names.bare('b'), &Parser.int(u8, 10)),
+            Param.option("b", Names.bare("b"), Parser.int(u8, 10)),
         },
     };
 

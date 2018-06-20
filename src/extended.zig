@@ -13,13 +13,12 @@ const assert = debug.assert;
 pub const Param = struct {
     field: []const u8,
     names: core.Names,
-    settings: Settings,
     kind: Kind,
 
     required: bool,
     position: ?usize,
 
-    pub fn flag(field: []const u8, names: *const core.Names) Param {
+    pub fn flag(field: []const u8, names: core.Names) Param {
         return init(
             field,
             names,
@@ -29,33 +28,33 @@ pub const Param = struct {
 
     pub fn option(
         field: []const u8,
-        names: *const core.Names,
-        comptime parser: *const Parser,
+        names: core.Names,
+        comptime parser: Parser,
     ) Param {
         return init(
             field,
             names,
-            Kind{ .Option = parser.* },
+            Kind{ .Option = parser },
         );
     }
 
     pub fn subcommand(
         field: []const u8,
-        names: *const core.Names,
-        comptime command: *const Command,
+        names: core.Names,
+        comptime command: Command,
     ) Param {
         return init(
             field,
             names,
-            Kind{ .Subcommand = command.* },
+            Kind{ .Subcommand = command },
         );
     }
 
-    pub fn init(field: []const u8, names: *const core.Names, kind: *const Kind) Param {
+    pub fn init(field: []const u8, names: core.Names, kind: Kind) Param {
         return Param{
             .field = field,
-            .names = names.*,
-            .kind = kind.*,
+            .names = names,
+            .kind = kind,
             .required = false,
             .position = null,
         };
@@ -130,6 +129,7 @@ pub fn Clap(comptime Result: type) type {
         default: Result,
         params: []const Param,
 
+        // TODO: pass-by-value
         pub fn parse(
             comptime clap: *const Self,
             comptime Error: type,
@@ -142,6 +142,7 @@ pub fn Clap(comptime Result: type) type {
             return try parseHelper(&top_level_command, Error, &c);
         }
 
+        // TODO: pass-by-value
         fn parseHelper(
             comptime command: *const Command,
             comptime Error: type,
@@ -152,7 +153,7 @@ pub fn Clap(comptime Result: type) type {
             var handled = comptime blk: {
                 var res: [command.params.len]bool = undefined;
                 for (command.params) |p, i| {
-                    res[i] = !p.settings.required;
+                    res[i] = !p.required;
                 }
 
                 break :blk res;
@@ -180,7 +181,7 @@ pub fn Clap(comptime Result: type) type {
 
             arg_loop: while (try clap.next()) |arg| : (pos += 1) {
                 inline for (command.params) |param, i| {
-                    if (arg.param.id == i and (param.settings.position orelse pos) == pos) {
+                    if (arg.param.id == i and (param.position orelse pos) == pos) {
                         handled[i] = true;
 
                         switch (param.kind) {
