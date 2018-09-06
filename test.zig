@@ -196,3 +196,32 @@ test "clap: all" {
         },
     );
 }
+
+test "clap.Example" {
+        const program_args = [][]const u8{
+    "-h", "--help",
+            "-v", "--version",
+        "file.zig",
+    };
+        
+    const warn = @import("std").debug.warn;
+        const c = @import("clap.zig");
+    
+        const params = []c.Param(u8){
+            c.Param(u8).init('h', false, c.Names.prefix("help")),
+            c.Param(u8).init('v', false, c.Names.prefix("version")),
+            c.Param(u8).init('f', true, c.Names.none()),
+    };
+    
+        var iter = &c.ArgSliceIterator.init(program_args).iter;
+        var parser = c.Clap(u8, c.ArgSliceIterator.Error).init(params, iter);
+    
+        while (parser.next() catch unreachable) |arg| {
+            switch (arg.param.id) {
+                'h' => warn("Help!\n"),
+                'v' => warn("1.1.1\n"),
+                'f' => warn("{}\n", arg.value.?),
+            else => unreachable,
+        }
+    }
+}
