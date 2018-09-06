@@ -1,8 +1,8 @@
 # zig-clap
 
 A simple and easy to use command line argument parser library for Zig.
-It's ment as a thin layer of abstraction over parsing arguments. Users
-can then build on top to parse arguments into their own data structures.
+It's ment as a thin layer of abstraction over parsing arguments which allows
+for further abstraction on top, such as filling in a `HashMap`.
 
 ## Features
 
