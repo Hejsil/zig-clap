@@ -198,29 +198,49 @@ test "clap: all" {
 }
 
 test "clap.Example" {
-        const program_args = [][]const u8{
-    "-h", "--help",
-            "-v", "--version",
+    // Fake program arguments. Don't mind them
+    const program_args = [][]const u8{
+        "-h", "--help",
+        "-v", "--version",
         "file.zig",
     };
-        
+
     const warn = @import("std").debug.warn;
-        const c = @import("clap.zig");
-    
-        const params = []c.Param(u8){
-            c.Param(u8).init('h', false, c.Names.prefix("help")),
-            c.Param(u8).init('v', false, c.Names.prefix("version")),
-            c.Param(u8).init('f', true, c.Names.none()),
+    const c = @import("clap.zig");
+
+    // Initialize the parameters you want your program to take.
+    // `Param` has a type passed in, which will determin the type
+    // of `Param.id`. This field can then be used to identify the
+    // `Param`, or something else entirely.
+    // Example: You could have the `id` be a function, and then
+    //          call it in the loop further down.
+    const params = []c.Param(u8){
+        c.Param(u8).init('h', false, c.Names.prefix("help")),
+        c.Param(u8).init('v', false, c.Names.prefix("version")),
+        c.Param(u8).init('f', true,  c.Names.none()),
     };
     
-        var iter = &c.ArgSliceIterator.init(program_args).iter;
-        var parser = c.Clap(u8, c.ArgSliceIterator.Error).init(params, iter);
-    
-        while (parser.next() catch unreachable) |arg| {
-            switch (arg.param.id) {
-                'h' => warn("Help!\n"),
-                'v' => warn("1.1.1\n"),
-                'f' => warn("{}\n", arg.value.?),
+    // Here, we use an `ArgSliceIterator` which iterates over
+    // a slice of arguments. For real program, you would probably
+    // use `OsArgIterator`.
+    var iter = &c.ArgSliceIterator.init(program_args).iter;
+    var parser = c.Clap(u8, c.ArgSliceIterator.Error).init(params, iter);
+
+    // Iterate over all arguments passed to the program.
+    // In real code, you should probably handle the errors
+    // `parser.next` returns.
+    while (parser.next() catch unreachable) |arg| {
+        // `arg.param` is a pointer to its matching `Param`
+        // from the `params` array.
+        switch (arg.param.id) {
+            'h' => warn("Help!\n"),
+            'v' => warn("1.1.1\n"),
+
+            // `arg.value` is `null`, if `arg.param.takes_value`
+            // is `false`. Otherwise, `arg.value` is the value
+            // passed with the argument, such as `-a=10` or
+            // `-a 10`.
+            'f' => warn("{}\n", arg.value.?),
             else => unreachable,
         }
     }
