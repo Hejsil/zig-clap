@@ -93,7 +93,7 @@ pub const Names = struct {
 ///     * Value parameters must take a value.
 pub fn Param(comptime Id: type) type {
     return struct {
-        const Self = this;
+            const Self = @This();
 
         id: Id,
         takes_value: bool,
@@ -119,7 +119,7 @@ pub fn Param(comptime Id: type) type {
 /// The result returned from ::Clap.next
 pub fn Arg(comptime Id: type) type {
     return struct {
-        const Self = this;
+            const Self = @This();
 
         param: *const Param(Id),
         value: ?[]const u8,
@@ -136,7 +136,7 @@ pub fn Arg(comptime Id: type) type {
 /// A interface for iterating over command line arguments
 pub fn ArgIterator(comptime E: type) type {
     return struct {
-        const Self = this;
+            const Self = @This();
         const Error = E;
 
         nextFn: fn (iter: *Self) Error!?[]const u8,
@@ -210,7 +210,7 @@ pub const OsArgIterator = struct {
 /// ::Clap.next to parse all the arguments of your program.
 pub fn Clap(comptime Id: type, comptime ArgError: type) type {
     return struct {
-        const Self = this;
+            const Self = @This();
 
         const State = union(enum) {
             Normal,
