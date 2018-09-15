@@ -198,7 +198,7 @@ pub const OsArgIterator = struct {
     fn nextFn(iter: *ArgIterator(Error)) Error!?[]const u8 {
         const self = @fieldParentPtr(OsArgIterator, "iter", iter);
         if (builtin.os == builtin.Os.windows) {
-            return try self.args.next(self.arena.allocator) orelse return null;
+            return try self.args.next(&self.arena.allocator) orelse return null;
         } else {
             return self.args.nextPosix();
         }
