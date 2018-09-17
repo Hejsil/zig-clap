@@ -116,7 +116,7 @@ pub fn Param(comptime Id: type) type {
     };
 }
 
-/// The result returned from ::Clap.next
+/// The result returned from ::StreamingClap.next
 pub fn Arg(comptime Id: type) type {
     return struct {
             const Self = @This();
@@ -206,9 +206,9 @@ pub const OsArgIterator = struct {
 };
 
 /// A command line argument parser which, given an ::ArgIterator, will parse arguments according
-/// to the ::params. ::Clap parses in an iterating manner, so you have to use a loop together with
-/// ::Clap.next to parse all the arguments of your program.
-pub fn Clap(comptime Id: type, comptime ArgError: type) type {
+/// to the ::params. ::StreamingClap parses in an iterating manner, so you have to use a loop together with
+/// ::StreamingClap.next to parse all the arguments of your program.
+pub fn StreamingClap(comptime Id: type, comptime ArgError: type) type {
     return struct {
             const Self = @This();
 

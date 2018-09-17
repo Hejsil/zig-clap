@@ -9,12 +9,12 @@ const assert = debug.assert;
 const ArgSliceIterator = clap.ArgSliceIterator;
 const Names = clap.Names;
 const Param = clap.Param(u8);
-const Clap = clap.Clap(u8, ArgSliceIterator.Error);
+const StreamingClap = clap.StreamingClap(u8, ArgSliceIterator.Error);
 const Arg = clap.Arg(u8);
    
 fn testNoErr(params: []const Param, args: []const []const u8, results: []const Arg) void {
     var arg_iter = ArgSliceIterator.init(args);
-    var c = Clap.init(params, &arg_iter.iter);
+    var c = StreamingClap.init(params, &arg_iter.iter);
 
     for (results) |res| {
         const arg = (c.next() catch unreachable) orelse unreachable;
@@ -224,7 +224,7 @@ test "clap.Example" {
     // a slice of arguments. For real program, you would probably
     // use `OsArgIterator`.
     var iter = &c.ArgSliceIterator.init(program_args).iter;
-    var parser = c.Clap(u8, c.ArgSliceIterator.Error).init(params, iter);
+    var parser = c.StreamingClap(u8, c.ArgSliceIterator.Error).init(params, iter);
 
     // Iterate over all arguments passed to the program.
     // In real code, you should probably handle the errors
