@@ -9,4 +9,6 @@ git:
 script:
   - zig-linux-*/zig version
   - zig-linux-*/zig test test.zig
-  
+  - zig-linux-*/zig test test.zig --release-fast
+  - zig-linux-*/zig test test.zig --release-safe
+  - zig-linux-*/zig test test.zig --release-small

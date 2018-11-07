@@ -93,7 +93,7 @@ pub const Names = struct {
 ///     * Value parameters must take a value.
 pub fn Param(comptime Id: type) type {
     return struct {
-            const Self = @This();
+        const Self = @This();
 
         id: Id,
         takes_value: bool,
@@ -119,7 +119,7 @@ pub fn Param(comptime Id: type) type {
 /// The result returned from ::StreamingClap.next
 pub fn Arg(comptime Id: type) type {
     return struct {
-            const Self = @This();
+        const Self = @This();
 
         param: *const Param(Id),
         value: ?[]const u8,
@@ -136,7 +136,7 @@ pub fn Arg(comptime Id: type) type {
 /// A interface for iterating over command line arguments
 pub fn ArgIterator(comptime E: type) type {
     return struct {
-            const Self = @This();
+        const Self = @This();
         const Error = E;
 
         nextFn: fn (iter: *Self) Error!?[]const u8,
@@ -373,4 +373,27 @@ pub fn StreamingClap(comptime Id: type, comptime ArgError: type) type {
             return error.InvalidArgument;
         }
     };
+}
+
+pub fn ToStructId(comptime T: type) type {
+    return struct {
+        parse: fn(*T, ?[]const u8)
+    };
+}
+
+const ToStructParamError = error{};
+const ToStructParam = Param(fn (*T, ?[]const u8) ToStructParamError!void);
+
+fn paramsFromStruct(comptime T: type) []const ToStructParam {
+    var res: []const ToStructParam = []ToStructParam{};
+
+    for (@typeInfo(T).Struct.fields) |field| {
+        res = res ++ []ToStructParam{
+            ToStructParam.init()
+        };
+    }
+}
+
+pub fn toStruct(defaults: var, iter: *ArgIterator(ArgError)) !@typeOf(defaults) {
+
 }
