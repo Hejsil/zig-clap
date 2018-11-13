@@ -11,7 +11,7 @@ const Names = clap.Names;
 const Param = clap.Param(u8);
 const StreamingClap = clap.StreamingClap(u8, ArgSliceIterator.Error);
 const Arg = clap.Arg(u8);
-   
+
 fn testNoErr(params: []const Param, args: []const []const u8, results: []const Arg) void {
     var arg_iter = ArgSliceIterator.init(args);
     var c = StreamingClap.init(params, &arg_iter.iter);
@@ -26,7 +26,7 @@ fn testNoErr(params: []const Param, args: []const []const u8, results: []const A
         const actual_value = arg.value orelse unreachable;
         debug.assert(mem.eql(u8, expected_value, actual_value));
     }
-    
+
     if (c.next() catch unreachable) |_| {
         unreachable;
     }
@@ -38,17 +38,17 @@ test "clap: short" {
         Param.init(1, false, Names.short('b')),
         Param.init(2, true, Names.short('c')),
     };
-    
+
     const a = &params[0];
     const b = &params[1];
     const c = &params[2];
-    
+
     testNoErr(
         params,
         [][]const u8{
             "-a", "-b", "-ab", "-ba",
-            "-c", "0", "-c=0",
-            "-ac", "0", "-ac=0",
+            "-c", "0", "-c=0", "-ac",
+            "0", "-ac=0",
         },
         []const Arg{
             Arg.init(a, null),
@@ -73,16 +73,17 @@ test "clap: long" {
         Param.init(1, false, Names.long("bb")),
         Param.init(2, true, Names.long("cc")),
     };
-    
+
     const aa = &params[0];
     const bb = &params[1];
     const cc = &params[2];
-    
+
     testNoErr(
         params,
         [][]const u8{
             "--aa", "--bb",
-            "--cc", "0", "--cc=0",
+            "--cc", "0",
+            "--cc=0",
         },
         []const Arg{
             Arg.init(aa, null),
@@ -99,16 +100,17 @@ test "clap: bare" {
         Param.init(1, false, Names.bare("bb")),
         Param.init(2, true, Names.bare("cc")),
     };
-    
+
     const aa = &params[0];
     const bb = &params[1];
     const cc = &params[2];
-    
+
     testNoErr(
         params,
         [][]const u8{
             "aa", "bb",
-            "cc", "0", "cc=0",
+            "cc", "0",
+            "cc=0",
         },
         []const Arg{
             Arg.init(aa, null),
@@ -120,13 +122,11 @@ test "clap: bare" {
 }
 
 test "clap: none" {
-    const params = []Param{
-        Param.init(0, true, Names.none()),
-    };
-    
+    const params = []Param{Param.init(0, true, Names.none())};
+
     testNoErr(
         params,
-        [][]const u8{"aa", "bb"},
+        [][]const u8{ "aa", "bb" },
         []const Arg{
             Arg.init(&params[0], "aa"),
             Arg.init(&params[0], "bb"),
@@ -153,22 +153,20 @@ test "clap: all" {
         }),
         Param.init(3, true, Names.none()),
     };
-    
+
     const aa = &params[0];
     const bb = &params[1];
     const cc = &params[2];
     const bare = &params[3];
-    
+
     testNoErr(
         params,
         [][]const u8{
             "-a", "-b", "-ab", "-ba",
-            "-c", "0", "-c=0",
-            "-ac", "0", "-ac=0",
-            "--aa", "--bb",
-            "--cc", "0", "--cc=0",
-            "aa", "bb",
-            "cc", "0", "cc=0",
+            "-c", "0", "-c=0", "-ac",
+            "0", "-ac=0", "--aa", "--bb",
+            "--cc", "0", "--cc=0", "aa",
+            "bb", "cc", "0", "cc=0",
             "something",
         },
         []const Arg{
@@ -217,9 +215,9 @@ test "clap.Example" {
     const params = []c.Param(u8){
         c.Param(u8).init('h', false, c.Names.prefix("help")),
         c.Param(u8).init('v', false, c.Names.prefix("version")),
-        c.Param(u8).init('f', true,  c.Names.none()),
+        c.Param(u8).init('f', true, c.Names.none()),
     };
-    
+
     // Here, we use an `ArgSliceIterator` which iterates over
     // a slice of arguments. For real program, you would probably
     // use `OsArgIterator`.

@@ -210,7 +210,7 @@ pub const OsArgIterator = struct {
 /// ::StreamingClap.next to parse all the arguments of your program.
 pub fn StreamingClap(comptime Id: type, comptime ArgError: type) type {
     return struct {
-            const Self = @This();
+        const Self = @This();
 
         const State = union(enum) {
             Normal,
@@ -373,27 +373,4 @@ pub fn StreamingClap(comptime Id: type, comptime ArgError: type) type {
             return error.InvalidArgument;
         }
     };
-}
-
-pub fn ToStructId(comptime T: type) type {
-    return struct {
-        parse: fn(*T, ?[]const u8)
-    };
-}
-
-const ToStructParamError = error{};
-const ToStructParam = Param(fn (*T, ?[]const u8) ToStructParamError!void);
-
-fn paramsFromStruct(comptime T: type) []const ToStructParam {
-    var res: []const ToStructParam = []ToStructParam{};
-
-    for (@typeInfo(T).Struct.fields) |field| {
-        res = res ++ []ToStructParam{
-            ToStructParam.init()
-        };
-    }
-}
-
-pub fn toStruct(defaults: var, iter: *ArgIterator(ArgError)) !@typeOf(defaults) {
-
 }
