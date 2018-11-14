@@ -30,7 +30,6 @@ pub fn Arg(comptime Id: type) type {
 /// ::StreamingClap.next to parse all the arguments of your program.
 pub fn StreamingClap(comptime Id: type, comptime ArgError: type) type {
     return struct {
-
         const State = union(enum) {
             Normal,
             Chaining: Chaining,
@@ -188,7 +187,6 @@ pub fn StreamingClap(comptime Id: type, comptime ArgError: type) type {
         }
     };
 }
-
 
 fn testNoErr(params: []const clap.Param(u8), args_strings: []const []const u8, results: []const Arg(u8)) void {
     var arg_iter = args.SliceIterator.init(args_strings);

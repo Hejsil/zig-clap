@@ -24,9 +24,8 @@ pub fn ComptimeClap(comptime Id: type, comptime params: []const clap.Param(Id)) 
             break :blk res;
         };
 
-        converted_params = converted_params ++ []clap.Param(usize){
-            clap.Param(usize).init(index, param.takes_value, param.names),
-        };
+        const converted = clap.Param(usize).init(index, param.takes_value, param.names);
+        converted_params = converted_params ++ []clap.Param(usize){converted};
     }
 
     return struct {

@@ -91,11 +91,10 @@ pub fn Param(comptime Id: type) type {
             return init(id, true, Names{ .short = null, .long = null });
         }
 
-        fn init(id: Id, takes_value: bool, names: Names) @This() {
+        pub fn init(id: Id, takes_value: bool, names: Names) @This() {
             // Assert, that if the param have no name, then it has to take
             // a value.
-            debug.assert(
-                names.long != null or
+            debug.assert(names.long != null or
                 names.short != null or
                 takes_value);
 
