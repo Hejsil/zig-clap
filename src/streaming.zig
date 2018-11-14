@@ -212,9 +212,9 @@ fn testNoErr(params: []const clap.Param(u8), args_strings: []const []const u8, r
 
 test "clap.streaming.StreamingClap: short params" {
     const params = []clap.Param(u8){
-        clap.Param(u8).init(0, false, clap.Names.short('a')),
-        clap.Param(u8).init(1, false, clap.Names.short('b')),
-        clap.Param(u8).init(2, true, clap.Names.short('c')),
+        clap.Param(u8).flag(0, clap.Names.short('a')),
+        clap.Param(u8).flag(1, clap.Names.short('b')),
+        clap.Param(u8).option(2, clap.Names.short('c')),
     };
 
     const a = &params[0];
@@ -247,9 +247,9 @@ test "clap.streaming.StreamingClap: short params" {
 
 test "clap.streaming.StreamingClap: long params" {
     const params = []clap.Param(u8){
-        clap.Param(u8).init(0, false, clap.Names.long("aa")),
-        clap.Param(u8).init(1, false, clap.Names.long("bb")),
-        clap.Param(u8).init(2, true, clap.Names.long("cc")),
+        clap.Param(u8).flag(0, clap.Names.long("aa")),
+        clap.Param(u8).flag(1, clap.Names.long("bb")),
+        clap.Param(u8).option(2, clap.Names.long("cc")),
     };
 
     const aa = &params[0];
@@ -273,7 +273,7 @@ test "clap.streaming.StreamingClap: long params" {
 }
 
 test "clap.streaming.StreamingClap: positional params" {
-    const params = []clap.Param(u8){clap.Param(u8).init(0, true, clap.Names.positional())};
+    const params = []clap.Param(u8){clap.Param(u8).positional(0)};
 
     testNoErr(
         params,
@@ -287,19 +287,19 @@ test "clap.streaming.StreamingClap: positional params" {
 
 test "clap.streaming.StreamingClap: all params" {
     const params = []clap.Param(u8){
-        clap.Param(u8).init(0, false, clap.Names{
+        clap.Param(u8).flag(0, clap.Names{
             .short = 'a',
             .long = "aa",
         }),
-        clap.Param(u8).init(1, false, clap.Names{
+        clap.Param(u8).flag(1, clap.Names{
             .short = 'b',
             .long = "bb",
         }),
-        clap.Param(u8).init(2, true, clap.Names{
+        clap.Param(u8).option(2, clap.Names{
             .short = 'c',
             .long = "cc",
         }),
-        clap.Param(u8).init(3, true, clap.Names.positional()),
+        clap.Param(u8).positional(3),
     };
 
     const aa = &params[0];

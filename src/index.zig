@@ -23,14 +23,6 @@ pub const Names = struct {
     /// '--' prefix
     long: ?[]const u8,
 
-    /// Initializes no names
-    pub fn positional() Names {
-        return Names{
-            .short = null,
-            .long = null,
-        };
-    }
-
     /// Initializes a short name
     pub fn short(s: u8) Names {
         return Names{
@@ -87,7 +79,19 @@ pub fn Param(comptime Id: type) type {
         takes_value: bool,
         names: Names,
 
-        pub fn init(id: Id, takes_value: bool, names: Names) @This() {
+        pub fn flag(id: Id, names: Names) @This() {
+            return init(id, false, names);
+        }
+
+        pub fn option(id: Id, names: Names) @This() {
+            return init(id, true, names);
+        }
+
+        pub fn positional(id: Id) @This() {
+            return init(id, true, Names{ .short = null, .long = null });
+        }
+
+        fn init(id: Id, takes_value: bool, names: Names) @This() {
             // Assert, that if the param have no name, then it has to take
             // a value.
             debug.assert(

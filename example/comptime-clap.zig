@@ -17,12 +17,12 @@ pub fn main() !void {
         // * A "Names" struct, which determins what names the parameter will have on the
         //   commandline. Names.prefix inits a "Names" struct that has the "short" name
         //   set to the first letter, and the "long" name set to the full name.
-        clap.Param(void).init({}, false, clap.Names.prefix("help")),
-        clap.Param(void).init({}, true, clap.Names.prefix("number")),
+        clap.Param(void).flag({}, clap.Names.prefix("help")),
+        clap.Param(void).option({}, clap.Names.prefix("number")),
 
         // Names.positional returns a "Names" struct where neither the "short" or "long"
         // name is set.
-        clap.Param(void).init({}, true, clap.Names.positional()),
+        clap.Param(void).positional({}),
     };
 
     // We then initialize an argument iterator. We will use the OsIterator as it nicely

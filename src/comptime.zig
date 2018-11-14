@@ -108,19 +108,19 @@ pub fn ComptimeClap(comptime Id: type, comptime params: []const clap.Param(Id)) 
 
 test "clap.comptime.ComptimeClap" {
     const Clap = ComptimeClap(void, comptime []clap.Param(void){
-        clap.Param(void).init({}, false, clap.Names{
+        clap.Param(void).flag({}, clap.Names{
             .short = 'a',
             .long = "aa",
         }),
-        clap.Param(void).init({}, false, clap.Names{
+        clap.Param(void).flag({}, clap.Names{
             .short = 'b',
             .long = "bb",
         }),
-        clap.Param(void).init({}, true, clap.Names{
+        clap.Param(void).option({}, clap.Names{
             .short = 'c',
             .long = "cc",
         }),
-        clap.Param(void).init({}, true, clap.Names.positional()),
+        clap.Param(void).positional({}),
     });
 
     var buf: [1024]u8 = undefined;
