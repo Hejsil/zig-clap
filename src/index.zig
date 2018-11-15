@@ -113,7 +113,7 @@ pub fn Param(comptime Id: type) type {
 ///     -s, --long=value_text help_text
 ///     -s,                   help_text
 ///         --long            help_text
-pub fn helpEx(
+pub fn helpFull(
     stream: var,
     comptime Id: type,
     params: []const Param(Id),
@@ -173,17 +173,53 @@ fn printParam(
         try stream.print("={}", value_text(context, param));
 }
 
+/// A wrapper around helpFull for simple help_text and value_text functions that
+/// cant return an error or take a context.
+pub fn helpEx(
+    stream: var,
+    comptime Id: type,
+    params: []const Param(Id),
+    help_text: fn(Param(Id)) []const u8,
+    value_text: fn(Param(Id)) []const u8,
+) !void {
+    const Context = struct {
+        help_text: fn(Param(Id)) []const u8,
+        value_text: fn(Param(Id)) []const u8,
+
+        pub fn help(c: @This(), p: Param(Id)) error{}![]const u8 {
+            return c.help_text(p);
+        }
+
+        pub fn value(c: @This(), p: Param(Id)) error{}![]const u8 {
+            return c.value_text(p);
+        }
+    };
+
+    return helpFull(
+        stream,
+        Id,
+        params,
+        error{},
+        Context{
+            .help_text = help_text,
+            .value_text = value_text,
+        },
+        Context.help,
+        Context.value,
+    );
+}
+
 /// A wrapper around helpEx that takes a Param([]const u8) and uses the string id
 /// as the help text for each paramter.
 pub fn help(stream: var, params: []const Param([]const u8)) !void {
-    try helpEx(stream, []const u8, params, error{}, {}, getHelpSimple, getValueSimple);
+    try helpEx(stream, []const u8, params, getHelpSimple, getValueSimple);
 }
 
-fn getHelpSimple(context: void, param: Param([]const u8)) error{}![]const u8 {
+fn getHelpSimple(param: Param([]const u8)) []const u8 {
     return param.id;
 }
 
-fn getValueSimple(context: void, param: Param([]const u8)) error{}![]const u8 {
+fn getValueSimple(param: Param([]const u8)) []const u8 {
     return "VALUE";
 }
 

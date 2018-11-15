@@ -110,7 +110,7 @@ Ofc, this limits you to use only parameters that are comptime known.
 
 ### `help`
 
-The `help` and `helpEx` are functions for printing a simple list of all parameters the
+The `help`, `helpEx` and `helpFull` are functions for printing a simple list of all parameters the
 program can take.
 
 ```rust
@@ -142,41 +142,7 @@ The `help` function is the simplest to call. It only takes an `OutStream` and a 
 `Param([]const u8)`. This function assumes that the id of each parameter is the help message.
 
 The `helpEx` is the generic version of `help`. It can print a help message for any
-`Param`, but requires some extra arguments to work.
+`Param` give that the caller provides functions for getting the help and value strings.
 
-```rust
-fn getHelp(_: void, param: clap.Param(u8)) error{}![]const u8 {
-    return switch (param.id) {
-        'h' => "Display this help and exit.",
-        'v' => "Output version information and exit.",
-        else => unreachable,
-    };
-}
-
-fn getValue(_: void, param: clap.Param(u8)) error{}![]const u8 {
-    return "";
-}
-
-const stderr_file = try std.io.getStdErr();
-var stderr_out_stream = stderr_file.outStream();
-const stderr = &stderr_out_stream.stream;
-
-try stderr.print("\n");
-try clap.helpEx(
-    stderr,
-    u8,
-    []clap.Param(u8){
-        clap.Param(u8).flag('h', clap.Names.prefix("help")),
-        clap.Param(u8).flag('v', clap.Names.prefix("version")),
-    },
-    error{},
-    {},
-    getHelp,
-    getValue,
-);
-```
-
-```
-        -h, --help      Display this help and exit.
-        -v, --version   Output version information and exit.
-```
+The `helpFull` is even more generic, allowing the functions that get the help and value strings
+to return errors and take a context as a parameter.
