@@ -141,8 +141,8 @@ try clap.help(
 The `help` function is the simplest to call. It only takes an `OutStream` and a slice of
 `Param([]const u8)`. This function assumes that the id of each parameter is the help message.
 
-The `clap.helpEx` is the generic version of `help`. It can print a help message for any
-`Param`, but requires some extra arguments for it to work.
+The `helpEx` is the generic version of `help`. It can print a help message for any
+`Param`, but requires some extra arguments to work.
 
 ```rust
 fn getHelp(_: void, param: clap.Param(u8)) error{}![]const u8 {
