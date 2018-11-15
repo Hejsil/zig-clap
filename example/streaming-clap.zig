@@ -10,18 +10,8 @@ pub fn main() !void {
 
     // First we specify what parameters our program can take.
     const params = []clap.Param(u8){
-        // Param.init takes 3 arguments.
-        // * An "id", which can be any type specified by the argument to Param. Here, we
-        //   use a "u8" as the "id" type.
-        // * A bool which determins wether the parameter takes a value.
-        // * A "Names" struct, which determins what names the parameter will have on the
-        //   commandline. Names.prefix inits a "Names" struct that has the "short" name
-        //   set to the first letter, and the "long" name set to the full name.
         clap.Param(u8).flag('h', clap.Names.prefix("help")),
         clap.Param(u8).option('n', clap.Names.prefix("number")),
-
-        // Names.positional returns a "Names" struct where neither the "short" or "long"
-        // name is set.
         clap.Param(u8).positional('f'),
     };
 

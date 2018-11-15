@@ -107,3 +107,76 @@ zig-clap/example/comptime-clap.zig:41:18: note: called from here
 ```
 
 Ofc, this limits you to use only parameters that are comptime known.
+
+### `help`
+
+The `help` and `helpEx` are functions for printing a simple list of all parameters the
+program can take.
+
+```rust
+const stderr_file = try std.io.getStdErr();
+var stderr_out_stream = stderr_file.outStream();
+const stderr = &stderr_out_stream.stream;
+
+try clap.help(
+    stderr,
+    []clap.Param([]const u8){
+        clap.Param([]const u8).flag(
+            "Display this help and exit.",
+            clap.Names.prefix("help"),
+        ),
+        clap.Param([]const u8).flag(
+            "Output version information and exit.",
+            clap.Names.prefix("version"),
+        ),
+    },
+);
+```
+
+```
+        -h, --help      Display this help and exit.
+        -v, --version   Output version information and exit.
+```
+
+The `help` function is the simplest to call. It only takes an `OutStream` and a slice of
+`Param([]const u8)`. This function assumes that the id of each parameter is the help message.
+
+The `clap.helpEx` is the generic version of `help`. It can print a help message for any
+`Param`, but requires some extra arguments for it to work.
+
+```rust
+fn getHelp(_: void, param: clap.Param(u8)) error{}![]const u8 {
+    return switch (param.id) {
+        'h' => "Display this help and exit.",
+        'v' => "Output version information and exit.",
+        else => unreachable,
+    };
+}
+
+fn getValue(_: void, param: clap.Param(u8)) error{}![]const u8 {
+    return "";
+}
+
+const stderr_file = try std.io.getStdErr();
+var stderr_out_stream = stderr_file.outStream();
+const stderr = &stderr_out_stream.stream;
+
+try stderr.print("\n");
+try clap.helpEx(
+    stderr,
+    u8,
+    []clap.Param(u8){
+        clap.Param(u8).flag('h', clap.Names.prefix("help")),
+        clap.Param(u8).flag('v', clap.Names.prefix("version")),
+    },
+    error{},
+    {},
+    getHelp,
+    getValue,
+);
+```
+
+```
+        -h, --help      Display this help and exit.
+        -v, --version   Output version information and exit.
+```
