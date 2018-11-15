@@ -10,8 +10,8 @@ pub fn main() !void {
 
     // First we specify what parameters our program can take.
     const params = []clap.Param(u8){
-        clap.Param(u8).flag('h', clap.Names.prefix("help")),
-        clap.Param(u8).option('n', clap.Names.prefix("number")),
+        clap.Param(u8).flag('h', clap.Names.both("help")),
+        clap.Param(u8).option('n', clap.Names.both("number")),
         clap.Param(u8).positional('f'),
     };
 

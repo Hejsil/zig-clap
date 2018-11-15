@@ -20,8 +20,8 @@ The `StreamingClap` is base of all the other parsers. It's a streaming parser th
 
 ```rust
 const params = []clap.Param(u8){
-    clap.Param(void).flag('h', false, clap.Names.prefix("help")),
-    clap.Param(void).option('n', true, clap.Names.prefix("number")),
+    clap.Param(void).flag('h', false, clap.Names.both("help")),
+    clap.Param(void).option('n', true, clap.Names.both("number")),
     clap.Param(void).positional('f'),
 };
 
@@ -50,8 +50,8 @@ them available through three functions (`flag`, `option`, `positionals`).
 
 ```rust
 const params = comptime []clap.Param(void){
-    clap.Param(void).flag({}, false, clap.Names.prefix("help")),
-    clap.Param(void).option({}, true, clap.Names.prefix("number")),
+    clap.Param(void).flag({}, false, clap.Names.both("help")),
+    clap.Param(void).option({}, true, clap.Names.both("number")),
     clap.Param(void).positional({}),
 };
 
@@ -78,7 +78,7 @@ program can take:
 
 ```rust
 const params = comptime []clap.Param(void){
-    clap.Param(void).init({}, false, clap.Names.prefix("help")),
+    clap.Param(void).init({}, false, clap.Names.both("help")),
 };
 
 var os_iter = clap.args.OsIterator.init(allocator);
@@ -123,11 +123,11 @@ try clap.help(
     []clap.Param([]const u8){
         clap.Param([]const u8).flag(
             "Display this help and exit.",
-            clap.Names.prefix("help"),
+            clap.Names.both("help"),
         ),
         clap.Param([]const u8).flag(
             "Output version information and exit.",
-            clap.Names.prefix("version"),
+            clap.Names.both("version"),
         ),
     },
 );

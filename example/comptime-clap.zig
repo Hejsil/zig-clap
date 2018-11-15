@@ -16,11 +16,11 @@ pub fn main() !void {
     const params = comptime []clap.Param([]const u8){
         clap.Param([]const u8).flag(
             "Display this help and exit.",
-            clap.Names.prefix("help")
+            clap.Names.both("help"),
         ),
         clap.Param([]const u8).option(
             "An option parameter, which takes a value.",
-            clap.Names.prefix("number"),
+            clap.Names.both("number"),
         ),
         clap.Param([]const u8).positional(""),
     };
