@@ -20,9 +20,9 @@ The `StreamingClap` is base of all the other parsers. It's a streaming parser th
 
 ```rust
 const params = []clap.Param(u8){
-    clap.Param(void).flag('h', false, clap.Names.both("help")),
-    clap.Param(void).option('n', true, clap.Names.both("number")),
-    clap.Param(void).positional('f'),
+    clap.Param(u8).flag('h', false, clap.Names.both("help")),
+    clap.Param(u8).option('n', true, clap.Names.both("number")),
+    clap.Param(u8).positional('f'),
 };
 
 var os_iter = clap.args.OsIterator.init(allocator);
