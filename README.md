@@ -20,8 +20,8 @@ The `StreamingClap` is base of all the other parsers. It's a streaming parser th
 
 ```rust
 const params = []clap.Param(u8){
-    clap.Param(u8).flag('h', false, clap.Names.both("help")),
-    clap.Param(u8).option('n', true, clap.Names.both("number")),
+    clap.Param(u8).flag('h', clap.Names.both("help")),
+    clap.Param(u8).option('n', clap.Names.both("number")),
     clap.Param(u8).positional('f'),
 };
 
@@ -50,8 +50,8 @@ them available through three functions (`flag`, `option`, `positionals`).
 
 ```rust
 const params = comptime []clap.Param(void){
-    clap.Param(void).flag({}, false, clap.Names.both("help")),
-    clap.Param(void).option({}, true, clap.Names.both("number")),
+    clap.Param(void).flag({}, clap.Names.both("help")),
+    clap.Param(void).option({}, clap.Names.both("number")),
     clap.Param(void).positional({}),
 };
 
@@ -78,7 +78,7 @@ program can take:
 
 ```rust
 const params = comptime []clap.Param(void){
-    clap.Param(void).init({}, false, clap.Names.both("help")),
+    clap.Param(void).flag({}, clap.Names.both("help")),
 };
 
 var os_iter = clap.args.OsIterator.init(allocator);
