@@ -15,7 +15,7 @@ A simple and easy to use command line argument parser library for Zig.
 
 ### `StreamingClap`
 
-The `StreamingClap` is base of all the other parsers. It's a streaming parser that uses an
+The `StreamingClap` is the base of all the other parsers. It's a streaming parser that uses an
 `args.Iterator` to provide it with arguments lazily.
 
 ```rust
@@ -106,7 +106,7 @@ zig-clap/example/comptime-clap.zig:41:18: note: called from here
                  ^
 ```
 
-Ofc, this limits you to use only parameters that are comptime known.
+Ofc, this limits you to parameters that are comptime known.
 
 ### `help`
 
