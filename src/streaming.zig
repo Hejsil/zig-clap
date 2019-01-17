@@ -28,7 +28,7 @@ pub fn Arg(comptime Id: type) type {
 /// A command line argument parser which, given an ::ArgIterator, will parse arguments according
 /// to the ::params. ::StreamingClap parses in an iterating manner, so you have to use a loop together with
 /// ::StreamingClap.next to parse all the arguments of your program.
-pub fn StreamingClap(comptime Id: type, comptime ArgError: type) type {
+pub fn StreamingClap(comptime Id: type, comptime ArgIterator: type) type {
     return struct {
         const State = union(enum) {
             Normal,
@@ -41,10 +41,10 @@ pub fn StreamingClap(comptime Id: type, comptime ArgError: type) type {
         };
 
         params: []const clap.Param(Id),
-        iter: *args.Iterator(ArgError),
+        iter: *ArgIterator,
         state: State,
 
-        pub fn init(params: []const clap.Param(Id), iter: *args.Iterator(ArgError)) @This() {
+        pub fn init(params: []const clap.Param(Id), iter: *ArgIterator) @This() {
             var res = @This(){
                 .params = params,
                 .iter = iter,
@@ -189,8 +189,8 @@ pub fn StreamingClap(comptime Id: type, comptime ArgError: type) type {
 }
 
 fn testNoErr(params: []const clap.Param(u8), args_strings: []const []const u8, results: []const Arg(u8)) void {
-    var arg_iter = args.SliceIterator.init(args_strings);
-    var c = StreamingClap(u8, args.SliceIterator.Error).init(params, &arg_iter.iter);
+    var iter = args.SliceIterator.init(args_strings);
+    var c = StreamingClap(u8, args.SliceIterator).init(params, &iter);
 
     for (results) |res| {
         const arg = (c.next() catch unreachable) orelse unreachable;

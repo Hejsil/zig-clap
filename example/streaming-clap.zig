@@ -17,15 +17,14 @@ pub fn main() !void {
 
     // We then initialize an argument iterator. We will use the OsIterator as it nicely
     // wraps iterating over arguments the most efficient way on each os.
-    var os_iter = clap.args.OsIterator.init(allocator);
-    const iter = &os_iter.iter;
-    defer os_iter.deinit();
+    var iter = clap.args.OsIterator.init(allocator);
+    defer iter.deinit();
 
     // Consume the exe arg.
     const exe = try iter.next();
 
     // Finally we initialize our streaming parser.
-    var parser = clap.StreamingClap(u8, clap.args.OsIterator.Error).init(params, iter);
+    var parser = clap.StreamingClap(u8, clap.args.OsIterator).init(params, &iter);
 
     // Because we use a streaming parser, we have to consume each argument parsed individually.
     while (try parser.next()) |arg| {
