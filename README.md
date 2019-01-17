@@ -25,13 +25,11 @@ const params = []clap.Param(u8){
     clap.Param(u8).positional('f'),
 };
 
-var os_iter = clap.args.OsIterator.init(allocator);
-const iter = &os_iter.iter;
-defer os_iter.deinit();
-
+var iter = clap.args.OsIterator.init(allocator);
+defer iter.deinit();
 const exe = try iter.next();
 
-var parser = clap.StreamingClap(u8, clap.args.OsIterator.Error).init(params, iter);
+var parser = clap.StreamingClap(u8, clap.args.OsIterator).init(params, &iter);
 
 while (try parser.next()) |arg| {
     switch (arg.param.id) {
@@ -40,7 +38,7 @@ while (try parser.next()) |arg| {
         'f' => debug.warn("{}\n", arg.value.?),
         else => unreachable,
     }
- }
+}
 ```
 
 ### `ComptimeClap`
@@ -55,13 +53,11 @@ const params = comptime []clap.Param(void){
     clap.Param(void).positional({}),
 };
 
-var os_iter = clap.args.OsIterator.init(allocator);
-const iter = &os_iter.iter;
-defer os_iter.deinit();
-
+var iter = clap.args.OsIterator.init(allocator);
+defer iter.deinit();
 const exe = try iter.next();
 
-var args = try clap.ComptimeClap(void, params).parse(allocator, clap.args.OsIterator.Error, iter);
+var args = try clap.ComptimeClap(void, params).parse(allocator, clap.args.OsIterator, &iter);
 defer args.deinit();
 
 if (args.flag("--help"))
@@ -85,9 +81,11 @@ var os_iter = clap.args.OsIterator.init(allocator);
 const iter = &os_iter.iter;
 defer os_iter.deinit();
 
+var iter = clap.args.OsIterator.init(allocator);
+defer iter.deinit();
 const exe = try iter.next();
 
-var args = try clap.ComptimeClap(params).parse(allocator, clap.args.OsIterator.Error, iter);
+var args = try clap.ComptimeClap(void, params).parse(allocator, clap.args.OsIterator, &iter);
 defer args.deinit();
 
 if (args.flag("--helps"))
