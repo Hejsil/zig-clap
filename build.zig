@@ -13,7 +13,7 @@ pub fn build(b: *Builder) void {
         "streaming-clap",
     }) |example_name| {
         const example = b.addExecutable(example_name, "example/" ++ example_name ++ ".zig");
-        example.addPackagePath("clap", "src/index.zig");
+        example.addPackagePath("clap", "index.zig");
         example.setBuildMode(mode);
         example_step.dependOn(&example.step);
     }
@@ -22,7 +22,7 @@ pub fn build(b: *Builder) void {
     inline for ([]Mode{ Mode.Debug, Mode.ReleaseFast, Mode.ReleaseSafe, Mode.ReleaseSmall }) |test_mode| {
         const mode_str = comptime modeToString(test_mode);
 
-        const tests = b.addTest("src/index.zig");
+        const tests = b.addTest("index.zig");
         tests.setBuildMode(test_mode);
         tests.setNamePrefix(mode_str ++ " ");
 

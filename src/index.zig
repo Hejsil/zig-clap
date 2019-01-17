@@ -41,10 +41,10 @@ pub const Names = struct {
         };
     }
 
-    /// Initializes a name with a prefix.
+    /// Initializes a name that is long and short, from the same string.
     /// ::short is set to ::name[0], and ::long is set to ::name.
     /// This function asserts that ::name.len != 0
-    pub fn prefix(name: []const u8) Names {
+    pub fn both(name: []const u8) Names {
         debug.assert(name.len != 0);
 
         return Names{
@@ -119,14 +119,13 @@ pub fn helpFull(
     params: []const Param(Id),
     comptime Error: type,
     context: var,
-    help_text: fn(@typeOf(context), Param(Id)) Error![]const u8,
-    value_text: fn(@typeOf(context), Param(Id)) Error![]const u8,
+    help_text: fn (@typeOf(context), Param(Id)) Error![]const u8,
+    value_text: fn (@typeOf(context), Param(Id)) Error![]const u8,
 ) !void {
     const max_spacing = blk: {
-        var null_stream = io.NullOutStream.init();
         var res: usize = 0;
         for (params) |param| {
-            var counting_stream = io.CountingOutStream(io.NullOutStream.Error).init(&null_stream.stream);
+            var counting_stream = io.CountingOutStream(io.NullOutStream.Error).init(io.null_out_stream);
             try printParam(&counting_stream.stream, Id, param, Error, context, value_text);
             if (res < counting_stream.bytes_written)
                 res = counting_stream.bytes_written;
@@ -153,7 +152,7 @@ fn printParam(
     param: Param(Id),
     comptime Error: type,
     context: var,
-    value_text: fn(@typeOf(context), Param(Id)) Error![]const u8,
+    value_text: fn (@typeOf(context), Param(Id)) Error![]const u8,
 ) @typeOf(stream.*).Error!void {
     if (param.names.short) |s| {
         try stream.print("-{c}", s);
@@ -179,12 +178,12 @@ pub fn helpEx(
     stream: var,
     comptime Id: type,
     params: []const Param(Id),
-    help_text: fn(Param(Id)) []const u8,
-    value_text: fn(Param(Id)) []const u8,
+    help_text: fn (Param(Id)) []const u8,
+    value_text: fn (Param(Id)) []const u8,
 ) !void {
     const Context = struct {
-        help_text: fn(Param(Id)) []const u8,
-        value_text: fn(Param(Id)) []const u8,
+        help_text: fn (Param(Id)) []const u8,
+        value_text: fn (Param(Id)) []const u8,
 
         pub fn help(c: @This(), p: Param(Id)) error{}![]const u8 {
             return c.help_text(p);
@@ -223,7 +222,6 @@ fn getValueSimple(param: Param([]const u8)) []const u8 {
     return "VALUE";
 }
 
-
 test "clap.help" {
     var buf: [1024]u8 = undefined;
     var slice_stream = io.SliceOutStream.init(buf[0..]);
@@ -248,19 +246,19 @@ test "clap.help" {
             ),
             Param([]const u8).flag(
                 "Both flag.",
-                Names.prefix("cc"),
+                Names.both("cc"),
             ),
             Param([]const u8).option(
                 "Both option.",
-                Names.prefix("dd"),
+                Names.both("dd"),
             ),
             Param([]const u8).positional(
-                "Positional. This should not appear in the help message."
+                "Positional. This should not appear in the help message.",
             ),
         },
     );
 
-    const expected =
+    const expected = "" ++
         "\t-a            \tShort flag.\n" ++
         "\t-b=VALUE      \tShort option.\n" ++
         "\t    --aa      \tLong flag.\n" ++

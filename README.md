@@ -15,14 +15,14 @@ A simple and easy to use command line argument parser library for Zig.
 
 ### `StreamingClap`
 
-The `StreamingClap` is base of all the other parsers. It's a streaming parser that uses an
+The `StreamingClap` is the base of all the other parsers. It's a streaming parser that uses an
 `args.Iterator` to provide it with arguments lazily.
 
 ```rust
 const params = []clap.Param(u8){
-    clap.Param(void).flag('h', false, clap.Names.prefix("help")),
-    clap.Param(void).option('n', true, clap.Names.prefix("number")),
-    clap.Param(void).positional('f'),
+    clap.Param(u8).flag('h', clap.Names.both("help")),
+    clap.Param(u8).option('n', clap.Names.both("number")),
+    clap.Param(u8).positional('f'),
 };
 
 var os_iter = clap.args.OsIterator.init(allocator);
@@ -50,8 +50,8 @@ them available through three functions (`flag`, `option`, `positionals`).
 
 ```rust
 const params = comptime []clap.Param(void){
-    clap.Param(void).flag({}, false, clap.Names.prefix("help")),
-    clap.Param(void).option({}, true, clap.Names.prefix("number")),
+    clap.Param(void).flag({}, clap.Names.both("help")),
+    clap.Param(void).option({}, clap.Names.both("number")),
     clap.Param(void).positional({}),
 };
 
@@ -78,7 +78,7 @@ program can take:
 
 ```rust
 const params = comptime []clap.Param(void){
-    clap.Param(void).init({}, false, clap.Names.prefix("help")),
+    clap.Param(void).flag({}, clap.Names.both("help")),
 };
 
 var os_iter = clap.args.OsIterator.init(allocator);
@@ -106,7 +106,7 @@ zig-clap/example/comptime-clap.zig:41:18: note: called from here
                  ^
 ```
 
-Ofc, this limits you to use only parameters that are comptime known.
+Ofc, this limits you to parameters that are comptime known.
 
 ### `help`
 
@@ -123,11 +123,11 @@ try clap.help(
     []clap.Param([]const u8){
         clap.Param([]const u8).flag(
             "Display this help and exit.",
-            clap.Names.prefix("help"),
+            clap.Names.both("help"),
         ),
         clap.Param([]const u8).flag(
             "Output version information and exit.",
-            clap.Names.prefix("version"),
+            clap.Names.both("version"),
         ),
     },
 );
