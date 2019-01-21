@@ -77,10 +77,6 @@ const params = comptime []clap.Param(void){
     clap.Param(void).flag({}, clap.Names.both("help")),
 };
 
-var os_iter = clap.args.OsIterator.init(allocator);
-const iter = &os_iter.iter;
-defer os_iter.deinit();
-
 var iter = clap.args.OsIterator.init(allocator);
 defer iter.deinit();
 const exe = try iter.next();
