@@ -15,23 +15,21 @@ A simple and easy to use command line argument parser library for Zig.
 
 ### `StreamingClap`
 
-The `StreamingClap` is base of all the other parsers. It's a streaming parser that uses an
+The `StreamingClap` is the base of all the other parsers. It's a streaming parser that uses an
 `args.Iterator` to provide it with arguments lazily.
 
 ```rust
 const params = []clap.Param(u8){
-    clap.Param(void).flag('h', false, clap.Names.both("help")),
-    clap.Param(void).option('n', true, clap.Names.both("number")),
-    clap.Param(void).positional('f'),
+    clap.Param(u8).flag('h', clap.Names.both("help")),
+    clap.Param(u8).option('n', clap.Names.both("number")),
+    clap.Param(u8).positional('f'),
 };
 
-var os_iter = clap.args.OsIterator.init(allocator);
-const iter = &os_iter.iter;
-defer os_iter.deinit();
-
+var iter = clap.args.OsIterator.init(allocator);
+defer iter.deinit();
 const exe = try iter.next();
 
-var parser = clap.StreamingClap(u8, clap.args.OsIterator.Error).init(params, iter);
+var parser = clap.StreamingClap(u8, clap.args.OsIterator).init(params, &iter);
 
 while (try parser.next()) |arg| {
     switch (arg.param.id) {
@@ -40,7 +38,7 @@ while (try parser.next()) |arg| {
         'f' => debug.warn("{}\n", arg.value.?),
         else => unreachable,
     }
- }
+}
 ```
 
 ### `ComptimeClap`
@@ -50,18 +48,16 @@ them available through three functions (`flag`, `option`, `positionals`).
 
 ```rust
 const params = comptime []clap.Param(void){
-    clap.Param(void).flag({}, false, clap.Names.both("help")),
-    clap.Param(void).option({}, true, clap.Names.both("number")),
+    clap.Param(void).flag({}, clap.Names.both("help")),
+    clap.Param(void).option({}, clap.Names.both("number")),
     clap.Param(void).positional({}),
 };
 
-var os_iter = clap.args.OsIterator.init(allocator);
-const iter = &os_iter.iter;
-defer os_iter.deinit();
-
+var iter = clap.args.OsIterator.init(allocator);
+defer iter.deinit();
 const exe = try iter.next();
 
-var args = try clap.ComptimeClap(void, params).parse(allocator, clap.args.OsIterator.Error, iter);
+var args = try clap.ComptimeClap(void, params).parse(allocator, clap.args.OsIterator, &iter);
 defer args.deinit();
 
 if (args.flag("--help"))
@@ -78,16 +74,14 @@ program can take:
 
 ```rust
 const params = comptime []clap.Param(void){
-    clap.Param(void).init({}, false, clap.Names.both("help")),
+    clap.Param(void).flag({}, clap.Names.both("help")),
 };
 
-var os_iter = clap.args.OsIterator.init(allocator);
-const iter = &os_iter.iter;
-defer os_iter.deinit();
-
+var iter = clap.args.OsIterator.init(allocator);
+defer iter.deinit();
 const exe = try iter.next();
 
-var args = try clap.ComptimeClap(params).parse(allocator, clap.args.OsIterator.Error, iter);
+var args = try clap.ComptimeClap(void, params).parse(allocator, clap.args.OsIterator, &iter);
 defer args.deinit();
 
 if (args.flag("--helps"))
@@ -106,7 +100,7 @@ zig-clap/example/comptime-clap.zig:41:18: note: called from here
                  ^
 ```
 
-Ofc, this limits you to use only parameters that are comptime known.
+Ofc, this limits you to parameters that are comptime known.
 
 ### `help`
 

@@ -34,7 +34,7 @@ pub fn ComptimeClap(comptime Id: type, comptime params: []const clap.Param(Id)) 
         pos: []const []const u8,
         allocator: *mem.Allocator,
 
-        pub fn parse(allocator: *mem.Allocator, comptime ArgError: type, iter: *clap.args.Iterator(ArgError)) !@This() {
+        pub fn parse(allocator: *mem.Allocator, comptime ArgIter: type, iter: *ArgIter) !@This() {
             var pos = std.ArrayList([]const u8).init(allocator);
             var res = @This(){
                 .options = []?[]const u8{null} ** options,
@@ -43,7 +43,7 @@ pub fn ComptimeClap(comptime Id: type, comptime params: []const clap.Param(Id)) 
                 .allocator = allocator,
             };
 
-            var stream = clap.StreamingClap(usize, ArgError).init(converted_params, iter);
+            var stream = clap.StreamingClap(usize, ArgIter).init(converted_params, iter);
             while (try stream.next()) |arg| {
                 const param = arg.param;
                 if (param.names.long == null and param.names.short == null) {
@@ -124,10 +124,10 @@ test "clap.comptime.ComptimeClap" {
 
     var buf: [1024]u8 = undefined;
     var fb_allocator = heap.FixedBufferAllocator.init(buf[0..]);
-    var arg_iter = clap.args.SliceIterator.init([][]const u8{
+    var iter = clap.args.SliceIterator.init([][]const u8{
         "-a", "-c", "0", "something",
     });
-    var args = try Clap.parse(&fb_allocator.allocator, clap.args.SliceIterator.Error, &arg_iter.iter);
+    var args = try Clap.parse(&fb_allocator.allocator, clap.args.SliceIterator, &iter);
     defer args.deinit();
 
     testing.expect(args.flag("-a"));

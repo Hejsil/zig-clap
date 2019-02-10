@@ -6,51 +6,42 @@ const heap = std.heap;
 const mem = std.mem;
 const os = std.os;
 
-/// A interface for iterating over command line arguments
-pub fn Iterator(comptime E: type) type {
-    return struct {
-        const Self = @This();
-        const Error = E;
+/// An example of what methods should be implemented on an arg iterator.
+pub const ExampleArgIterator = struct {
+    const Error = error{};
 
-        nextFn: fn (iter: *Self) Error!?[]const u8,
+    pub fn next(iter: *ExampleArgIterator) Error!?[]const u8 {
+        return "2";
+    }
+};
 
-        pub fn next(iter: *Self) Error!?[]const u8 {
-            return iter.nextFn(iter);
-        }
-    };
-}
-
-/// An ::ArgIterator, which iterates over a slice of arguments.
+/// An argument iterator which iterates over a slice of arguments.
 /// This implementation does not allocate.
 pub const SliceIterator = struct {
     const Error = error{};
 
     args: []const []const u8,
     index: usize,
-    iter: Iterator(Error),
 
     pub fn init(args: []const []const u8) SliceIterator {
         return SliceIterator{
             .args = args,
             .index = 0,
-            .iter = Iterator(Error){ .nextFn = nextFn },
         };
     }
 
-    fn nextFn(iter: *Iterator(Error)) Error!?[]const u8 {
-        const self = @fieldParentPtr(SliceIterator, "iter", iter);
-        if (self.args.len <= self.index)
+    pub fn next(iter: *SliceIterator) Error!?[]const u8 {
+        if (iter.args.len <= iter.index)
             return null;
 
-        defer self.index += 1;
-        return self.args[self.index];
+        defer iter.index += 1;
+        return iter.args[iter.index];
     }
 };
 
 test "clap.args.SliceIterator" {
     const args = [][]const u8{ "A", "BB", "CCC" };
-    var slice_iter = SliceIterator.init(args);
-    const iter = &slice_iter.iter;
+    var iter = SliceIterator.init(args);
 
     for (args) |a| {
         const b = try iter.next();
@@ -58,20 +49,18 @@ test "clap.args.SliceIterator" {
     }
 }
 
-/// An ::ArgIterator, which wraps the ArgIterator in ::std.
+/// An argument iterator which wraps the ArgIterator in ::std.
 /// On windows, this iterator allocates.
 pub const OsIterator = struct {
     const Error = os.ArgIterator.NextError;
 
     arena: heap.ArenaAllocator,
     args: os.ArgIterator,
-    iter: Iterator(Error),
 
     pub fn init(allocator: *mem.Allocator) OsIterator {
         return OsIterator{
             .arena = heap.ArenaAllocator.init(allocator),
             .args = os.args(),
-            .iter = Iterator(Error){ .nextFn = nextFn },
         };
     }
 
@@ -79,12 +68,11 @@ pub const OsIterator = struct {
         iter.arena.deinit();
     }
 
-    fn nextFn(iter: *Iterator(Error)) Error!?[]const u8 {
-        const self = @fieldParentPtr(OsIterator, "iter", iter);
+    pub fn next(iter: *OsIterator) Error!?[]const u8 {
         if (builtin.os == builtin.Os.windows) {
-            return try self.args.next(&self.arena.allocator) orelse return null;
+            return try iter.args.next(&iter.arena.allocator) orelse return null;
         } else {
-            return self.args.nextPosix();
+            return iter.args.nextPosix();
         }
     }
 };
