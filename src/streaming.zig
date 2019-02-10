@@ -3,7 +3,7 @@ const clap = @import("index.zig");
 const std = @import("std");
 
 const args = clap.args;
-const debug = std.debug;
+const testing = std.testing;
 const heap = std.heap;
 const mem = std.mem;
 const os = std.os;
@@ -194,17 +194,17 @@ fn testNoErr(params: []const clap.Param(u8), args_strings: []const []const u8, r
 
     for (results) |res| {
         const arg = (c.next() catch unreachable) orelse unreachable;
-        debug.assert(res.param == arg.param);
+        testing.expectEqual(res.param, arg.param);
         const expected_value = res.value orelse {
-            debug.assert(arg.value == null);
+            testing.expectEqual(@typeOf(arg.value)(null), arg.value);
             continue;
         };
         const actual_value = arg.value orelse unreachable;
-        debug.assert(mem.eql(u8, expected_value, actual_value));
+        testing.expectEqualSlices(u8, expected_value, actual_value);
     }
 
-    if (c.next() catch unreachable) |_| {
-        unreachable;
+    if (c.next() catch @panic("")) |_| {
+        @panic("");
     }
 }
 

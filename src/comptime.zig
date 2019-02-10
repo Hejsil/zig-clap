@@ -1,7 +1,7 @@
 const clap = @import("index.zig");
 const std = @import("std");
 
-const debug = std.debug;
+const testing = std.testing;
 const heap = std.heap;
 const mem = std.mem;
 
@@ -130,12 +130,12 @@ test "clap.comptime.ComptimeClap" {
     var args = try Clap.parse(&fb_allocator.allocator, clap.args.SliceIterator.Error, &arg_iter.iter);
     defer args.deinit();
 
-    debug.assert(args.flag("-a"));
-    debug.assert(args.flag("--aa"));
-    debug.assert(!args.flag("-b"));
-    debug.assert(!args.flag("--bb"));
-    debug.assert(mem.eql(u8, args.option("-c").?, "0"));
-    debug.assert(mem.eql(u8, args.option("--cc").?, "0"));
-    debug.assert(args.positionals().len == 1);
-    debug.assert(mem.eql(u8, args.positionals()[0], "something"));
+    testing.expect(args.flag("-a"));
+    testing.expect(args.flag("--aa"));
+    testing.expect(!args.flag("-b"));
+    testing.expect(!args.flag("--bb"));
+    testing.expectEqualSlices(u8, "0", args.option("-c").?);
+    testing.expectEqualSlices(u8, "0", args.option("--cc").?);
+    testing.expectEqual(usize(1), args.positionals().len);
+    testing.expectEqualSlices(u8, "something", args.positionals()[0]);
 }
