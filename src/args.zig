@@ -4,7 +4,7 @@ const std = @import("std");
 const debug = std.debug;
 const heap = std.heap;
 const mem = std.mem;
-const os = std.os;
+const process = std.process;
 
 /// An example of what methods should be implemented on an arg iterator.
 pub const ExampleArgIterator = struct {
@@ -52,15 +52,15 @@ test "clap.args.SliceIterator" {
 /// An argument iterator which wraps the ArgIterator in ::std.
 /// On windows, this iterator allocates.
 pub const OsIterator = struct {
-    const Error = os.ArgIterator.NextError;
+    const Error = process.ArgIterator.NextError;
 
     arena: heap.ArenaAllocator,
-    args: os.ArgIterator,
+    args: process.ArgIterator,
 
     pub fn init(allocator: *mem.Allocator) OsIterator {
         return OsIterator{
             .arena = heap.ArenaAllocator.init(allocator),
-            .args = os.args(),
+            .args = process.args(),
         };
     }
 
