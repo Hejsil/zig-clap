@@ -13,16 +13,20 @@ pub fn main() !void {
     defer direct_allocator.deinit();
 
     // First we specify what parameters our program can take.
-    const params = comptime []clap.Param([]const u8){
-        clap.Param([]const u8).flag(
-            "Display this help and exit.",
-            clap.Names.both("help"),
-        ),
-        clap.Param([]const u8).option(
-            "An option parameter, which takes a value.",
-            clap.Names.both("number"),
-        ),
-        clap.Param([]const u8).positional(""),
+    const params = comptime [_]clap.Param([]const u8){
+        clap.Param([]const u8){
+            .id = "Display this help and exit.",
+            .names = clap.Names{ .short = 'h', .long = "help" },
+        },
+        clap.Param([]const u8){
+            .id = "An option parameter, which takes a value.",
+            .names = clap.Names{ .short = 'n', .long = "number" },
+            .takes_value = true,
+        },
+        clap.Param([]const u8){
+            .id = "",
+            .takes_value = true,
+        },
     };
 
     // We then initialize an argument iterator. We will use the OsIterator as it nicely

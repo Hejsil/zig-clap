@@ -1,4 +1,4 @@
-const clap = @import("index.zig");
+const clap = @import("../clap.zig");
 const std = @import("std");
 
 const testing = std.testing;
@@ -8,7 +8,7 @@ const mem = std.mem;
 pub fn ComptimeClap(comptime Id: type, comptime params: []const clap.Param(Id)) type {
     var flags: usize = 0;
     var options: usize = 0;
-    var converted_params: []const clap.Param(usize) = []clap.Param(usize){};
+    var converted_params: []const clap.Param(usize) = [_]clap.Param(usize){};
     for (params) |param| {
         const index = blk: {
             if (param.names.long == null and param.names.short == null)
@@ -24,8 +24,12 @@ pub fn ComptimeClap(comptime Id: type, comptime params: []const clap.Param(Id)) 
             break :blk res;
         };
 
-        const converted = clap.Param(usize).init(index, param.takes_value, param.names);
-        converted_params = converted_params ++ []clap.Param(usize){converted};
+        const converted = clap.Param(usize){
+            .id = index,
+            .names = param.names,
+            .takes_value = param.takes_value,
+        };
+        converted_params = converted_params ++ [_]clap.Param(usize){converted};
     }
 
     return struct {
@@ -37,13 +41,16 @@ pub fn ComptimeClap(comptime Id: type, comptime params: []const clap.Param(Id)) 
         pub fn parse(allocator: *mem.Allocator, comptime ArgIter: type, iter: *ArgIter) !@This() {
             var pos = std.ArrayList([]const u8).init(allocator);
             var res = @This(){
-                .options = []?[]const u8{null} ** options,
-                .flags = []bool{false} ** flags,
+                .options = [_]?[]const u8{null} ** options,
+                .flags = [_]bool{false} ** flags,
                 .pos = undefined,
                 .allocator = allocator,
             };
 
-            var stream = clap.StreamingClap(usize, ArgIter).init(converted_params, iter);
+            var stream = clap.StreamingClap(usize, ArgIter){
+                .params = converted_params,
+                .iter = iter,
+            };
             while (try stream.next()) |arg| {
                 const param = arg.param;
                 if (param.names.long == null and param.names.short == null) {
@@ -90,7 +97,7 @@ pub fn ComptimeClap(comptime Id: type, comptime params: []const clap.Param(Id)) 
             comptime {
                 for (converted_params) |param| {
                     if (param.names.short) |s| {
-                        if (mem.eql(u8, name, "-" ++ []u8{s}))
+                        if (mem.eql(u8, name, "-" ++ [_]u8{s}))
                             return param;
                     }
                     if (param.names.long) |l| {
@@ -106,27 +113,38 @@ pub fn ComptimeClap(comptime Id: type, comptime params: []const clap.Param(Id)) 
 }
 
 test "clap.comptime.ComptimeClap" {
-    const Clap = ComptimeClap(void, comptime []clap.Param(void){
-        clap.Param(void).flag({}, clap.Names{
-            .short = 'a',
-            .long = "aa",
-        }),
-        clap.Param(void).flag({}, clap.Names{
-            .short = 'b',
-            .long = "bb",
-        }),
-        clap.Param(void).option({}, clap.Names{
-            .short = 'c',
-            .long = "cc",
-        }),
-        clap.Param(void).positional({}),
+    const Clap = ComptimeClap(void, [_]clap.Param(void){
+        clap.Param(void){
+            .names = clap.Names{
+                .short = 'a',
+                .long = "aa",
+            }
+        },
+        clap.Param(void){
+            .names = clap.Names{
+                .short = 'b',
+                .long = "bb",
+            }
+        },
+        clap.Param(void){
+            .names = clap.Names{
+                .short = 'c',
+                .long = "cc",
+            },
+            .takes_value = true,
+        },
+        clap.Param(void){
+            .takes_value = true,
+        },
     });
 
     var buf: [1024]u8 = undefined;
     var fb_allocator = heap.FixedBufferAllocator.init(buf[0..]);
-    var iter = clap.args.SliceIterator.init([][]const u8{
-        "-a", "-c", "0", "something",
-    });
+    var iter = clap.args.SliceIterator{
+        .args = [_][]const u8{
+            "-a", "-c", "0", "something",
+        },
+    };
     var args = try Clap.parse(&fb_allocator.allocator, clap.args.SliceIterator, &iter);
     defer args.deinit();
 

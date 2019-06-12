@@ -1,5 +1,5 @@
 const builtin = @import("builtin");
-const clap = @import("index.zig");
+const clap = @import("../clap.zig");
 const std = @import("std");
 
 const args = clap.args;
@@ -14,14 +14,7 @@ pub fn Arg(comptime Id: type) type {
         const Self = @This();
 
         param: *const clap.Param(Id),
-        value: ?[]const u8,
-
-        pub fn init(param: *const clap.Param(Id), value: ?[]const u8) Self {
-            return Self{
-                .param = param,
-                .value = value,
-            };
-        }
+        value: ?[]const u8 = null,
     };
 }
 
@@ -42,17 +35,7 @@ pub fn StreamingClap(comptime Id: type, comptime ArgIterator: type) type {
 
         params: []const clap.Param(Id),
         iter: *ArgIterator,
-        state: State,
-
-        pub fn init(params: []const clap.Param(Id), iter: *ArgIterator) @This() {
-            var res = @This(){
-                .params = params,
-                .iter = iter,
-                .state = State.Normal,
-            };
-
-            return res;
-        }
+        state: State = State.Normal,
 
         /// Get the next ::Arg that matches a ::Param.
         pub fn next(parser: *@This()) !?Arg(Id) {
@@ -107,7 +90,7 @@ pub fn StreamingClap(comptime Id: type, comptime ArgIterator: type) type {
                                     if (maybe_value != null)
                                         return error.DoesntTakeValue;
 
-                                    return Arg(Id).init(param, null);
+                                    return Arg(Id){ .param = param };
                                 }
 
                                 const value = blk: {
@@ -117,7 +100,7 @@ pub fn StreamingClap(comptime Id: type, comptime ArgIterator: type) type {
                                     break :blk (try parser.iter.next()) orelse return error.MissingValue;
                                 };
 
-                                return Arg(Id).init(param, value);
+                                return Arg(Id){ .param = param, .value = value };
                             }
                         },
                         ArgInfo.Kind.Short => {
@@ -133,7 +116,7 @@ pub fn StreamingClap(comptime Id: type, comptime ArgIterator: type) type {
                                 if (param.names.short) |_|
                                     continue;
 
-                                return Arg(Id).init(param, arg);
+                                return Arg(Id){ .param = param, .value = arg };
                             }
                         },
                     }
@@ -169,18 +152,17 @@ pub fn StreamingClap(comptime Id: type, comptime ArgIterator: type) type {
                 }
 
                 if (!param.takes_value)
-                    return Arg(Id).init(param, null);
+                    return Arg(Id){ .param = param };
 
                 if (arg.len <= next_index) {
                     const value = (try parser.iter.next()) orelse return error.MissingValue;
-                    return Arg(Id).init(param, value);
+                    return Arg(Id){ .param = param, .value = value };
                 }
 
-                if (arg[next_index] == '=') {
-                    return Arg(Id).init(param, arg[next_index + 1 ..]);
-                }
+                if (arg[next_index] == '=')
+                    return Arg(Id){ .param = param, .value = arg[next_index + 1 ..] };
 
-                return Arg(Id).init(param, arg[next_index..]);
+                return Arg(Id){ .param = param, .value = arg[next_index..] };
             }
 
             return error.InvalidArgument;
@@ -189,8 +171,11 @@ pub fn StreamingClap(comptime Id: type, comptime ArgIterator: type) type {
 }
 
 fn testNoErr(params: []const clap.Param(u8), args_strings: []const []const u8, results: []const Arg(u8)) void {
-    var iter = args.SliceIterator.init(args_strings);
-    var c = StreamingClap(u8, args.SliceIterator).init(params, &iter);
+    var iter = args.SliceIterator{ .args = args_strings };
+    var c = StreamingClap(u8, args.SliceIterator){
+        .params = params,
+        .iter = &iter
+    };
 
     for (results) |res| {
         const arg = (c.next() catch unreachable) orelse unreachable;
@@ -209,10 +194,20 @@ fn testNoErr(params: []const clap.Param(u8), args_strings: []const []const u8, r
 }
 
 test "clap.streaming.StreamingClap: short params" {
-    const params = []clap.Param(u8){
-        clap.Param(u8).flag(0, clap.Names.short('a')),
-        clap.Param(u8).flag(1, clap.Names.short('b')),
-        clap.Param(u8).option(2, clap.Names.short('c')),
+    const params = [_]clap.Param(u8){
+        clap.Param(u8){
+            .id = 0,
+            .names = clap.Names{ .short = 'a' },
+        },
+        clap.Param(u8){
+            .id = 1,
+            .names = clap.Names{ .short = 'b' },
+        },
+        clap.Param(u8){
+            .id = 2,
+            .names = clap.Names{ .short = 'c' },
+            .takes_value = true,
+        },
     };
 
     const a = &params[0];
@@ -221,33 +216,43 @@ test "clap.streaming.StreamingClap: short params" {
 
     testNoErr(
         params,
-        [][]const u8{
+        [_][]const u8{
             "-a", "-b", "-ab", "-ba",
             "-c", "0", "-c=0", "-ac",
             "0", "-ac=0",
         },
-        []const Arg(u8){
-            Arg(u8).init(a, null),
-            Arg(u8).init(b, null),
-            Arg(u8).init(a, null),
-            Arg(u8).init(b, null),
-            Arg(u8).init(b, null),
-            Arg(u8).init(a, null),
-            Arg(u8).init(c, "0"),
-            Arg(u8).init(c, "0"),
-            Arg(u8).init(a, null),
-            Arg(u8).init(c, "0"),
-            Arg(u8).init(a, null),
-            Arg(u8).init(c, "0"),
+        [_]Arg(u8){
+            Arg(u8){ .param = a },
+            Arg(u8){ .param = b },
+            Arg(u8){ .param = a },
+            Arg(u8){ .param = b },
+            Arg(u8){ .param = b },
+            Arg(u8){ .param = a },
+            Arg(u8){ .param = c, .value = "0" },
+            Arg(u8){ .param = c, .value = "0" },
+            Arg(u8){ .param = a },
+            Arg(u8){ .param = c, .value = "0" },
+            Arg(u8){ .param = a },
+            Arg(u8){ .param = c, .value = "0" },
         },
     );
 }
 
 test "clap.streaming.StreamingClap: long params" {
-    const params = []clap.Param(u8){
-        clap.Param(u8).flag(0, clap.Names.long("aa")),
-        clap.Param(u8).flag(1, clap.Names.long("bb")),
-        clap.Param(u8).option(2, clap.Names.long("cc")),
+    const params = [_]clap.Param(u8){
+        clap.Param(u8){
+            .id = 0,
+            .names = clap.Names{ .long = "aa" },
+        },
+        clap.Param(u8){
+            .id = 1,
+            .names = clap.Names{ .long = "bb" },
+        },
+        clap.Param(u8){
+            .id = 2,
+            .names = clap.Names{ .long = "cc" },
+            .takes_value = true,
+        },
     };
 
     const aa = &params[0];
@@ -256,48 +261,66 @@ test "clap.streaming.StreamingClap: long params" {
 
     testNoErr(
         params,
-        [][]const u8{
+        [_][]const u8{
             "--aa", "--bb",
             "--cc", "0",
             "--cc=0",
         },
-        []const Arg(u8){
-            Arg(u8).init(aa, null),
-            Arg(u8).init(bb, null),
-            Arg(u8).init(cc, "0"),
-            Arg(u8).init(cc, "0"),
+        [_]Arg(u8){
+            Arg(u8){ .param = aa },
+            Arg(u8){ .param = bb },
+            Arg(u8){ .param = cc, .value = "0" },
+            Arg(u8){ .param = cc, .value = "0" },
         },
     );
 }
 
 test "clap.streaming.StreamingClap: positional params" {
-    const params = []clap.Param(u8){clap.Param(u8).positional(0)};
+    const params = [_]clap.Param(u8){
+        clap.Param(u8){
+            .id = 0,
+            .takes_value = true,
+        },
+    };
 
     testNoErr(
         params,
-        [][]const u8{ "aa", "bb" },
-        []const Arg(u8){
-            Arg(u8).init(&params[0], "aa"),
-            Arg(u8).init(&params[0], "bb"),
+        [_][]const u8{ "aa", "bb" },
+        [_]Arg(u8){
+            Arg(u8){ .param = &params[0], .value = "aa" },
+            Arg(u8){ .param = &params[0], .value = "bb" },
         },
     );
 }
 
 test "clap.streaming.StreamingClap: all params" {
-    const params = []clap.Param(u8){
-        clap.Param(u8).flag(0, clap.Names{
-            .short = 'a',
-            .long = "aa",
-        }),
-        clap.Param(u8).flag(1, clap.Names{
-            .short = 'b',
-            .long = "bb",
-        }),
-        clap.Param(u8).option(2, clap.Names{
-            .short = 'c',
-            .long = "cc",
-        }),
-        clap.Param(u8).positional(3),
+    const params = [_]clap.Param(u8){
+        clap.Param(u8){
+            .id = 0,
+            .names = clap.Names{
+                .short = 'a',
+                .long = "aa",
+            },
+        },
+        clap.Param(u8){
+            .id = 1,
+            .names = clap.Names{
+                .short = 'b',
+                .long = "bb",
+            },
+        },
+        clap.Param(u8){
+            .id = 2,
+            .names = clap.Names{
+                .short = 'c',
+                .long = "cc",
+            },
+            .takes_value = true,
+        },
+        clap.Param(u8){
+            .id = 3,
+            .takes_value = true,
+        },
     };
 
     const aa = &params[0];
@@ -307,30 +330,30 @@ test "clap.streaming.StreamingClap: all params" {
 
     testNoErr(
         params,
-        [][]const u8{
+        [_][]const u8{
             "-a", "-b", "-ab", "-ba",
             "-c", "0", "-c=0", "-ac",
             "0", "-ac=0", "--aa", "--bb",
             "--cc", "0", "--cc=0", "something",
         },
-        []const Arg(u8){
-            Arg(u8).init(aa, null),
-            Arg(u8).init(bb, null),
-            Arg(u8).init(aa, null),
-            Arg(u8).init(bb, null),
-            Arg(u8).init(bb, null),
-            Arg(u8).init(aa, null),
-            Arg(u8).init(cc, "0"),
-            Arg(u8).init(cc, "0"),
-            Arg(u8).init(aa, null),
-            Arg(u8).init(cc, "0"),
-            Arg(u8).init(aa, null),
-            Arg(u8).init(cc, "0"),
-            Arg(u8).init(aa, null),
-            Arg(u8).init(bb, null),
-            Arg(u8).init(cc, "0"),
-            Arg(u8).init(cc, "0"),
-            Arg(u8).init(positional, "something"),
+        [_]Arg(u8){
+            Arg(u8){ .param = aa },
+            Arg(u8){ .param = bb },
+            Arg(u8){ .param = aa },
+            Arg(u8){ .param = bb },
+            Arg(u8){ .param = bb },
+            Arg(u8){ .param = aa },
+            Arg(u8){ .param = cc, .value = "0" },
+            Arg(u8){ .param = cc, .value = "0" },
+            Arg(u8){ .param = aa },
+            Arg(u8){ .param = cc, .value = "0" },
+            Arg(u8){ .param = aa },
+            Arg(u8){ .param = cc, .value = "0" },
+            Arg(u8){ .param = aa },
+            Arg(u8){ .param = bb },
+            Arg(u8){ .param = cc, .value = "0" },
+            Arg(u8){ .param = cc, .value = "0" },
+            Arg(u8){ .param = positional, .value = "something" },
         },
     );
 }

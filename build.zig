@@ -8,21 +8,21 @@ pub fn build(b: *Builder) void {
     const mode = b.standardReleaseOptions();
 
     const example_step = b.step("examples", "Build examples");
-    inline for ([][]const u8{
+    inline for ([_][]const u8{
         "comptime-clap",
         "streaming-clap",
     }) |example_name| {
         const example = b.addExecutable(example_name, "example/" ++ example_name ++ ".zig");
-        example.addPackagePath("clap", "index.zig");
+        example.addPackagePath("clap", "clap.zig");
         example.setBuildMode(mode);
         example_step.dependOn(&example.step);
     }
 
     const test_all_step = b.step("test", "Run all tests in all modes.");
-    inline for ([]Mode{ Mode.Debug, Mode.ReleaseFast, Mode.ReleaseSafe, Mode.ReleaseSmall }) |test_mode| {
+    inline for ([_]Mode{ Mode.Debug, Mode.ReleaseFast, Mode.ReleaseSafe, Mode.ReleaseSmall }) |test_mode| {
         const mode_str = comptime modeToString(test_mode);
 
-        const tests = b.addTest("index.zig");
+        const tests = b.addTest("clap.zig");
         tests.setBuildMode(test_mode);
         tests.setNamePrefix(mode_str ++ " ");
 

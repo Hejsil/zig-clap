@@ -4,9 +4,9 @@ const debug = std.debug;
 const io = std.io;
 const mem = std.mem;
 
-pub const @"comptime" = @import("comptime.zig");
-pub const args = @import("args.zig");
-pub const streaming = @import("streaming.zig");
+pub const @"comptime" = @import("src/comptime.zig");
+pub const args = @import("src/args.zig");
+pub const streaming = @import("src/streaming.zig");
 
 test "clap" {
     _ = @"comptime";
@@ -20,38 +20,10 @@ pub const StreamingClap = streaming.StreamingClap;
 /// The names a ::Param can have.
 pub const Names = struct {
     /// '-' prefix
-    short: ?u8,
+    short: ?u8 = null,
 
     /// '--' prefix
-    long: ?[]const u8,
-
-    /// Initializes a short name
-    pub fn short(s: u8) Names {
-        return Names{
-            .short = s,
-            .long = null,
-        };
-    }
-
-    /// Initializes a long name
-    pub fn long(l: []const u8) Names {
-        return Names{
-            .short = null,
-            .long = l,
-        };
-    }
-
-    /// Initializes a name that is long and short, from the same string.
-    /// ::short is set to ::name[0], and ::long is set to ::name.
-    /// This function asserts that ::name.len != 0
-    pub fn both(name: []const u8) Names {
-        debug.assert(name.len != 0);
-
-        return Names{
-            .short = name[0],
-            .long = name,
-        };
-    }
+    long: ?[]const u8 = null,
 };
 
 /// Represents a parameter for the command line.
@@ -77,35 +49,9 @@ pub const Names = struct {
 ///     * Positional parameters must take a value.
 pub fn Param(comptime Id: type) type {
     return struct {
-        id: Id,
-        takes_value: bool,
-        names: Names,
-
-        pub fn flag(id: Id, names: Names) @This() {
-            return init(id, false, names);
-        }
-
-        pub fn option(id: Id, names: Names) @This() {
-            return init(id, true, names);
-        }
-
-        pub fn positional(id: Id) @This() {
-            return init(id, true, Names{ .short = null, .long = null });
-        }
-
-        pub fn init(id: Id, takes_value: bool, names: Names) @This() {
-            // Assert, that if the param have no name, then it has to take
-            // a value.
-            debug.assert(names.long != null or
-                names.short != null or
-                takes_value);
-
-            return @This(){
-                .id = id,
-                .takes_value = takes_value,
-                .names = names,
-            };
-        }
+        id: Id = Id{},
+        names: Names = Names{},
+        takes_value: bool = false,
     };
 }
 
@@ -227,34 +173,38 @@ test "clap.help" {
     var slice_stream = io.SliceOutStream.init(buf[0..]);
     try help(
         &slice_stream.stream,
-        []Param([]const u8){
-            Param([]const u8).flag(
-                "Short flag.",
-                Names.short('a'),
-            ),
-            Param([]const u8).option(
-                "Short option.",
-                Names.short('b'),
-            ),
-            Param([]const u8).flag(
-                "Long flag.",
-                Names.long("aa"),
-            ),
-            Param([]const u8).option(
-                "Long option.",
-                Names.long("bb"),
-            ),
-            Param([]const u8).flag(
-                "Both flag.",
-                Names.both("cc"),
-            ),
-            Param([]const u8).option(
-                "Both option.",
-                Names.both("dd"),
-            ),
-            Param([]const u8).positional(
-                "Positional. This should not appear in the help message.",
-            ),
+        [_]Param([]const u8){
+            Param([]const u8){
+                .id = "Short flag.",
+                .names = Names{ .short = 'a' },
+            },
+            Param([]const u8){
+                .id = "Short option.",
+                .names = Names{ .short = 'b' },
+                .takes_value = true,
+            },
+            Param([]const u8){
+                .id = "Long flag.",
+                .names = Names{ .long = "aa" },
+            },
+            Param([]const u8){
+                .id = "Long option.",
+                .names = Names{ .long = "bb" },
+                .takes_value = true,
+            },
+            Param([]const u8){
+                .id = "Both flag.",
+                .names = Names{ .short = 'c', .long = "cc" },
+            },
+            Param([]const u8){
+                .id = "Both option.",
+                .names = Names{ .short = 'd', .long = "dd" },
+                .takes_value = true,
+            },
+            Param([]const u8){
+                .id = "Positional. This should not appear in the help message.",
+                .takes_value = true,
+            },
         },
     );
 

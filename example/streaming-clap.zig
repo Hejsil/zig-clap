@@ -9,10 +9,20 @@ pub fn main() !void {
     defer direct_allocator.deinit();
 
     // First we specify what parameters our program can take.
-    const params = []clap.Param(u8){
-        clap.Param(u8).flag('h', clap.Names.both("help")),
-        clap.Param(u8).option('n', clap.Names.both("number")),
-        clap.Param(u8).positional('f'),
+    const params = [_]clap.Param(u8){
+        clap.Param(u8){
+            .id = 'h',
+            .names = clap.Names{ .short = 'h', .long = "help" },
+        },
+        clap.Param(u8){
+            .id = 'n',
+            .names = clap.Names{ .short = 'n', .long = "number" },
+            .takes_value = true,
+        },
+        clap.Param(u8){
+            .id = 'f',
+            .takes_value = true,
+        },
     };
 
     // We then initialize an argument iterator. We will use the OsIterator as it nicely
@@ -24,7 +34,10 @@ pub fn main() !void {
     const exe = try iter.next();
 
     // Finally we initialize our streaming parser.
-    var parser = clap.StreamingClap(u8, clap.args.OsIterator).init(params, &iter);
+    var parser = clap.StreamingClap(u8, clap.args.OsIterator){
+        .params = params,
+        .iter = &iter,
+    };
 
     // Because we use a streaming parser, we have to consume each argument parsed individually.
     while (try parser.next()) |arg| {

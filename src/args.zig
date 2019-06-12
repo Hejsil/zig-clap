@@ -21,14 +21,7 @@ pub const SliceIterator = struct {
     const Error = error{};
 
     args: []const []const u8,
-    index: usize,
-
-    pub fn init(args: []const []const u8) SliceIterator {
-        return SliceIterator{
-            .args = args,
-            .index = 0,
-        };
-    }
+    index: usize = 0,
 
     pub fn next(iter: *SliceIterator) Error!?[]const u8 {
         if (iter.args.len <= iter.index)
@@ -40,8 +33,8 @@ pub const SliceIterator = struct {
 };
 
 test "clap.args.SliceIterator" {
-    const args = [][]const u8{ "A", "BB", "CCC" };
-    var iter = SliceIterator.init(args);
+    const args = [_][]const u8{ "A", "BB", "CCC" };
+    var iter = SliceIterator{ .args = args };
 
     for (args) |a| {
         const b = try iter.next();
