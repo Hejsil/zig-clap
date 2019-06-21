@@ -10,7 +10,9 @@ pub fn build(b: *Builder) void {
     const example_step = b.step("examples", "Build examples");
     inline for ([_][]const u8{
         "comptime-clap",
+        //"comptime-clap-error",
         "streaming-clap",
+        "help",
     }) |example_name| {
         const example = b.addExecutable(example_name, "example/" ++ example_name ++ ".zig");
         example.addPackagePath("clap", "clap.zig");
@@ -31,11 +33,36 @@ pub fn build(b: *Builder) void {
         test_all_step.dependOn(test_step);
     }
 
+    const readme_step = b.step("test", "Remake README.");
+    const readme = readMeStep(b);
+    readme.dependOn(example_step);
+    readme_step.dependOn(readme);
+
     const all_step = b.step("all", "Build everything and runs all tests");
     all_step.dependOn(test_all_step);
     all_step.dependOn(example_step);
+    all_step.dependOn(readme_step);
 
     b.default_step.dependOn(all_step);
+}
+
+fn readMeStep(b: *Builder) *std.build.Step {
+    const s = b.allocator.create(std.build.Step) catch unreachable;
+    s.* = std.build.Step.init("ReadMeStep", b.allocator, struct {
+        fn make(step: *std.build.Step) anyerror!void {
+            @setEvalBranchQuota(10000);
+            const file = try std.fs.File.openWrite("README.md");
+            const stream = &file.outStream().stream;
+            try stream.print(
+                @embedFile("example/README.md.template"),
+                @embedFile("example/streaming-clap.zig"),
+                @embedFile("example/comptime-clap.zig"),
+                @embedFile("example/comptime-clap-error.zig"),
+                @embedFile("example/help.zig"),
+            );
+        }
+    }.make);
+    return s;
 }
 
 fn modeToString(mode: Mode) []const u8 {

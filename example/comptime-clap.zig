@@ -13,7 +13,7 @@ pub fn main() !void {
     defer direct_allocator.deinit();
 
     // First we specify what parameters our program can take.
-    const params = comptime [_]clap.Param([]const u8){
+    const params = [_]clap.Param([]const u8){
         clap.Param([]const u8){
             .id = "Display this help and exit.",
             .names = clap.Names{ .short = 'h', .long = "help" },
@@ -41,11 +41,8 @@ pub fn main() !void {
     var args = try clap.ComptimeClap([]const u8, params).parse(allocator, clap.args.OsIterator, &iter);
     defer args.deinit();
 
-    // clap.help is a function that can print a simple help message, given a
-    // slice of Param([]const u8). There is also a helpEx, which can print a
-    // help message for any Param, but it is more verbose to call.
     if (args.flag("--help"))
-        return try clap.help(stdout, params);
+        debug.warn("--help\n");
     if (args.option("--number")) |n|
         debug.warn("--number = {}\n", n);
     for (args.positionals()) |pos|

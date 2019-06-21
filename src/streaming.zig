@@ -174,7 +174,7 @@ fn testNoErr(params: []const clap.Param(u8), args_strings: []const []const u8, r
     var iter = args.SliceIterator{ .args = args_strings };
     var c = StreamingClap(u8, args.SliceIterator){
         .params = params,
-        .iter = &iter
+        .iter = &iter,
     };
 
     for (results) |res| {
@@ -217,9 +217,9 @@ test "clap.streaming.StreamingClap: short params" {
     testNoErr(
         params,
         [_][]const u8{
-            "-a", "-b", "-ab", "-ba",
-            "-c", "0", "-c=0", "-ac",
-            "0", "-ac=0",
+            "-a", "-b",    "-ab",  "-ba",
+            "-c", "0",     "-c=0", "-ac",
+            "0",  "-ac=0",
         },
         [_]Arg(u8){
             Arg(u8){ .param = a },
@@ -262,8 +262,8 @@ test "clap.streaming.StreamingClap: long params" {
     testNoErr(
         params,
         [_][]const u8{
-            "--aa", "--bb",
-            "--cc", "0",
+            "--aa",   "--bb",
+            "--cc",   "0",
             "--cc=0",
         },
         [_]Arg(u8){
@@ -276,12 +276,10 @@ test "clap.streaming.StreamingClap: long params" {
 }
 
 test "clap.streaming.StreamingClap: positional params" {
-    const params = [_]clap.Param(u8){
-        clap.Param(u8){
-            .id = 0,
-            .takes_value = true,
-        },
-    };
+    const params = [_]clap.Param(u8){clap.Param(u8){
+        .id = 0,
+        .takes_value = true,
+    }};
 
     testNoErr(
         params,
@@ -331,10 +329,10 @@ test "clap.streaming.StreamingClap: all params" {
     testNoErr(
         params,
         [_][]const u8{
-            "-a", "-b", "-ab", "-ba",
-            "-c", "0", "-c=0", "-ac",
-            "0", "-ac=0", "--aa", "--bb",
-            "--cc", "0", "--cc=0", "something",
+            "-a",   "-b",    "-ab",    "-ba",
+            "-c",   "0",     "-c=0",   "-ac",
+            "0",    "-ac=0", "--aa",   "--bb",
+            "--cc", "0",     "--cc=0", "something",
         },
         [_]Arg(u8){
             Arg(u8){ .param = aa },

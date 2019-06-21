@@ -1,0 +1,77 @@
+# zig-clap
+
+A simple and easy to use command line argument parser library for Zig.
+
+## Features
+
+* Short arguments `-a`
+  * Chaining `-abc` where `a` and `b` does not take values.
+* Long arguments `--long`
+* Supports both passing values using spacing and `=` (`-a 100`, `-a=100`)
+  * Short args also support passing values with no spacing or `=` (`-a100`)
+  * This all works with chaining (`-ba 100`, `-ba=100`, `-ba100`)
+
+## Examples
+
+### `StreamingClap`
+
+The `StreamingClap` is the base of all the other parsers. It's a streaming parser that uses an
+`args.Iterator` to provide it with arguments lazily.
+
+```zig
+{}
+```
+
+### `ComptimeClap`
+
+The `ComptimeClap` is a wrapper for `StreamingClap`, which parses all the arguments and makes
+them available through three functions (`flag`, `option`, `positionals`).
+
+```zig
+{}
+```
+
+The data structure returned from this parser has lookup speed on par with array access (`arr[i]`)
+and validates that the strings you pass to `option` and `flag` are actually parameters that the
+program can take:
+
+```zig
+{}
+```
+
+```
+zig-clap/src/comptime.zig:116:17: error: --helps is not a parameter.
+                @compileError(name ++ " is not a parameter.");
+                ^
+zig-clap/src/comptime.zig:84:45: note: called from here
+            const param = comptime findParam(name);
+                                            ^
+zig-clap/example/comptime-clap-error.zig:22:18: note: called from here
+    _ = args.flag("--helps");
+                 ^
+```
+
+Ofc, this limits you to parameters that are comptime known.
+
+### `help`
+
+The `help`, `helpEx` and `helpFull` are functions for printing a simple list of all parameters the
+program can take.
+
+```zig
+{}
+```
+
+```
+	-h, --help   	Display this help and exit.
+	-v, --version	Output version information and exit.
+```
+
+The `help` function is the simplest to call. It only takes an `OutStream` and a slice of
+`Param([]const u8)`. This function assumes that the id of each parameter is the help message.
+
+The `helpEx` is the generic version of `help`. It can print a help message for any
+`Param` give that the caller provides functions for getting the help and value strings.
+
+The `helpFull` is even more generic, allowing the functions that get the help and value strings
+to return errors and take a context as a parameter.

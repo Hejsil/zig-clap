@@ -4,6 +4,7 @@ const std = @import("std");
 const testing = std.testing;
 const heap = std.heap;
 const mem = std.mem;
+const debug = std.debug;
 
 pub fn ComptimeClap(comptime Id: type, comptime params: []const clap.Param(Id)) type {
     var flags: usize = 0;
@@ -56,11 +57,17 @@ pub fn ComptimeClap(comptime Id: type, comptime params: []const clap.Param(Id)) 
                 if (param.names.long == null and param.names.short == null) {
                     try pos.append(arg.value.?);
                 } else if (param.takes_value) {
-                    // We slice before access to avoid false positive access out of bound
-                    // compile error.
-                    res.options[0..][param.id] = arg.value.?;
+                    // If we don't have any optional parameters, then this code should
+                    // never be reached.
+                    debug.assert(res.options.len != 0);
+
+                    // Hack: Utilize Zigs lazy analyzis to avoid a compiler error
+                    if (res.options.len != 0)
+                        res.options[param.id] = arg.value.?;
                 } else {
-                    res.flags[0..][param.id] = true;
+                    debug.assert(res.flags.len != 0);
+                    if (res.flags.len != 0)
+                        res.flags[param.id] = true;
                 }
             }
 
@@ -118,13 +125,13 @@ test "clap.comptime.ComptimeClap" {
             .names = clap.Names{
                 .short = 'a',
                 .long = "aa",
-            }
+            },
         },
         clap.Param(void){
             .names = clap.Names{
                 .short = 'b',
                 .long = "bb",
-            }
+            },
         },
         clap.Param(void){
             .names = clap.Names{

@@ -4,18 +4,16 @@ const debug = std.debug;
 const io = std.io;
 const mem = std.mem;
 
-pub const @"comptime" = @import("src/comptime.zig");
 pub const args = @import("src/args.zig");
-pub const streaming = @import("src/streaming.zig");
 
 test "clap" {
-    _ = @"comptime";
     _ = args;
-    _ = streaming;
+    _ = ComptimeClap;
+    _ = StreamingClap;
 }
 
-pub const ComptimeClap = @"comptime".ComptimeClap;
-pub const StreamingClap = streaming.StreamingClap;
+pub const ComptimeClap = @import("src/comptime.zig").ComptimeClap;
+pub const StreamingClap = @import("src/streaming.zig").StreamingClap;
 
 /// The names a ::Param can have.
 pub const Names = struct {
