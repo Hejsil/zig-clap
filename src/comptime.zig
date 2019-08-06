@@ -11,19 +11,12 @@ pub fn ComptimeClap(comptime Id: type, comptime params: []const clap.Param(Id)) 
     var options: usize = 0;
     var converted_params: []const clap.Param(usize) = [_]clap.Param(usize){};
     for (params) |param| {
-        const index = blk: {
-            if (param.names.long == null and param.names.short == null)
-                break :blk 0;
-            if (param.takes_value) {
-                const res = options;
-                options += 1;
-                break :blk res;
-            }
-
-            const res = flags;
-            flags += 1;
-            break :blk res;
-        };
+        var index: usize = 0;
+        if (param.names.long != null or param.names.short != null) {
+            const ptr = if (param.takes_value) &options else &flags;
+            index = ptr.*;
+            ptr.* += 1;
+        }
 
         const converted = clap.Param(usize){
             .id = index,

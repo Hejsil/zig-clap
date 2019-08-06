@@ -25,9 +25,7 @@ const clap = @import("clap");
 const debug = std.debug;
 
 pub fn main() !void {
-    var direct_allocator = std.heap.DirectAllocator.init();
-    const allocator = &direct_allocator.allocator;
-    defer direct_allocator.deinit();
+    const allocator = std.heap.direct_allocator;
 
     // First we specify what parameters our program can take.
     const params = [_]clap.Param(u8){
@@ -90,13 +88,7 @@ const clap = @import("clap");
 const debug = std.debug;
 
 pub fn main() !void {
-    const stdout_file = try std.io.getStdOut();
-    var stdout_out_stream = stdout_file.outStream();
-    const stdout = &stdout_out_stream.stream;
-
-    var direct_allocator = std.heap.DirectAllocator.init();
-    const allocator = &direct_allocator.allocator;
-    defer direct_allocator.deinit();
+    const allocator = std.heap.direct_allocator;
 
     // First we specify what parameters our program can take.
     const params = [_]clap.Param([]const u8){
@@ -146,11 +138,9 @@ const std = @import("std");
 const clap = @import("clap");
 
 pub fn main() !void {
-    const params = [_]clap.Param(void){
-        clap.Param(void){
-            .names = clap.Names{ .short = 'h', .long = "help" }
-        },
-    };
+    const params = [_]clap.Param(void){clap.Param(void){
+        .names = clap.Names{ .short = 'h', .long = "help" },
+    }};
 
     var direct_allocator = std.heap.DirectAllocator.init();
     const allocator = &direct_allocator.allocator;
@@ -204,11 +194,11 @@ pub fn main() !void {
         [_]clap.Param([]const u8){
             clap.Param([]const u8){
                 .id = "Display this help and exit.",
-                .names = clap.Names{ .short = 'h', .long = "help" }
+                .names = clap.Names{ .short = 'h', .long = "help" },
             },
             clap.Param([]const u8){
                 .id = "Output version information and exit.",
-                .names = clap.Names{ .short = 'v', .long = "version" }
+                .names = clap.Names{ .short = 'v', .long = "version" },
             },
         },
     );

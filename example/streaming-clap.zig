@@ -4,9 +4,7 @@ const clap = @import("clap");
 const debug = std.debug;
 
 pub fn main() !void {
-    var direct_allocator = std.heap.DirectAllocator.init();
-    const allocator = &direct_allocator.allocator;
-    defer direct_allocator.deinit();
+    const allocator = std.heap.direct_allocator;
 
     // First we specify what parameters our program can take.
     const params = [_]clap.Param(u8){
