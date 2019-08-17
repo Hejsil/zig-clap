@@ -10,6 +10,8 @@ A simple and easy to use command line argument parser library for Zig.
 * Supports both passing values using spacing and `=` (`-a 100`, `-a=100`)
   * Short args also support passing values with no spacing or `=` (`-a100`)
   * This all works with chaining (`-ba 100`, `-ba=100`, `-ba100`)
+* Print help message from parameter specification.
+* Parse help message to parameter specification.
 
 ## Examples
 
