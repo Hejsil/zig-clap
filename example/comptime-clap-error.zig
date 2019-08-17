@@ -2,13 +2,11 @@ const std = @import("std");
 const clap = @import("clap");
 
 pub fn main() !void {
+    const allocator = std.heap.direct_allocator;
+
     const params = [_]clap.Param(void){clap.Param(void){
         .names = clap.Names{ .short = 'h', .long = "help" },
     }};
-
-    var direct_allocator = std.heap.DirectAllocator.init();
-    const allocator = &direct_allocator.allocator;
-    defer direct_allocator.deinit();
 
     var iter = clap.args.OsIterator.init(allocator);
     defer iter.deinit();
