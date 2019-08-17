@@ -7,7 +7,7 @@ pub fn main() !void {
     const allocator = std.heap.direct_allocator;
 
     // First we specify what parameters our program can take.
-    // We can use `parseParam` parse a string to a `Param(Help)`
+    // We can use `parseParam` to parse a string to a `Param(Help)`
     const params = comptime [_]clap.Param(clap.Help){
         clap.parseParam("-h, --help        Display this help and exit.              ") catch unreachable,
         clap.parseParam("-n, --number=NUM  An option parameter, which takes a value.") catch unreachable,
