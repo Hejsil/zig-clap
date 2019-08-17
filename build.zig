@@ -17,6 +17,7 @@ pub fn build(b: *Builder) void {
         const example = b.addExecutable(example_name, "example/" ++ example_name ++ ".zig");
         example.addPackagePath("clap", "clap.zig");
         example.setBuildMode(mode);
+        example.install();
         example_step.dependOn(&example.step);
     }
 

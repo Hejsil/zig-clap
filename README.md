@@ -91,18 +91,11 @@ pub fn main() !void {
     const allocator = std.heap.direct_allocator;
 
     // First we specify what parameters our program can take.
-    const params = [_]clap.Param([]const u8){
-        clap.Param([]const u8){
-            .id = "Display this help and exit.",
-            .names = clap.Names{ .short = 'h', .long = "help" },
-        },
-        clap.Param([]const u8){
-            .id = "An option parameter, which takes a value.",
-            .names = clap.Names{ .short = 'n', .long = "number" },
-            .takes_value = true,
-        },
-        clap.Param([]const u8){
-            .id = "",
+    // We can use `parseParam` parse a string to a `Param(Help)`
+    const params = comptime [_]clap.Param(clap.Help){
+        clap.parseParam("-h, --help        Display this help and exit.              ") catch unreachable,
+        clap.parseParam("-n, --number=NUM  An option parameter, which takes a value.") catch unreachable,
+        clap.Param(clap.Help){
             .takes_value = true,
         },
     };
@@ -116,7 +109,7 @@ pub fn main() !void {
     const exe = try iter.next();
 
     // Finally we can parse the arguments
-    var args = try clap.ComptimeClap([]const u8, params).parse(allocator, clap.args.OsIterator, &iter);
+    var args = try clap.ComptimeClap(clap.Help, params).parse(allocator, clap.args.OsIterator, &iter);
     defer args.deinit();
 
     if (args.flag("--help"))
@@ -187,19 +180,13 @@ pub fn main() !void {
     const stderr = &stderr_out_stream.stream;
 
     // clap.help is a function that can print a simple help message, given a
-    // slice of Param([]const u8). There is also a helpEx, which can print a
+    // slice of Param(Help). There is also a helpEx, which can print a
     // help message for any Param, but it is more verbose to call.
     try clap.help(
         stderr,
-        [_]clap.Param([]const u8){
-            clap.Param([]const u8){
-                .id = "Display this help and exit.",
-                .names = clap.Names{ .short = 'h', .long = "help" },
-            },
-            clap.Param([]const u8){
-                .id = "Output version information and exit.",
-                .names = clap.Names{ .short = 'v', .long = "version" },
-            },
+        comptime [_]clap.Param(clap.Help){
+            clap.parseParam("-h, --help     Display this help and exit.         ") catch unreachable,
+            clap.parseParam("-v, --version  Output version information and exit.") catch unreachable,
         },
     );
 }
@@ -211,8 +198,8 @@ pub fn main() !void {
 	-v, --version	Output version information and exit.
 ```
 
-The `help` function is the simplest to call. It only takes an `OutStream` and a slice of
-`Param([]const u8)`. This function assumes that the id of each parameter is the help message.
+The `help` functions are the simplest to call. It only takes an `OutStream` and a slice of
+`Param(Help)`.
 
 The `helpEx` is the generic version of `help`. It can print a help message for any
 `Param` give that the caller provides functions for getting the help and value strings.

@@ -7,18 +7,11 @@ pub fn main() !void {
     const allocator = std.heap.direct_allocator;
 
     // First we specify what parameters our program can take.
-    const params = [_]clap.Param([]const u8){
-        clap.Param([]const u8){
-            .id = "Display this help and exit.",
-            .names = clap.Names{ .short = 'h', .long = "help" },
-        },
-        clap.Param([]const u8){
-            .id = "An option parameter, which takes a value.",
-            .names = clap.Names{ .short = 'n', .long = "number" },
-            .takes_value = true,
-        },
-        clap.Param([]const u8){
-            .id = "",
+    // We can use `parseParam` parse a string to a `Param(Help)`
+    const params = comptime [_]clap.Param(clap.Help){
+        clap.parseParam("-h, --help        Display this help and exit.              ") catch unreachable,
+        clap.parseParam("-n, --number=NUM  An option parameter, which takes a value.") catch unreachable,
+        clap.Param(clap.Help){
             .takes_value = true,
         },
     };
@@ -32,7 +25,7 @@ pub fn main() !void {
     const exe = try iter.next();
 
     // Finally we can parse the arguments
-    var args = try clap.ComptimeClap([]const u8, params).parse(allocator, clap.args.OsIterator, &iter);
+    var args = try clap.ComptimeClap(clap.Help, params).parse(allocator, clap.args.OsIterator, &iter);
     defer args.deinit();
 
     if (args.flag("--help"))

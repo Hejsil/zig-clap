@@ -113,27 +113,11 @@ pub fn ComptimeClap(comptime Id: type, comptime params: []const clap.Param(Id)) 
 }
 
 test "clap.comptime.ComptimeClap" {
-    const Clap = ComptimeClap(void, [_]clap.Param(void){
-        clap.Param(void){
-            .names = clap.Names{
-                .short = 'a',
-                .long = "aa",
-            },
-        },
-        clap.Param(void){
-            .names = clap.Names{
-                .short = 'b',
-                .long = "bb",
-            },
-        },
-        clap.Param(void){
-            .names = clap.Names{
-                .short = 'c',
-                .long = "cc",
-            },
-            .takes_value = true,
-        },
-        clap.Param(void){
+    const Clap = ComptimeClap(clap.Help, comptime [_]clap.Param(clap.Help){
+        clap.parseParam("-a, --aa  ") catch unreachable,
+        clap.parseParam("-b, --bb  ") catch unreachable,
+        clap.parseParam("-c, --cc=V") catch unreachable,
+        clap.Param(clap.Help){
             .takes_value = true,
         },
     });

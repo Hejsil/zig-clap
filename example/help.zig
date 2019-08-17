@@ -7,19 +7,13 @@ pub fn main() !void {
     const stderr = &stderr_out_stream.stream;
 
     // clap.help is a function that can print a simple help message, given a
-    // slice of Param([]const u8). There is also a helpEx, which can print a
+    // slice of Param(Help). There is also a helpEx, which can print a
     // help message for any Param, but it is more verbose to call.
     try clap.help(
         stderr,
-        [_]clap.Param([]const u8){
-            clap.Param([]const u8){
-                .id = "Display this help and exit.",
-                .names = clap.Names{ .short = 'h', .long = "help" },
-            },
-            clap.Param([]const u8){
-                .id = "Output version information and exit.",
-                .names = clap.Names{ .short = 'v', .long = "version" },
-            },
+        comptime [_]clap.Param(clap.Help){
+            clap.parseParam("-h, --help     Display this help and exit.         ") catch unreachable,
+            clap.parseParam("-v, --version  Output version information and exit.") catch unreachable,
         },
     );
 }

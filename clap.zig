@@ -3,6 +3,7 @@ const std = @import("std");
 const debug = std.debug;
 const io = std.io;
 const mem = std.mem;
+const testing = std.testing;
 
 pub const args = @import("src/args.zig");
 
@@ -53,10 +54,166 @@ pub fn Param(comptime Id: type) type {
     };
 }
 
+/// Takes a string and parses it to a Param(Help).
+/// This is the reverse of 'help2' but for at single parameter only.
+pub fn parseParam(line: []const u8) !Param(Help) {
+    var res = Param(Help){
+        .id = Help{
+            .msg = line[0..0],
+            .value = line[0..0],
+        },
+    };
+
+    var it = mem.tokenize(line, " \t");
+    var param_str = it.next() orelse return error.NoParamFound;
+    if (!mem.startsWith(u8, param_str, "--") and mem.startsWith(u8, param_str, "-")) {
+        const found_comma = param_str[param_str.len - 1] == ',';
+        if (found_comma)
+            param_str = param_str[0..param_str.len - 1];
+
+        switch (param_str.len) {
+            1 => return error.InvalidShortParam,
+            2 => {
+                res.names.short = param_str[1];
+                if (!found_comma) {
+                    res.id.msg = mem.trim(u8, it.rest(), " \t");
+                    return res;
+                }
+            },
+            else => {
+                res.names.short = param_str[1];
+                if (param_str[2] != '=')
+                    return error.InvalidShortParam;
+
+                res.id.value = param_str[3..];
+                res.takes_value = true;
+
+                if (found_comma)
+                    return error.TrailingComma;
+
+                res.id.msg = mem.trim(u8, it.rest(), " \t");
+                return res;
+            },
+        }
+
+        param_str = it.next() orelse return error.NoParamFound;
+    }
+
+    if (mem.startsWith(u8, param_str, "--")) {
+        res.names.long = param_str[2..];
+        if (mem.indexOfScalar(u8, param_str, '=')) |eql_index| {
+            res.names.long = param_str[2..eql_index];
+            res.id.value = param_str[eql_index + 1 ..];
+            res.takes_value = true;
+        }
+
+        if (param_str[param_str.len - 1] == ',')
+            return error.TrailingComma;
+        
+        res.id.msg = mem.trim(u8, it.rest(), " \t");
+        return res;
+    }
+
+    return error.NoParamFound;
+}
+
+test "parseParam" {
+    var text: []const u8 = "-s, --long=value Help text";
+    testing.expectEqual(Param(Help){
+        .id = Help{
+            .msg = text[17..],
+            .value = text[11..16],
+        },
+        .names = Names{
+            .short = 's',
+            .long = text[6..10],
+        },
+        .takes_value = true,
+    }, try parseParam(text));
+
+    text = "--long=value Help text";
+    testing.expectEqual(Param(Help){
+        .id = Help{
+            .msg = text[13..],
+            .value = text[7..12],
+        },
+        .names = Names{
+            .short = null,
+            .long = text[2..6],
+        },
+        .takes_value = true,
+    }, try parseParam(text));
+
+    text = "-s=value Help text";
+    testing.expectEqual(Param(Help){
+        .id = Help{
+            .msg = text[9..],
+            .value = text[3..8],
+        },
+        .names = Names{
+            .short = 's',
+            .long = null,
+        },
+        .takes_value = true,
+    }, try parseParam(text));
+
+    text = "-s, --long Help text";
+    testing.expectEqual(Param(Help){
+        .id = Help{
+            .msg = text[11..],
+            .value = text[0..0],
+        },
+        .names = Names{
+            .short = 's',
+            .long = text[6..10],
+        },
+        .takes_value = false,
+    }, try parseParam(text));
+
+    text = "-s Help text";
+    testing.expectEqual(Param(Help){
+        .id = Help{
+            .msg = text[3..],
+            .value = text[0..0],
+        },
+        .names = Names{
+            .short = 's',
+            .long = null,
+        },
+        .takes_value = false,
+    }, try parseParam(text));
+
+    text = "--long Help text";
+    testing.expectEqual(Param(Help){
+        .id = Help{
+            .msg = text[7..],
+            .value = text[0..0],
+        },
+        .names = Names{
+            .short = null,
+            .long = text[2..6],
+        },
+        .takes_value = false,
+    }, try parseParam(text));
+
+    testing.expectError(error.NoParamFound, parseParam("Help"));
+    testing.expectError(error.TrailingComma, parseParam("--long, Help"));
+    testing.expectError(error.TrailingComma, parseParam("--long=value, Help"));
+    testing.expectError(error.NoParamFound, parseParam("-s, Help"));
+    testing.expectError(error.TrailingComma, parseParam("-s=value, Help"));
+    testing.expectError(error.InvalidShortParam, parseParam("-ss Help"));
+    testing.expectError(error.InvalidShortParam, parseParam("-ss=value Help"));
+    testing.expectError(error.InvalidShortParam, parseParam("- Help"));
+}
+
+
+
 /// Will print a help message in the following format:
 ///     -s, --long=value_text help_text
 ///     -s,                   help_text
+///     -s=value_text         help_text
 ///         --long            help_text
+///         --long=value_text help_text
 pub fn helpFull(
     stream: var,
     comptime Id: type,
@@ -152,18 +309,22 @@ pub fn helpEx(
     );
 }
 
-/// A wrapper around helpEx that takes a Param([]const u8) and uses the string id
-/// as the help text for each paramter.
-pub fn help(stream: var, params: []const Param([]const u8)) !void {
-    try helpEx(stream, []const u8, params, getHelpSimple, getValueSimple);
+pub const Help = struct {
+    msg: []const u8 = "",
+    value: []const u8 = "",
+};
+
+/// A wrapper around helpEx that takes a Param(Help).
+pub fn help(stream: var, params: []const Param(Help)) !void {
+    try helpEx(stream, Help, params, getHelpSimple, getValueSimple);
 }
 
-fn getHelpSimple(param: Param([]const u8)) []const u8 {
-    return param.id;
+fn getHelpSimple(param: Param(Help)) []const u8 {
+    return param.id.msg;
 }
 
-fn getValueSimple(param: Param([]const u8)) []const u8 {
-    return "VALUE";
+fn getValueSimple(param: Param(Help)) []const u8 {
+    return param.id.value;
 }
 
 test "clap.help" {
@@ -171,54 +332,44 @@ test "clap.help" {
     var slice_stream = io.SliceOutStream.init(buf[0..]);
     try help(
         &slice_stream.stream,
-        [_]Param([]const u8){
-            Param([]const u8){
-                .id = "Short flag.",
-                .names = Names{ .short = 'a' },
-            },
-            Param([]const u8){
-                .id = "Short option.",
-                .names = Names{ .short = 'b' },
-                .takes_value = true,
-            },
-            Param([]const u8){
-                .id = "Long flag.",
-                .names = Names{ .long = "aa" },
-            },
-            Param([]const u8){
-                .id = "Long option.",
-                .names = Names{ .long = "bb" },
-                .takes_value = true,
-            },
-            Param([]const u8){
-                .id = "Both flag.",
-                .names = Names{ .short = 'c', .long = "cc" },
-            },
-            Param([]const u8){
-                .id = "Both option.",
-                .names = Names{ .short = 'd', .long = "dd" },
-                .takes_value = true,
-            },
-            Param([]const u8){
-                .id = "Positional. This should not appear in the help message.",
+        comptime [_]Param(Help){
+            parseParam("-a           Short flag.  ") catch unreachable,
+            parseParam("-b=V1        Short option.") catch unreachable,
+            parseParam("--aa         Long flag.   ") catch unreachable,
+            parseParam("--bb=V2      Long option. ") catch unreachable,
+            parseParam("-c, --cc     Both flag.   ") catch unreachable,
+            parseParam("-d, --dd=V3  Both option. ") catch unreachable,
+            Param(Help){
+                .id = Help{
+                    .msg = "Positional. This should not appear in the help message.",
+                },
                 .takes_value = true,
             },
         },
     );
 
     const expected = "" ++
-        "\t-a            \tShort flag.\n" ++
-        "\t-b=VALUE      \tShort option.\n" ++
-        "\t    --aa      \tLong flag.\n" ++
-        "\t    --bb=VALUE\tLong option.\n" ++
-        "\t-c, --cc      \tBoth flag.\n" ++
-        "\t-d, --dd=VALUE\tBoth option.\n";
+        "\t-a         \tShort flag.\n" ++
+        "\t-b=V1      \tShort option.\n" ++
+        "\t    --aa   \tLong flag.\n" ++
+        "\t    --bb=V2\tLong option.\n" ++
+        "\t-c, --cc   \tBoth flag.\n" ++
+        "\t-d, --dd=V3\tBoth option.\n";
 
-    if (!mem.eql(u8, slice_stream.getWritten(), expected)) {
-        debug.warn("============ Expected ============\n");
+    const actual = slice_stream.getWritten();
+    if (!mem.eql(u8, actual, expected)) {
+        debug.warn("\n============ Expected ============\n");
         debug.warn("{}", expected);
         debug.warn("============= Actual =============\n");
-        debug.warn("{}", slice_stream.getWritten());
-        return error.NoMatch;
+        debug.warn("{}", actual);
+
+        var buffer: [1024 * 2]u8 = undefined;
+        var fba = std.heap.FixedBufferAllocator.init(&buffer);
+
+        debug.warn("============ Expected (escaped) ============\n");
+        debug.warn("{x}\n", expected);
+        debug.warn("============ Actual (escaped) ============\n");
+        debug.warn("{x}\n", actual);
+        testing.expect(false);
     }
 }

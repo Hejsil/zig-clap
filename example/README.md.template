@@ -67,8 +67,8 @@ program can take.
 	-v, --version	Output version information and exit.
 ```
 
-The `help` function is the simplest to call. It only takes an `OutStream` and a slice of
-`Param([]const u8)`. This function assumes that the id of each parameter is the help message.
+The `help` functions are the simplest to call. It only takes an `OutStream` and a slice of
+`Param(Help)`.
 
 The `helpEx` is the generic version of `help`. It can print a help message for any
 `Param` give that the caller provides functions for getting the help and value strings.
