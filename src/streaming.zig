@@ -53,25 +53,14 @@ pub fn StreamingClap(comptime Id: type, comptime ArgIterator: type) type {
             switch (parser.state) {
                 State.Normal => {
                     const full_arg = (try parser.iter.next()) orelse return null;
-                    const arg_info = blk: {
-                        var arg = full_arg;
-                        var kind = ArgInfo.Kind.Positional;
-
-                        if (mem.startsWith(u8, arg, "--")) {
-                            arg = arg[2..];
-                            kind = ArgInfo.Kind.Long;
-                        } else if (mem.startsWith(u8, arg, "-")) {
-                            arg = arg[1..];
-                            kind = ArgInfo.Kind.Short;
-                        }
-
-                        // We allow long arguments to go without a name.
-                        // This allows the user to use "--" for something important
-                        if (kind != ArgInfo.Kind.Long and arg.len == 0)
-                            return error.InvalidArgument;
-
-                        break :blk ArgInfo{ .arg = arg, .kind = kind };
-                    };
+                    const arg_info = if (mem.eql(u8, full_arg, "--") or mem.eql(u8, full_arg, "-"))
+                        ArgInfo{ .arg = full_arg, .kind = .Positional }
+                    else if (mem.startsWith(u8, full_arg, "--"))
+                        ArgInfo{ .arg = full_arg[2..], .kind = .Long }
+                    else if (mem.startsWith(u8, full_arg, "-"))
+                        ArgInfo{ .arg = full_arg[1..], .kind = .Short }
+                    else
+                        ArgInfo{ .arg = full_arg, .kind = .Positional };
 
                     const arg = arg_info.arg;
                     const kind = arg_info.kind;
@@ -333,6 +322,7 @@ test "clap.streaming.StreamingClap: all params" {
             "-c",   "0",     "-c=0",   "-ac",
             "0",    "-ac=0", "--aa",   "--bb",
             "--cc", "0",     "--cc=0", "something",
+            "--", "-",
         },
         [_]Arg(u8){
             Arg(u8){ .param = aa },
@@ -352,6 +342,8 @@ test "clap.streaming.StreamingClap: all params" {
             Arg(u8){ .param = cc, .value = "0" },
             Arg(u8){ .param = cc, .value = "0" },
             Arg(u8){ .param = positional, .value = "something" },
+            Arg(u8){ .param = positional, .value = "--" },
+            Arg(u8){ .param = positional, .value = "-" },
         },
     );
 }
