@@ -55,7 +55,7 @@ pub fn Param(comptime Id: type) type {
 }
 
 /// Takes a string and parses it to a Param(Help).
-/// This is the reverse of 'help2' but for at single parameter only.
+/// This is the reverse of 'help' but for at single parameter only.
 pub fn parseParam(line: []const u8) !Param(Help) {
     var res = Param(Help){
         .id = Help{

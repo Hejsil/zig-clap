@@ -51,7 +51,7 @@ pub fn StreamingClap(comptime Id: type, comptime ArgIterator: type) type {
             };
 
             switch (parser.state) {
-                State.Normal => {
+                .Normal => {
                     const full_arg = (try parser.iter.next()) orelse return null;
                     const arg_info = if (mem.eql(u8, full_arg, "--") or mem.eql(u8, full_arg, "-"))
                         ArgInfo{ .arg = full_arg, .kind = .Positional }
@@ -112,7 +112,7 @@ pub fn StreamingClap(comptime Id: type, comptime ArgIterator: type) type {
 
                     return error.InvalidArgument;
                 },
-                @TagType(State).Chaining => |state| return try parser.chainging(state),
+                .Chaining => |state| return try parser.chainging(state),
             }
         }
 
@@ -177,9 +177,8 @@ fn testNoErr(params: []const clap.Param(u8), args_strings: []const []const u8, r
         testing.expectEqualSlices(u8, expected_value, actual_value);
     }
 
-    if (c.next() catch @panic("")) |_| {
-        @panic("");
-    }
+    if (c.next() catch unreachable) |_|
+        unreachable;
 }
 
 test "clap.streaming.StreamingClap: short params" {
