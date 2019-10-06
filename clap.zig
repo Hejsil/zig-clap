@@ -5,7 +5,7 @@ const io = std.io;
 const mem = std.mem;
 const testing = std.testing;
 
-pub const args = @import("src/args.zig");
+pub const args = @import("clap/args.zig");
 
 test "clap" {
     _ = args;
@@ -13,8 +13,8 @@ test "clap" {
     _ = StreamingClap;
 }
 
-pub const ComptimeClap = @import("src/comptime.zig").ComptimeClap;
-pub const StreamingClap = @import("src/streaming.zig").StreamingClap;
+pub const ComptimeClap = @import("clap/comptime.zig").ComptimeClap;
+pub const StreamingClap = @import("clap/streaming.zig").StreamingClap;
 
 /// The names a ::Param can have.
 pub const Names = struct {
@@ -69,7 +69,7 @@ pub fn parseParam(line: []const u8) !Param(Help) {
     if (!mem.startsWith(u8, param_str, "--") and mem.startsWith(u8, param_str, "-")) {
         const found_comma = param_str[param_str.len - 1] == ',';
         if (found_comma)
-            param_str = param_str[0..param_str.len - 1];
+            param_str = param_str[0 .. param_str.len - 1];
 
         if (param_str.len != 2)
             return error.InvalidShortParam;
@@ -83,7 +83,7 @@ pub fn parseParam(line: []const u8) !Param(Help) {
                     const len = mem.indexOfScalar(u8, help_msg[start..], '>') orelse break :blk;
                     res.id.value = help_msg[start..][0..len];
                     res.takes_value = true;
-                    help_msg = help_msg[start + len + 1..];
+                    help_msg = help_msg[start + len + 1 ..];
                 }
             }
 
@@ -99,7 +99,7 @@ pub fn parseParam(line: []const u8) !Param(Help) {
 
         if (param_str[param_str.len - 1] == ',')
             return error.TrailingComma;
-    
+
         var help_msg = it.rest();
         if (it.next()) |next| blk: {
             if (mem.startsWith(u8, next, "<")) {
@@ -107,10 +107,10 @@ pub fn parseParam(line: []const u8) !Param(Help) {
                 const len = mem.indexOfScalar(u8, help_msg[start..], '>') orelse break :blk;
                 res.id.value = help_msg[start..][0..len];
                 res.takes_value = true;
-                help_msg = help_msg[start + len + 1..];
+                help_msg = help_msg[start + len + 1 ..];
             }
         }
-        
+
         res.id.msg = mem.trim(u8, help_msg, " \t");
         return res;
     }
@@ -222,7 +222,6 @@ fn find(str: []const u8, f: []const u8) []const u8 {
     const i = mem.indexOf(u8, str, f).?;
     return str[i..][0..f.len];
 }
-
 
 /// Will print a help message in the following format:
 ///     -s, --long <value_text> help_text

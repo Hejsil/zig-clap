@@ -7,6 +7,11 @@ const Builder = std.build.Builder;
 pub fn build(b: *Builder) void {
     const mode = b.standardReleaseOptions();
 
+    const fmt_step = b.addFmt([_][]const u8{
+        "build.zig",
+        "clap",
+    });
+
     const test_all_step = b.step("test", "Run all tests in all modes.");
     inline for ([_]Mode{ Mode.Debug, Mode.ReleaseFast, Mode.ReleaseSafe, Mode.ReleaseSmall }) |test_mode| {
         const mode_str = comptime modeToString(test_mode);

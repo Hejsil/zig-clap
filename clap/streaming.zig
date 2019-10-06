@@ -321,7 +321,7 @@ test "clap.streaming.StreamingClap: all params" {
             "-c",   "0",     "-c=0",   "-ac",
             "0",    "-ac=0", "--aa",   "--bb",
             "--cc", "0",     "--cc=0", "something",
-            "--", "-",
+            "--",   "-",
         },
         [_]Arg(u8){
             Arg(u8){ .param = aa },
