@@ -1,0 +1,24 @@
+name: CI
+on: push
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{matrix.os}}
+    steps:
+      - uses: actions/checkout@v1
+        with:
+          submodules: recursive
+      - uses: goto-bus-stop/setup-zig@v1.0.0
+        with:
+          version: 0.5.0
+      - run: zig build
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - uses: goto-bus-stop/setup-zig@v1.0.0
+        with:
+          version: 0.5.0
+      - run: zig fmt --check .
