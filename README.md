@@ -48,13 +48,10 @@ pub fn main() !void {
 
     // We then initialize an argument iterator. We will use the OsIterator as it nicely
     // wraps iterating over arguments the most efficient way on each os.
-    var iter = clap.args.OsIterator.init(allocator);
+    var iter = try clap.args.OsIterator.init(allocator);
     defer iter.deinit();
 
-    // Consume the exe arg.
-    const exe = try iter.next();
-
-    // Finally we initialize our streaming parser.
+    // Initialize our streaming parser.
     var parser = clap.StreamingClap(u8, clap.args.OsIterator){
         .params = params,
         .iter = &iter,
@@ -104,13 +101,10 @@ pub fn main() !void {
 
     // We then initialize an argument iterator. We will use the OsIterator as it nicely
     // wraps iterating over arguments the most efficient way on each os.
-    var iter = clap.args.OsIterator.init(allocator);
+    var iter = try clap.args.OsIterator.init(allocator);
     defer iter.deinit();
 
-    // Consume the exe arg.
-    const exe = try iter.next();
-
-    // Finally we can parse the arguments
+    // Parse the arguments
     var args = try clap.ComptimeClap(clap.Help, params).parse(allocator, clap.args.OsIterator, &iter);
     defer args.deinit();
 

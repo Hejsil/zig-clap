@@ -50,11 +50,19 @@ pub const OsIterator = struct {
     arena: heap.ArenaAllocator,
     args: process.ArgIterator,
 
-    pub fn init(allocator: *mem.Allocator) OsIterator {
-        return OsIterator{
+    /// The executable path (this is the first argument passed to the program)
+    /// TODO: Is it the right choice for this to be null? Maybe `init` should
+    ///       return an error when we have no exe.
+    exe_arg: ?[]const u8,
+
+    pub fn init(allocator: *mem.Allocator) Error!OsIterator {
+        var res = OsIterator{
             .arena = heap.ArenaAllocator.init(allocator),
             .args = process.args(),
+            .exe_arg = undefined,
         };
+        res.exe_arg = try res.next();
+        return res;
     }
 
     pub fn deinit(iter: *OsIterator) void {
