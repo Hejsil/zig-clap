@@ -15,6 +15,119 @@ A simple and easy to use command line argument parser library for Zig.
 
 ## Examples
 
+### `clap.parse`
+
+The simplest way to use this library is to just call the `clap.parse` function.
+
+```zig
+const std = @import("std");
+const clap = @import("clap");
+
+const debug = std.debug;
+
+pub fn main() !void {
+    // First we specify what parameters our program can take.
+    // We can use `parseParam` to parse a string to a `Param(Help)`
+    const params = comptime [_]clap.Param(clap.Help){
+        clap.parseParam("-h, --help          Display this help and exit.              ") catch unreachable,
+        clap.parseParam("-n, --number <NUM>  An option parameter, which takes a value.") catch unreachable,
+        clap.Param(clap.Help){
+            .takes_value = true,
+        },
+    };
+
+    var args = try clap.parse(clap.Help, params, std.heap.direct_allocator);
+    defer args.deinit();
+
+    if (args.flag("--help"))
+        debug.warn("--help\n");
+    if (args.option("--number")) |n|
+        debug.warn("--number = {}\n", n);
+    for (args.positionals()) |pos|
+        debug.warn("{}\n", pos);
+}
+
+```
+
+The data structure returned has lookup speed on par with array access (`arr[i]`) and validates
+that the strings you pass to `option` and `flag` are actually parameters that the program can take:
+
+```zig
+const std = @import("std");
+const clap = @import("clap");
+
+pub fn main() !void {
+    // First we specify what parameters our program can take.
+    // We can use `parseParam` to parse a string to a `Param(Help)`
+    const params = comptime [_]clap.Param(clap.Help){
+        clap.parseParam("-h, --help  Display this help and exit.") catch unreachable,
+    };
+
+    var args = try clap.parse(clap.Help, params, std.heap.direct_allocator);
+    defer args.deinit();
+
+    _ = args.flag("--helps");
+}
+
+```
+
+```
+zig-clap/clap/comptime.zig:109:17: error: --helps is not a parameter.
+                @compileError(name ++ " is not a parameter.");
+                ^
+zig-clap/clap/comptime.zig:77:45: note: called from here
+            const param = comptime findParam(name);
+                                            ^
+zig-clap/clap.zig:238:31: note: called from here
+            return a.clap.flag(name);
+                              ^
+zig-clap/example/simple-error.zig:16:18: note: called from here
+    _ = args.flag("--helps");
+```
+
+### `ComptimeClap`
+
+The `ComptimeClap` is the parser used by `clap.parse`. It allows the user to use a custom argument
+iterator.
+
+```zig
+const std = @import("std");
+const clap = @import("clap");
+
+const debug = std.debug;
+
+pub fn main() !void {
+    const allocator = std.heap.direct_allocator;
+
+    // First we specify what parameters our program can take.
+    // We can use `parseParam` to parse a string to a `Param(Help)`
+    const params = comptime [_]clap.Param(clap.Help){
+        clap.parseParam("-h, --help          Display this help and exit.              ") catch unreachable,
+        clap.parseParam("-n, --number <NUM>  An option parameter, which takes a value.") catch unreachable,
+        clap.Param(clap.Help){
+            .takes_value = true,
+        },
+    };
+
+    // We then initialize an argument iterator. We will use the OsIterator as it nicely
+    // wraps iterating over arguments the most efficient way on each os.
+    var iter = try clap.args.OsIterator.init(allocator);
+    defer iter.deinit();
+
+    // Parse the arguments
+    var args = try clap.ComptimeClap(clap.Help, params).parse(allocator, clap.args.OsIterator, &iter);
+    defer args.deinit();
+
+    if (args.flag("--help"))
+        debug.warn("--help\n");
+    if (args.option("--number")) |n|
+        debug.warn("--number = {}\n", n);
+    for (args.positionals()) |pos|
+        debug.warn("{}\n", pos);
+}
+
+```
+
 ### `StreamingClap`
 
 The `StreamingClap` is the base of all the other parsers. It's a streaming parser that uses an
@@ -75,89 +188,8 @@ pub fn main() !void {
 
 ```
 
-### `ComptimeClap`
-
-The `ComptimeClap` is a wrapper for `StreamingClap`, which parses all the arguments and makes
-them available through three functions (`flag`, `option`, `positionals`).
-
-```zig
-const std = @import("std");
-const clap = @import("clap");
-
-const debug = std.debug;
-
-pub fn main() !void {
-    const allocator = std.heap.direct_allocator;
-
-    // First we specify what parameters our program can take.
-    // We can use `parseParam` to parse a string to a `Param(Help)`
-    const params = comptime [_]clap.Param(clap.Help){
-        clap.parseParam("-h, --help          Display this help and exit.              ") catch unreachable,
-        clap.parseParam("-n, --number <NUM>  An option parameter, which takes a value.") catch unreachable,
-        clap.Param(clap.Help){
-            .takes_value = true,
-        },
-    };
-
-    // We then initialize an argument iterator. We will use the OsIterator as it nicely
-    // wraps iterating over arguments the most efficient way on each os.
-    var iter = try clap.args.OsIterator.init(allocator);
-    defer iter.deinit();
-
-    // Parse the arguments
-    var args = try clap.ComptimeClap(clap.Help, params).parse(allocator, clap.args.OsIterator, &iter);
-    defer args.deinit();
-
-    if (args.flag("--help"))
-        debug.warn("--help\n");
-    if (args.option("--number")) |n|
-        debug.warn("--number = {}\n", n);
-    for (args.positionals()) |pos|
-        debug.warn("{}\n", pos);
-}
-
-```
-
-The data structure returned from this parser has lookup speed on par with array access (`arr[i]`)
-and validates that the strings you pass to `option` and `flag` are actually parameters that the
-program can take:
-
-```zig
-const std = @import("std");
-const clap = @import("clap");
-
-pub fn main() !void {
-    const allocator = std.heap.direct_allocator;
-
-    const params = [_]clap.Param(void){clap.Param(void){
-        .names = clap.Names{ .short = 'h', .long = "help" },
-    }};
-
-    var iter = clap.args.OsIterator.init(allocator);
-    defer iter.deinit();
-    const exe = try iter.next();
-
-    var args = try clap.ComptimeClap(void, params).parse(allocator, clap.args.OsIterator, &iter);
-    defer args.deinit();
-
-    _ = args.flag("--helps");
-}
-
-```
-
-```
-zig-clap/src/comptime.zig:109:17: error: --helps is not a parameter.
-                @compileError(name ++ " is not a parameter.");
-                ^
-zig-clap/src/comptime.zig:77:45: note: called from here
-            const param = comptime findParam(name);
-                                            ^
-zig-clap/example/comptime-clap-error.zig:18:18: note: called from here
-    _ = args.flag("--helps");
-                 ^
-```
-
-Ofc, this limits you to parameters that are comptime known.
+Currently, this parse is the only parser that allow an array of `Param` that
+is generated at runtime.
 
 ### `help`
 

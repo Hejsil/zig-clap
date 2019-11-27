@@ -223,6 +223,47 @@ fn find(str: []const u8, f: []const u8) []const u8 {
     return str[i..][0..f.len];
 }
 
+pub fn Args(comptime Id: type, comptime params: []const Param(Id)) type {
+    return struct {
+        arena: std.heap.ArenaAllocator,
+        clap: ComptimeClap(Id, params),
+        exe_arg: ?[]const u8,
+
+        pub fn deinit(a: *@This()) void {
+            a.clap.deinit();
+            a.arena.deinit();
+        }
+
+        pub fn flag(a: @This(), comptime name: []const u8) bool {
+            return a.clap.flag(name);
+        }
+
+        pub fn option(a: @This(), comptime name: []const u8) ?[]const u8 {
+            return a.clap.option(name);
+        }
+
+        pub fn positionals(a: @This()) []const []const u8 {
+            return a.clap.positionals();
+        }
+    };
+}
+
+/// Parses the command line arguments passed into the program based on an
+/// array of `Param`s.
+pub fn parse(
+    comptime Id: type,
+    comptime params: []const Param(Id),
+    allocator: *mem.Allocator,
+) !Args(Id, params) {
+    var iter = try args.OsIterator.init(allocator);
+    const clap = try ComptimeClap(Id, params).parse(allocator, args.OsIterator, &iter);
+    return Args(Id, params){
+        .arena = iter.arena,
+        .clap = clap,
+        .exe_arg = iter.exe_arg,
+    };
+}
+
 /// Will print a help message in the following format:
 ///     -s, --long <value_text> help_text
 ///     -s,                     help_text
