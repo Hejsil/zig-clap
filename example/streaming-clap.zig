@@ -30,7 +30,7 @@ pub fn main() !void {
 
     // Initialize our streaming parser.
     var parser = clap.StreamingClap(u8, clap.args.OsIterator){
-        .params = params,
+        .params = &params,
         .iter = &iter,
     };
 

@@ -9,7 +9,7 @@ const debug = std.debug;
 pub fn ComptimeClap(comptime Id: type, comptime params: []const clap.Param(Id)) type {
     var flags: usize = 0;
     var options: usize = 0;
-    var converted_params: []const clap.Param(usize) = [_]clap.Param(usize){};
+    var converted_params: []const clap.Param(usize) = &[_]clap.Param(usize){};
     for (params) |param| {
         var index: usize = 0;
         if (param.names.long != null or param.names.short != null) {
@@ -113,7 +113,7 @@ pub fn ComptimeClap(comptime Id: type, comptime params: []const clap.Param(Id)) 
 }
 
 test "clap.comptime.ComptimeClap" {
-    const Clap = ComptimeClap(clap.Help, comptime [_]clap.Param(clap.Help){
+    const Clap = ComptimeClap(clap.Help, comptime &[_]clap.Param(clap.Help){
         clap.parseParam("-a, --aa    ") catch unreachable,
         clap.parseParam("-b, --bb    ") catch unreachable,
         clap.parseParam("-c, --cc <V>") catch unreachable,
@@ -125,7 +125,7 @@ test "clap.comptime.ComptimeClap" {
     var buf: [1024]u8 = undefined;
     var fb_allocator = heap.FixedBufferAllocator.init(buf[0..]);
     var iter = clap.args.SliceIterator{
-        .args = [_][]const u8{
+        .args = &[_][]const u8{
             "-a", "-c", "0", "something",
         },
     };
@@ -138,6 +138,6 @@ test "clap.comptime.ComptimeClap" {
     testing.expect(!args.flag("--bb"));
     testing.expectEqualSlices(u8, "0", args.option("-c").?);
     testing.expectEqualSlices(u8, "0", args.option("--cc").?);
-    testing.expectEqual(usize(1), args.positionals().len);
+    testing.expectEqual(@as(usize, 1), args.positionals().len);
     testing.expectEqualSlices(u8, "something", args.positionals()[0]);
 }

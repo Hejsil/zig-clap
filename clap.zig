@@ -388,7 +388,7 @@ test "clap.help" {
     var slice_stream = io.SliceOutStream.init(buf[0..]);
     try help(
         &slice_stream.stream,
-        comptime [_]Param(Help){
+        comptime &[_]Param(Help){
             parseParam("-a             Short flag.  ") catch unreachable,
             parseParam("-b <V1>        Short option.") catch unreachable,
             parseParam("--aa           Long flag.   ") catch unreachable,

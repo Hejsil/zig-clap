@@ -8,7 +8,7 @@ pub fn main() !void {
         clap.parseParam("-h, --help  Display this help and exit.") catch unreachable,
     };
 
-    var args = try clap.parse(clap.Help, params, std.heap.direct_allocator);
+    var args = try clap.parse(clap.Help, &params, std.heap.direct_allocator);
     defer args.deinit();
 
     _ = args.flag("--helps");
