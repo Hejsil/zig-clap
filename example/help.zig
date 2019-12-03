@@ -2,7 +2,7 @@ const std = @import("std");
 const clap = @import("clap");
 
 pub fn main() !void {
-    const stderr_file = try std.io.getStdErr();
+    const stderr_file = std.io.getStdErr();
     var stderr_out_stream = stderr_file.outStream();
     const stderr = &stderr_out_stream.stream;
 
@@ -11,7 +11,7 @@ pub fn main() !void {
     // help message for any Param, but it is more verbose to call.
     try clap.help(
         stderr,
-        comptime [_]clap.Param(clap.Help){
+        comptime &[_]clap.Param(clap.Help){
             clap.parseParam("-h, --help     Display this help and exit.         ") catch unreachable,
             clap.parseParam("-v, --version  Output version information and exit.") catch unreachable,
         },

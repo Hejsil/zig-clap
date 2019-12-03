@@ -22,7 +22,7 @@ pub fn main() !void {
     defer iter.deinit();
 
     // Parse the arguments
-    var args = try clap.ComptimeClap(clap.Help, params).parse(allocator, clap.args.OsIterator, &iter);
+    var args = try clap.ComptimeClap(clap.Help, &params).parse(allocator, clap.args.OsIterator, &iter);
     defer args.deinit();
 
     if (args.flag("--help"))

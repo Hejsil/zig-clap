@@ -7,7 +7,7 @@ const Builder = std.build.Builder;
 pub fn build(b: *Builder) void {
     const mode = b.standardReleaseOptions();
 
-    const fmt_step = b.addFmt([_][]const u8{
+    const fmt_step = b.addFmt(&[_][]const u8{
         "build.zig",
         "clap",
     });

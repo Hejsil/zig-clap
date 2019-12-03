@@ -33,7 +33,7 @@ pub const SliceIterator = struct {
 };
 
 test "clap.args.SliceIterator" {
-    const args = [_][]const u8{ "A", "BB", "CCC" };
+    const args = &[_][]const u8{ "A", "BB", "CCC" };
     var iter = SliceIterator{ .args = args };
 
     for (args) |a| {
