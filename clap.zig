@@ -296,10 +296,10 @@ pub fn helpFull(
             continue;
 
         var counting_stream = io.CountingOutStream(@typeOf(stream.*).Error).init(stream);
-        try stream.print("\t");
+        try stream.print("\t", .{});
         try printParam(&counting_stream.stream, Id, param, Error, context, value_text);
         try stream.writeByteNTimes(' ', max_spacing - counting_stream.bytes_written);
-        try stream.print("\t{}\n", try help_text(context, param));
+        try stream.print("\t{}\n", .{ try help_text(context, param) });
     }
 }
 
@@ -312,21 +312,21 @@ fn printParam(
     value_text: fn (@typeOf(context), Param(Id)) Error![]const u8,
 ) @typeOf(stream.*).Error!void {
     if (param.names.short) |s| {
-        try stream.print("-{c}", s);
+        try stream.print("-{c}", .{ s });
     } else {
-        try stream.print("  ");
+        try stream.print("  ", .{});
     }
     if (param.names.long) |l| {
         if (param.names.short) |_| {
-            try stream.print(", ");
+            try stream.print(", ", .{});
         } else {
-            try stream.print("  ");
+            try stream.print("  ", .{});
         }
 
-        try stream.print("--{}", l);
+        try stream.print("--{}", .{ l });
     }
     if (param.takes_value)
-        try stream.print(" <{}>", value_text(context, param));
+        try stream.print(" <{}>", .{ value_text(context, param) });
 }
 
 /// A wrapper around helpFull for simple help_text and value_text functions that
@@ -414,18 +414,18 @@ test "clap.help" {
 
     const actual = slice_stream.getWritten();
     if (!mem.eql(u8, actual, expected)) {
-        debug.warn("\n============ Expected ============\n");
-        debug.warn("{}", expected);
-        debug.warn("============= Actual =============\n");
-        debug.warn("{}", actual);
+        debug.warn("\n============ Expected ============\n", .{});
+        debug.warn("{}", .{ expected });
+        debug.warn("============= Actual =============\n", .{});
+        debug.warn("{}", .{ actual });
 
         var buffer: [1024 * 2]u8 = undefined;
         var fba = std.heap.FixedBufferAllocator.init(&buffer);
 
-        debug.warn("============ Expected (escaped) ============\n");
-        debug.warn("{x}\n", expected);
-        debug.warn("============ Actual (escaped) ============\n");
-        debug.warn("{x}\n", actual);
+        debug.warn("============ Expected (escaped) ============\n", .{});
+        debug.warn("{x}\n", .{ expected });
+        debug.warn("============ Actual (escaped) ============\n", .{});
+        debug.warn("{x}\n", .{ actual });
         testing.expect(false);
     }
 }

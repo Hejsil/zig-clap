@@ -60,14 +60,13 @@ fn readMeStep(b: *Builder) *std.build.Step {
             @setEvalBranchQuota(10000);
             const file = try std.fs.File.openWrite("README.md");
             const stream = &file.outStream().stream;
-            try stream.print(
-                @embedFile("example/README.md.template"),
+            try stream.print(@embedFile("example/README.md.template"), .{
                 @embedFile("example/simple.zig"),
                 @embedFile("example/simple-error.zig"),
                 @embedFile("example/comptime-clap.zig"),
                 @embedFile("example/streaming-clap.zig"),
                 @embedFile("example/help.zig"),
-            );
+            });
         }
     }.make);
     return s;
