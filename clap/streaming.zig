@@ -170,7 +170,7 @@ fn testNoErr(params: []const clap.Param(u8), args_strings: []const []const u8, r
         const arg = (c.next() catch unreachable) orelse unreachable;
         testing.expectEqual(res.param, arg.param);
         const expected_value = res.value orelse {
-            testing.expectEqual(@as(@typeOf(arg.value), null), arg.value);
+            testing.expectEqual(@as(@TypeOf(arg.value), null), arg.value);
             continue;
         };
         const actual_value = arg.value orelse unreachable;

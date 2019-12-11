@@ -276,8 +276,8 @@ pub fn helpFull(
     params: []const Param(Id),
     comptime Error: type,
     context: var,
-    help_text: fn (@typeOf(context), Param(Id)) Error![]const u8,
-    value_text: fn (@typeOf(context), Param(Id)) Error![]const u8,
+    help_text: fn (@TypeOf(context), Param(Id)) Error![]const u8,
+    value_text: fn (@TypeOf(context), Param(Id)) Error![]const u8,
 ) !void {
     const max_spacing = blk: {
         var res: usize = 0;
@@ -295,7 +295,7 @@ pub fn helpFull(
         if (param.names.short == null and param.names.long == null)
             continue;
 
-        var counting_stream = io.CountingOutStream(@typeOf(stream.*).Error).init(stream);
+        var counting_stream = io.CountingOutStream(@TypeOf(stream.*).Error).init(stream);
         try stream.print("\t", .{});
         try printParam(&counting_stream.stream, Id, param, Error, context, value_text);
         try stream.writeByteNTimes(' ', max_spacing - counting_stream.bytes_written);
@@ -309,8 +309,8 @@ fn printParam(
     param: Param(Id),
     comptime Error: type,
     context: var,
-    value_text: fn (@typeOf(context), Param(Id)) Error![]const u8,
-) @typeOf(stream.*).Error!void {
+    value_text: fn (@TypeOf(context), Param(Id)) Error![]const u8,
+) @TypeOf(stream.*).Error!void {
     if (param.names.short) |s| {
         try stream.print("-{c}", .{ s });
     } else {
