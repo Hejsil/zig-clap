@@ -1,6 +1,6 @@
-const builtin = @import("builtin");
 const std = @import("std");
 
+const builtin = std.builtin;
 const debug = std.debug;
 const heap = std.heap;
 const mem = std.mem;
@@ -70,7 +70,7 @@ pub const OsIterator = struct {
     }
 
     pub fn next(iter: *OsIterator) Error!?[]const u8 {
-        if (builtin.os == builtin.Os.windows) {
+        if (builtin.os.tag == .windows) {
             return try iter.args.next(&iter.arena.allocator) orelse return null;
         } else {
             return iter.args.nextPosix();

@@ -58,7 +58,7 @@ fn readMeStep(b: *Builder) *std.build.Step {
     s.* = std.build.Step.init("ReadMeStep", b.allocator, struct {
         fn make(step: *std.build.Step) anyerror!void {
             @setEvalBranchQuota(10000);
-            const file = try std.fs.File.openWrite("README.md");
+            const file = try std.fs.cwd().createFile("README.md", .{});
             const stream = &file.outStream().stream;
             try stream.print(@embedFile("example/README.md.template"), .{
                 @embedFile("example/simple.zig"),
