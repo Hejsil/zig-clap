@@ -235,8 +235,8 @@ to return errors and take a context as a parameter.
 
 ### `usage`
 
-The `usage`, `usageEx` and `usageFull` are functions for printing a simple list of all parameters the
-program can take.
+The `usage`, `usageEx` and `usageFull` are functions for printing a small abbreviated version
+of the help message.
 
 ```zig
 const std = @import("std");
@@ -265,13 +265,4 @@ pub fn main() !void {
 ```
 [-hv] [--value <N>]
 ```
-
-The `usage` functions are the simplest to call. It only takes an `OutStream` and a slice of
-`Param(Help)`.
-
-The `usageEx` is the generic version of `usage`. It can print a usage message for any
-`Param` give that the caller provides functions for getting the usage and value strings.
-
-The `usageFull` is even more generic, allowing the functions that get the usage and value strings
-to return errors and take a context as a parameter.
 
