@@ -32,6 +32,7 @@ pub fn build(b: *Builder) void {
         "comptime-clap",
         "streaming-clap",
         "help",
+        "usage",
     }) |example_name| {
         const example = b.addExecutable(example_name, "example/" ++ example_name ++ ".zig");
         example.addPackagePath("clap", "clap.zig");
@@ -67,6 +68,7 @@ fn readMeStep(b: *Builder) *std.build.Step {
                 @embedFile("example/comptime-clap.zig"),
                 @embedFile("example/streaming-clap.zig"),
                 @embedFile("example/help.zig"),
+                @embedFile("example/usage.zig"),
             );
         }
     }.make);

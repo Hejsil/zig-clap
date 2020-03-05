@@ -87,3 +87,26 @@ The `helpEx` is the generic version of `help`. It can print a help message for a
 
 The `helpFull` is even more generic, allowing the functions that get the help and value strings
 to return errors and take a context as a parameter.
+
+### `usage`
+
+The `usage`, `usageEx` and `usageFull` are functions for printing a simple list of all parameters the
+program can take.
+
+```zig
+{}
+```
+
+```
+[-hv] [--value <N>]
+```
+
+The `usage` functions are the simplest to call. It only takes an `OutStream` and a slice of
+`Param(Help)`.
+
+The `usageEx` is the generic version of `usage`. It can print a usage message for any
+`Param` give that the caller provides functions for getting the usage and value strings.
+
+The `usageFull` is even more generic, allowing the functions that get the usage and value strings
+to return errors and take a context as a parameter.
+

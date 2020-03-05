@@ -265,25 +265,25 @@ pub fn parse(
 }
 
 /// Will print a help message in the following format:
-///     -s, --long <value_text> help_text
-///     -s,                     help_text
-///     -s <value_text>         help_text
-///         --long              help_text
-///         --long <value_text> help_text
+///     -s, --long <valueText> helpText
+///     -s,                    helpText
+///     -s <valueText>         helpText
+///         --long             helpText
+///         --long <valueText> helpText
 pub fn helpFull(
     stream: var,
     comptime Id: type,
     params: []const Param(Id),
     comptime Error: type,
     context: var,
-    help_text: fn (@typeOf(context), Param(Id)) Error![]const u8,
-    value_text: fn (@typeOf(context), Param(Id)) Error![]const u8,
+    helpText: fn (@typeOf(context), Param(Id)) Error![]const u8,
+    valueText: fn (@typeOf(context), Param(Id)) Error![]const u8,
 ) !void {
     const max_spacing = blk: {
         var res: usize = 0;
         for (params) |param| {
             var counting_stream = io.CountingOutStream(io.NullOutStream.Error).init(io.null_out_stream);
-            try printParam(&counting_stream.stream, Id, param, Error, context, value_text);
+            try printParam(&counting_stream.stream, Id, param, Error, context, valueText);
             if (res < counting_stream.bytes_written)
                 res = counting_stream.bytes_written;
         }
@@ -297,9 +297,9 @@ pub fn helpFull(
 
         var counting_stream = io.CountingOutStream(@typeOf(stream.*).Error).init(stream);
         try stream.print("\t");
-        try printParam(&counting_stream.stream, Id, param, Error, context, value_text);
+        try printParam(&counting_stream.stream, Id, param, Error, context, valueText);
         try stream.writeByteNTimes(' ', max_spacing - counting_stream.bytes_written);
-        try stream.print("\t{}\n", try help_text(context, param));
+        try stream.print("\t{}\n", try helpText(context, param));
     }
 }
 
@@ -309,7 +309,7 @@ fn printParam(
     param: Param(Id),
     comptime Error: type,
     context: var,
-    value_text: fn (@typeOf(context), Param(Id)) Error![]const u8,
+    valueText: fn (@typeOf(context), Param(Id)) Error![]const u8,
 ) @typeOf(stream.*).Error!void {
     if (param.names.short) |s| {
         try stream.print("-{c}", s);
@@ -326,28 +326,28 @@ fn printParam(
         try stream.print("--{}", l);
     }
     if (param.takes_value)
-        try stream.print(" <{}>", value_text(context, param));
+        try stream.print(" <{}>", valueText(context, param));
 }
 
-/// A wrapper around helpFull for simple help_text and value_text functions that
+/// A wrapper around helpFull for simple helpText and valueText functions that
 /// cant return an error or take a context.
 pub fn helpEx(
     stream: var,
     comptime Id: type,
     params: []const Param(Id),
-    help_text: fn (Param(Id)) []const u8,
-    value_text: fn (Param(Id)) []const u8,
+    helpText: fn (Param(Id)) []const u8,
+    valueText: fn (Param(Id)) []const u8,
 ) !void {
     const Context = struct {
-        help_text: fn (Param(Id)) []const u8,
-        value_text: fn (Param(Id)) []const u8,
+        helpText: fn (Param(Id)) []const u8,
+        valueText: fn (Param(Id)) []const u8,
 
         pub fn help(c: @This(), p: Param(Id)) error{}![]const u8 {
-            return c.help_text(p);
+            return c.helpText(p);
         }
 
         pub fn value(c: @This(), p: Param(Id)) error{}![]const u8 {
-            return c.value_text(p);
+            return c.valueText(p);
         }
     };
 
@@ -357,8 +357,8 @@ pub fn helpEx(
         params,
         error{},
         Context{
-            .help_text = help_text,
-            .value_text = value_text,
+            .helpText = helpText,
+            .valueText = valueText,
         },
         Context.help,
         Context.value,
@@ -428,4 +428,155 @@ test "clap.help" {
         debug.warn("{x}\n", actual);
         testing.expect(false);
     }
+}
+
+/// Will print a usage message in the following format:
+/// [-abc] [--longa] [-d <valueText>] [--longb <valueText>] <valueText>
+///
+/// First all none value taking parameters, which have a short name are
+/// printed, then non positional parameters and finally the positinal.
+pub fn usageFull(
+    stream: var,
+    comptime Id: type,
+    params: []const Param(Id),
+    comptime Error: type,
+    context: var,
+    valueText: fn (@typeOf(context), Param(Id)) Error![]const u8,
+) !void {
+    var cs = io.CountingOutStream(@typeOf(stream.*).Error).init(stream);
+    for (params) |param| {
+        const name = param.names.short orelse continue;
+        if (param.takes_value)
+            continue;
+
+        if (cs.bytes_written == 0)
+            try stream.write("[-");
+        try cs.stream.write([_]u8{name});
+    }
+    if (cs.bytes_written != 0)
+        try cs.stream.write("]");
+
+    var positional: ?Param(Id) = null;
+    for (params) |param| {
+        if (!param.takes_value and param.names.short != null)
+            continue;
+
+        const prefix = if (param.names.short) |_| "-" else "--";
+        const name = if (param.names.short) |*s| (*const [1]u8)(s)[0..] else param.names.long orelse {
+            positional = param;
+            continue;
+        };
+        if (cs.bytes_written != 0)
+            try cs.stream.write(" ");
+
+        try cs.stream.print("[{}{}", prefix, name);
+        if (param.takes_value)
+            try cs.stream.print(" <{}>", try valueText(context, param));
+
+        try cs.stream.write("]");
+    }
+
+    if (positional) |p| {
+        if (cs.bytes_written != 0)
+            try cs.stream.write(" ");
+        try cs.stream.print("<{}>", try valueText(context, p));
+    }
+}
+
+/// A wrapper around usageFull for a simple valueText functions that
+/// cant return an error or take a context.
+pub fn usageEx(
+    stream: var,
+    comptime Id: type,
+    params: []const Param(Id),
+    valueText: fn (Param(Id)) []const u8,
+) !void {
+    const Context = struct {
+        valueText: fn (Param(Id)) []const u8,
+
+        pub fn value(c: @This(), p: Param(Id)) error{}![]const u8 {
+            return c.valueText(p);
+        }
+    };
+
+    return usageFull(
+        stream,
+        Id,
+        params,
+        error{},
+        Context{ .valueText = valueText },
+        Context.value,
+    );
+}
+
+/// A wrapper around usageEx that takes a Param(Help).
+pub fn usage(stream: var, params: []const Param(Help)) !void {
+    try usageEx(stream, Help, params, getValueSimple);
+}
+
+fn testUsage(expected: []const u8, params: []const Param(Help)) !void {
+    var buf: [1024]u8 = undefined;
+    var slice_stream = io.SliceOutStream.init(buf[0..]);
+    try usage(&slice_stream.stream, params);
+
+    const actual = slice_stream.getWritten();
+    if (!mem.eql(u8, actual, expected)) {
+        debug.warn("\n============ Expected ============\n");
+        debug.warn("{}\n", expected);
+        debug.warn("============= Actual =============\n");
+        debug.warn("{}\n", actual);
+
+        var buffer: [1024 * 2]u8 = undefined;
+        var fba = std.heap.FixedBufferAllocator.init(&buffer);
+
+        debug.warn("============ Expected (escaped) ============\n");
+        debug.warn("{x}\n", expected);
+        debug.warn("============ Actual (escaped) ============\n");
+        debug.warn("{x}\n", actual);
+        testing.expect(false);
+    }
+}
+
+test "usage" {
+    @setEvalBranchQuota(100000);
+    try testUsage("[-ab]", comptime [_]Param(Help){
+        parseParam("-a") catch unreachable,
+        parseParam("-b") catch unreachable,
+    });
+    try testUsage("[-a <value>] [-b <v>]", comptime [_]Param(Help){
+        parseParam("-a <value>") catch unreachable,
+        parseParam("-b <v>") catch unreachable,
+    });
+    try testUsage("[--a] [--b]", comptime [_]Param(Help){
+        parseParam("--a") catch unreachable,
+        parseParam("--b") catch unreachable,
+    });
+    try testUsage("[--a <value>] [--b <v>]", comptime [_]Param(Help){
+        parseParam("--a <value>") catch unreachable,
+        parseParam("--b <v>") catch unreachable,
+    });
+    try testUsage("<file>", comptime [_]Param(Help){
+        Param(Help){
+            .id = Help{
+                .value = "file",
+            },
+            .takes_value = true,
+        },
+    });
+    try testUsage("[-ab] [-c <value>] [-d <v>] [--e] [--f] [--g <value>] [--h <v>] <file>", comptime [_]Param(Help){
+        parseParam("-a") catch unreachable,
+        parseParam("-b") catch unreachable,
+        parseParam("-c <value>") catch unreachable,
+        parseParam("-d <v>") catch unreachable,
+        parseParam("--e") catch unreachable,
+        parseParam("--f") catch unreachable,
+        parseParam("--g <value>") catch unreachable,
+        parseParam("--h <v>") catch unreachable,
+        Param(Help){
+            .id = Help{
+                .value = "file",
+            },
+            .takes_value = true,
+        },
+    });
 }

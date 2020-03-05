@@ -232,3 +232,46 @@ The `helpEx` is the generic version of `help`. It can print a help message for a
 
 The `helpFull` is even more generic, allowing the functions that get the help and value strings
 to return errors and take a context as a parameter.
+
+### `usage`
+
+The `usage`, `usageEx` and `usageFull` are functions for printing a simple list of all parameters the
+program can take.
+
+```zig
+const std = @import("std");
+const clap = @import("clap");
+
+pub fn main() !void {
+    const stderr_file = try std.io.getStdErr();
+    var stderr_out_stream = stderr_file.outStream();
+    const stderr = &stderr_out_stream.stream;
+
+    // clap.usage is a function that can print a simple usage message, given a
+    // slice of Param(Help). There is also a usageEx, which can print a
+    // usage message for any Param, but it is more verbose to call.
+    try clap.usage(
+        stderr,
+        comptime [_]clap.Param(clap.Help){
+            clap.parseParam("-h, --help       Display this help and exit.         ") catch unreachable,
+            clap.parseParam("-v, --version    Output version information and exit.") catch unreachable,
+            clap.parseParam("    --value <N>  Output version information and exit.") catch unreachable,
+        },
+    );
+}
+
+```
+
+```
+[-hv] [--value <N>]
+```
+
+The `usage` functions are the simplest to call. It only takes an `OutStream` and a slice of
+`Param(Help)`.
+
+The `usageEx` is the generic version of `usage`. It can print a usage message for any
+`Param` give that the caller provides functions for getting the usage and value strings.
+
+The `usageFull` is even more generic, allowing the functions that get the usage and value strings
+to return errors and take a context as a parameter.
+
