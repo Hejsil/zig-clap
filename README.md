@@ -36,7 +36,7 @@ pub fn main() !void {
         },
     };
 
-    var args = try clap.parse(clap.Help, &params, std.heap.direct_allocator);
+    var args = try clap.parse(clap.Help, &params, std.heap.page_allocator);
     defer args.deinit();
 
     if (args.flag("--help"))
@@ -97,7 +97,7 @@ const clap = @import("clap");
 const debug = std.debug;
 
 pub fn main() !void {
-    const allocator = std.heap.direct_allocator;
+    const allocator = std.heap.page_allocator;
 
     // First we specify what parameters our program can take.
     // We can use `parseParam` to parse a string to a `Param(Help)`
@@ -140,7 +140,7 @@ const clap = @import("clap");
 const debug = std.debug;
 
 pub fn main() !void {
-    const allocator = std.heap.direct_allocator;
+    const allocator = std.heap.page_allocator;
 
     // First we specify what parameters our program can take.
     const params = [_]clap.Param(u8){
@@ -203,13 +203,12 @@ const clap = @import("clap");
 pub fn main() !void {
     const stderr_file = std.io.getStdErr();
     var stderr_out_stream = stderr_file.outStream();
-    const stderr = &stderr_out_stream.stream;
 
     // clap.help is a function that can print a simple help message, given a
     // slice of Param(Help). There is also a helpEx, which can print a
     // help message for any Param, but it is more verbose to call.
     try clap.help(
-        stderr,
+        stderr_out_stream,
         comptime &[_]clap.Param(clap.Help){
             clap.parseParam("-h, --help     Display this help and exit.         ") catch unreachable,
             clap.parseParam("-v, --version  Output version information and exit.") catch unreachable,

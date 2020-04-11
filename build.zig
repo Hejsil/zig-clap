@@ -40,7 +40,7 @@ pub fn build(b: *Builder) void {
         example_step.dependOn(&example.step);
     }
 
-    const readme_step = b.step("test", "Remake README.");
+    const readme_step = b.step("readme", "Remake README.");
     const readme = readMeStep(b);
     readme.dependOn(example_step);
     readme_step.dependOn(readme);
