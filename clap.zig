@@ -282,8 +282,8 @@ pub fn helpFull(
     const max_spacing = blk: {
         var res: usize = 0;
         for (params) |param| {
-            var counting_stream = io.CountingOutStream(io.NullOutStream.Error).init(io.null_out_stream);
-            try printParam(&counting_stream.stream, Id, param, Error, context, value_text);
+            var counting_stream = io.countingOutStream(io.null_out_stream);
+            try printParam(&counting_stream.outStream(), Id, param, Error, context, value_text);
             if (res < counting_stream.bytes_written)
                 res = counting_stream.bytes_written;
         }
@@ -295,9 +295,9 @@ pub fn helpFull(
         if (param.names.short == null and param.names.long == null)
             continue;
 
-        var counting_stream = io.CountingOutStream(@TypeOf(stream.*).Error).init(stream);
+        var counting_stream = io.countingOutStream(stream);
         try stream.print("\t", .{});
-        try printParam(&counting_stream.stream, Id, param, Error, context, value_text);
+        try printParam(&counting_stream.outStream(), Id, param, Error, context, value_text);
         try stream.writeByteNTimes(' ', max_spacing - counting_stream.bytes_written);
         try stream.print("\t{}\n", .{ try help_text(context, param) });
     }
@@ -385,9 +385,11 @@ fn getValueSimple(param: Param(Help)) []const u8 {
 
 test "clap.help" {
     var buf: [1024]u8 = undefined;
-    var slice_stream = io.SliceOutStream.init(buf[0..]);
+    var slice_stream = io.fixedBufferStream(&buf);
+
+    @setEvalBranchQuota(10000);
     try help(
-        &slice_stream.stream,
+        slice_stream.outStream(),
         comptime &[_]Param(Help){
             parseParam("-a             Short flag.  ") catch unreachable,
             parseParam("-b <V1>        Short option.") catch unreachable,
