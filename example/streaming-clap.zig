@@ -4,7 +4,7 @@ const clap = @import("clap");
 const debug = std.debug;
 
 pub fn main() !void {
-    const allocator = std.heap.direct_allocator;
+    const allocator = std.heap.page_allocator;
 
     // First we specify what parameters our program can take.
     const params = [_]clap.Param(u8){
