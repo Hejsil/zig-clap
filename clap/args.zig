@@ -33,7 +33,7 @@ pub const SliceIterator = struct {
 };
 
 test "clap.args.SliceIterator" {
-    const args = [_][]const u8{ "A", "BB", "CCC" };
+    const args = &[_][]const u8{ "A", "BB", "CCC" };
     var iter = SliceIterator{ .args = args };
 
     for (args) |a| {
@@ -70,7 +70,7 @@ pub const OsIterator = struct {
     }
 
     pub fn next(iter: *OsIterator) Error!?[]const u8 {
-        if (builtin.os == builtin.Os.windows) {
+        if (builtin.os.tag == .windows) {
             return try iter.args.next(&iter.arena.allocator) orelse return null;
         } else {
             return iter.args.nextPosix();

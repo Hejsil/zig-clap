@@ -170,7 +170,7 @@ fn testNoErr(params: []const clap.Param(u8), args_strings: []const []const u8, r
         const arg = (c.next() catch unreachable) orelse unreachable;
         testing.expectEqual(res.param, arg.param);
         const expected_value = res.value orelse {
-            testing.expectEqual(@typeOf(arg.value)(null), arg.value);
+            testing.expectEqual(@as(@TypeOf(arg.value), null), arg.value);
             continue;
         };
         const actual_value = arg.value orelse unreachable;
@@ -203,13 +203,13 @@ test "clap.streaming.StreamingClap: short params" {
     const c = &params[2];
 
     testNoErr(
-        params,
-        [_][]const u8{
+        &params,
+        &[_][]const u8{
             "-a", "-b",    "-ab",  "-ba",
             "-c", "0",     "-c=0", "-ac",
             "0",  "-ac=0",
         },
-        [_]Arg(u8){
+        &[_]Arg(u8){
             Arg(u8){ .param = a },
             Arg(u8){ .param = b },
             Arg(u8){ .param = a },
@@ -248,13 +248,13 @@ test "clap.streaming.StreamingClap: long params" {
     const cc = &params[2];
 
     testNoErr(
-        params,
-        [_][]const u8{
+        &params,
+        &[_][]const u8{
             "--aa",   "--bb",
             "--cc",   "0",
             "--cc=0",
         },
-        [_]Arg(u8){
+        &[_]Arg(u8){
             Arg(u8){ .param = aa },
             Arg(u8){ .param = bb },
             Arg(u8){ .param = cc, .value = "0" },
@@ -270,9 +270,9 @@ test "clap.streaming.StreamingClap: positional params" {
     }};
 
     testNoErr(
-        params,
-        [_][]const u8{ "aa", "bb" },
-        [_]Arg(u8){
+        &params,
+        &[_][]const u8{ "aa", "bb" },
+        &[_]Arg(u8){
             Arg(u8){ .param = &params[0], .value = "aa" },
             Arg(u8){ .param = &params[0], .value = "bb" },
         },
@@ -315,15 +315,15 @@ test "clap.streaming.StreamingClap: all params" {
     const positional = &params[3];
 
     testNoErr(
-        params,
-        [_][]const u8{
+        &params,
+        &[_][]const u8{
             "-a",   "-b",    "-ab",    "-ba",
             "-c",   "0",     "-c=0",   "-ac",
             "0",    "-ac=0", "--aa",   "--bb",
             "--cc", "0",     "--cc=0", "something",
             "--",   "-",
         },
-        [_]Arg(u8){
+        &[_]Arg(u8){
             Arg(u8){ .param = aa },
             Arg(u8){ .param = bb },
             Arg(u8){ .param = aa },

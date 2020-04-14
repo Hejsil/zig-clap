@@ -36,15 +36,15 @@ pub fn main() !void {
         },
     };
 
-    var args = try clap.parse(clap.Help, params, std.heap.direct_allocator);
+    var args = try clap.parse(clap.Help, &params, std.heap.page_allocator);
     defer args.deinit();
 
     if (args.flag("--help"))
-        debug.warn("--help\n");
+        debug.warn("--help\n", .{});
     if (args.option("--number")) |n|
-        debug.warn("--number = {}\n", n);
+        debug.warn("--number = {}\n", .{n});
     for (args.positionals()) |pos|
-        debug.warn("{}\n", pos);
+        debug.warn("{}\n", .{pos});
 }
 
 ```
@@ -97,7 +97,7 @@ const clap = @import("clap");
 const debug = std.debug;
 
 pub fn main() !void {
-    const allocator = std.heap.direct_allocator;
+    const allocator = std.heap.page_allocator;
 
     // First we specify what parameters our program can take.
     // We can use `parseParam` to parse a string to a `Param(Help)`
@@ -115,15 +115,15 @@ pub fn main() !void {
     defer iter.deinit();
 
     // Parse the arguments
-    var args = try clap.ComptimeClap(clap.Help, params).parse(allocator, clap.args.OsIterator, &iter);
+    var args = try clap.ComptimeClap(clap.Help, &params).parse(allocator, clap.args.OsIterator, &iter);
     defer args.deinit();
 
     if (args.flag("--help"))
-        debug.warn("--help\n");
+        debug.warn("--help\n", .{});
     if (args.option("--number")) |n|
-        debug.warn("--number = {}\n", n);
+        debug.warn("--number = {}\n", .{n});
     for (args.positionals()) |pos|
-        debug.warn("{}\n", pos);
+        debug.warn("{}\n", .{pos});
 }
 
 ```
@@ -140,7 +140,7 @@ const clap = @import("clap");
 const debug = std.debug;
 
 pub fn main() !void {
-    const allocator = std.heap.direct_allocator;
+    const allocator = std.heap.page_allocator;
 
     // First we specify what parameters our program can take.
     const params = [_]clap.Param(u8){
@@ -166,7 +166,7 @@ pub fn main() !void {
 
     // Initialize our streaming parser.
     var parser = clap.StreamingClap(u8, clap.args.OsIterator){
-        .params = params,
+        .params = &params,
         .iter = &iter,
     };
 
@@ -174,13 +174,13 @@ pub fn main() !void {
     while (try parser.next()) |arg| {
         // arg.param will point to the parameter which matched the argument.
         switch (arg.param.id) {
-            'h' => debug.warn("Help!\n"),
-            'n' => debug.warn("--number = {}\n", arg.value.?),
+            'h' => debug.warn("Help!\n", .{}),
+            'n' => debug.warn("--number = {}\n", .{arg.value.?}),
 
             // arg.value == null, if arg.param.takes_value == false.
             // Otherwise, arg.value is the value passed with the argument, such as "-a=10"
             // or "-a 10".
-            'f' => debug.warn("{}\n", arg.value.?),
+            'f' => debug.warn("{}\n", .{arg.value.?}),
             else => unreachable,
         }
     }
@@ -201,16 +201,14 @@ const std = @import("std");
 const clap = @import("clap");
 
 pub fn main() !void {
-    const stderr_file = try std.io.getStdErr();
-    var stderr_out_stream = stderr_file.outStream();
-    const stderr = &stderr_out_stream.stream;
+    const stderr = std.io.getStdErr().outStream();
 
     // clap.help is a function that can print a simple help message, given a
     // slice of Param(Help). There is also a helpEx, which can print a
     // help message for any Param, but it is more verbose to call.
     try clap.help(
         stderr,
-        comptime [_]clap.Param(clap.Help){
+        comptime &[_]clap.Param(clap.Help){
             clap.parseParam("-h, --help     Display this help and exit.         ") catch unreachable,
             clap.parseParam("-v, --version  Output version information and exit.") catch unreachable,
         },
@@ -243,18 +241,28 @@ const std = @import("std");
 const clap = @import("clap");
 
 pub fn main() !void {
-    const stderr_file = try std.io.getStdErr();
-    var stderr_out_stream = stderr_file.outStream();
-    const stderr = &stderr_out_stream.stream;
+    const stderr = std.io.getStdErr().outStream();
 
     // clap.usage is a function that can print a simple usage message, given a
     // slice of Param(Help). There is also a usageEx, which can print a
     // usage message for any Param, but it is more verbose to call.
     try clap.usage(
         stderr,
-        comptime [_]clap.Param(clap.Help){
+        comptime &[_]clap.Param(clap.Help){
             clap.parseParam("-h, --help       Display this help and exit.         ") catch unreachable,
             clap.parseParam("-v, --version    Output version information and exit.") catch unreachable,
+            clap.parseParam("    --value <N>  Output version information and exit.") catch unreachable,
+        },
+    );
+}
+
+```
+
+```
+[-hv] [--value <N>]
+```
+
+
             clap.parseParam("    --value <N>  Output version information and exit.") catch unreachable,
         },
     );

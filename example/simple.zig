@@ -14,13 +14,13 @@ pub fn main() !void {
         },
     };
 
-    var args = try clap.parse(clap.Help, params, std.heap.direct_allocator);
+    var args = try clap.parse(clap.Help, &params, std.heap.page_allocator);
     defer args.deinit();
 
     if (args.flag("--help"))
-        debug.warn("--help\n");
+        debug.warn("--help\n", .{});
     if (args.option("--number")) |n|
-        debug.warn("--number = {}\n", n);
+        debug.warn("--number = {}\n", .{n});
     for (args.positionals()) |pos|
-        debug.warn("{}\n", pos);
+        debug.warn("{}\n", .{pos});
 }

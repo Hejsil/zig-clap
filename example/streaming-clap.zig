@@ -4,7 +4,7 @@ const clap = @import("clap");
 const debug = std.debug;
 
 pub fn main() !void {
-    const allocator = std.heap.direct_allocator;
+    const allocator = std.heap.page_allocator;
 
     // First we specify what parameters our program can take.
     const params = [_]clap.Param(u8){
@@ -30,7 +30,7 @@ pub fn main() !void {
 
     // Initialize our streaming parser.
     var parser = clap.StreamingClap(u8, clap.args.OsIterator){
-        .params = params,
+        .params = &params,
         .iter = &iter,
     };
 
@@ -38,13 +38,13 @@ pub fn main() !void {
     while (try parser.next()) |arg| {
         // arg.param will point to the parameter which matched the argument.
         switch (arg.param.id) {
-            'h' => debug.warn("Help!\n"),
-            'n' => debug.warn("--number = {}\n", arg.value.?),
+            'h' => debug.warn("Help!\n", .{}),
+            'n' => debug.warn("--number = {}\n", .{arg.value.?}),
 
             // arg.value == null, if arg.param.takes_value == false.
             // Otherwise, arg.value is the value passed with the argument, such as "-a=10"
             // or "-a 10".
-            'f' => debug.warn("{}\n", arg.value.?),
+            'f' => debug.warn("{}\n", .{arg.value.?}),
             else => unreachable,
         }
     }

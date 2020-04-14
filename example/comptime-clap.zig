@@ -4,7 +4,7 @@ const clap = @import("clap");
 const debug = std.debug;
 
 pub fn main() !void {
-    const allocator = std.heap.direct_allocator;
+    const allocator = std.heap.page_allocator;
 
     // First we specify what parameters our program can take.
     // We can use `parseParam` to parse a string to a `Param(Help)`
@@ -22,13 +22,13 @@ pub fn main() !void {
     defer iter.deinit();
 
     // Parse the arguments
-    var args = try clap.ComptimeClap(clap.Help, params).parse(allocator, clap.args.OsIterator, &iter);
+    var args = try clap.ComptimeClap(clap.Help, &params).parse(allocator, clap.args.OsIterator, &iter);
     defer args.deinit();
 
     if (args.flag("--help"))
-        debug.warn("--help\n");
+        debug.warn("--help\n", .{});
     if (args.option("--number")) |n|
-        debug.warn("--number = {}\n", n);
+        debug.warn("--number = {}\n", .{n});
     for (args.positionals()) |pos|
-        debug.warn("{}\n", pos);
+        debug.warn("{}\n", .{pos});
 }

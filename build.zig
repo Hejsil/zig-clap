@@ -7,7 +7,7 @@ const Builder = std.build.Builder;
 pub fn build(b: *Builder) void {
     const mode = b.standardReleaseOptions();
 
-    const fmt_step = b.addFmt([_][]const u8{
+    const fmt_step = b.addFmt(&[_][]const u8{
         "build.zig",
         "clap",
     });
@@ -59,17 +59,16 @@ fn readMeStep(b: *Builder) *std.build.Step {
     s.* = std.build.Step.init("ReadMeStep", b.allocator, struct {
         fn make(step: *std.build.Step) anyerror!void {
             @setEvalBranchQuota(10000);
-            const file = try std.fs.File.openWrite("README.md");
-            const stream = &file.outStream().stream;
-            try stream.print(
-                @embedFile("example/README.md.template"),
+            const file = try std.fs.cwd().openFile("README.md", .{ .write = true });
+            const stream = file.outStream();
+            try stream.print(@embedFile("example/README.md.template"), .{
                 @embedFile("example/simple.zig"),
                 @embedFile("example/simple-error.zig"),
                 @embedFile("example/comptime-clap.zig"),
                 @embedFile("example/streaming-clap.zig"),
                 @embedFile("example/help.zig"),
                 @embedFile("example/usage.zig"),
-            );
+            });
         }
     }.make);
     return s;

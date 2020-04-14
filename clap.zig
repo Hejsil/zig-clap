@@ -60,7 +60,8 @@ pub fn parseParam(line: []const u8) !Param(Help) {
     var res = Param(Help){
         .id = Help{
             .msg = line[0..0],
-            .value = line[0..0],
+            // see zig issue #4771
+            .value = &[0]u8{},
         },
     };
 
@@ -162,7 +163,7 @@ test "parseParam" {
     testing.expectEqual(Param(Help){
         .id = Help{
             .msg = find(text, "Help text"),
-            .value = text[0..0],
+            .value = &[0]u8{},
         },
         .names = Names{
             .short = 's',
@@ -175,7 +176,7 @@ test "parseParam" {
     testing.expectEqual(Param(Help){
         .id = Help{
             .msg = find(text, "Help text"),
-            .value = text[0..0],
+            .value = &[0]u8{},
         },
         .names = Names{
             .short = 's',
@@ -188,7 +189,7 @@ test "parseParam" {
     testing.expectEqual(Param(Help){
         .id = Help{
             .msg = find(text, "Help text"),
-            .value = text[0..0],
+            .value = &[0]u8{},
         },
         .names = Names{
             .short = null,
@@ -276,14 +277,14 @@ pub fn helpFull(
     params: []const Param(Id),
     comptime Error: type,
     context: var,
-    helpText: fn (@typeOf(context), Param(Id)) Error![]const u8,
-    valueText: fn (@typeOf(context), Param(Id)) Error![]const u8,
+    helpText: fn (@TypeOf(context), Param(Id)) Error![]const u8,
+    valueText: fn (@TypeOf(context), Param(Id)) Error![]const u8,
 ) !void {
     const max_spacing = blk: {
         var res: usize = 0;
         for (params) |param| {
-            var counting_stream = io.CountingOutStream(io.NullOutStream.Error).init(io.null_out_stream);
-            try printParam(&counting_stream.stream, Id, param, Error, context, valueText);
+            var counting_stream = io.countingOutStream(io.null_out_stream);
+            try printParam(counting_stream.outStream(), Id, param, Error, context, valueText);
             if (res < counting_stream.bytes_written)
                 res = counting_stream.bytes_written;
         }
@@ -295,11 +296,11 @@ pub fn helpFull(
         if (param.names.short == null and param.names.long == null)
             continue;
 
-        var counting_stream = io.CountingOutStream(@typeOf(stream.*).Error).init(stream);
-        try stream.print("\t");
-        try printParam(&counting_stream.stream, Id, param, Error, context, valueText);
+        var counting_stream = io.countingOutStream(stream);
+        try stream.print("\t", .{});
+        try printParam(counting_stream.outStream(), Id, param, Error, context, valueText);
         try stream.writeByteNTimes(' ', max_spacing - counting_stream.bytes_written);
-        try stream.print("\t{}\n", try helpText(context, param));
+        try stream.print("\t{}\n", .{try helpText(context, param)});
     }
 }
 
@@ -309,24 +310,24 @@ fn printParam(
     param: Param(Id),
     comptime Error: type,
     context: var,
-    valueText: fn (@typeOf(context), Param(Id)) Error![]const u8,
-) @typeOf(stream.*).Error!void {
+    valueText: fn (@TypeOf(context), Param(Id)) Error![]const u8,
+) @TypeOf(stream).Error!void {
     if (param.names.short) |s| {
-        try stream.print("-{c}", s);
+        try stream.print("-{c}", .{s});
     } else {
-        try stream.print("  ");
+        try stream.print("  ", .{});
     }
     if (param.names.long) |l| {
         if (param.names.short) |_| {
-            try stream.print(", ");
+            try stream.print(", ", .{});
         } else {
-            try stream.print("  ");
+            try stream.print("  ", .{});
         }
 
-        try stream.print("--{}", l);
+        try stream.print("--{}", .{l});
     }
     if (param.takes_value)
-        try stream.print(" <{}>", valueText(context, param));
+        try stream.print(" <{}>", .{valueText(context, param)});
 }
 
 /// A wrapper around helpFull for simple helpText and valueText functions that
@@ -385,10 +386,11 @@ fn getValueSimple(param: Param(Help)) []const u8 {
 
 test "clap.help" {
     var buf: [1024]u8 = undefined;
-    var slice_stream = io.SliceOutStream.init(buf[0..]);
+    var slice_stream = io.fixedBufferStream(buf[0..]);
+    @setEvalBranchQuota(10000);
     try help(
-        &slice_stream.stream,
-        comptime [_]Param(Help){
+        slice_stream.outStream(),
+        comptime &[_]Param(Help){
             parseParam("-a             Short flag.  ") catch unreachable,
             parseParam("-b <V1>        Short option.") catch unreachable,
             parseParam("--aa           Long flag.   ") catch unreachable,
@@ -414,18 +416,18 @@ test "clap.help" {
 
     const actual = slice_stream.getWritten();
     if (!mem.eql(u8, actual, expected)) {
-        debug.warn("\n============ Expected ============\n");
-        debug.warn("{}", expected);
-        debug.warn("============= Actual =============\n");
-        debug.warn("{}", actual);
+        debug.warn("\n============ Expected ============\n", .{});
+        debug.warn("{}", .{expected});
+        debug.warn("============= Actual =============\n", .{});
+        debug.warn("{}", .{actual});
 
         var buffer: [1024 * 2]u8 = undefined;
         var fba = std.heap.FixedBufferAllocator.init(&buffer);
 
-        debug.warn("============ Expected (escaped) ============\n");
-        debug.warn("{x}\n", expected);
-        debug.warn("============ Actual (escaped) ============\n");
-        debug.warn("{x}\n", actual);
+        debug.warn("============ Expected (escaped) ============\n", .{});
+        debug.warn("{x}\n", .{expected});
+        debug.warn("============ Actual (escaped) ============\n", .{});
+        debug.warn("{x}\n", .{actual});
         testing.expect(false);
     }
 }
@@ -441,20 +443,20 @@ pub fn usageFull(
     params: []const Param(Id),
     comptime Error: type,
     context: var,
-    valueText: fn (@typeOf(context), Param(Id)) Error![]const u8,
+    valueText: fn (@TypeOf(context), Param(Id)) Error![]const u8,
 ) !void {
-    var cs = io.CountingOutStream(@typeOf(stream.*).Error).init(stream);
+    var cs = io.countingOutStream(stream);
     for (params) |param| {
         const name = param.names.short orelse continue;
         if (param.takes_value)
             continue;
 
         if (cs.bytes_written == 0)
-            try stream.write("[-");
-        try cs.stream.write([_]u8{name});
+            try stream.writeAll("[-");
+        try cs.outStream().writeAll(&[_]u8{name});
     }
     if (cs.bytes_written != 0)
-        try cs.stream.write("]");
+        try cs.outStream().writeAll("]");
 
     var positional: ?Param(Id) = null;
     for (params) |param| {
@@ -462,24 +464,24 @@ pub fn usageFull(
             continue;
 
         const prefix = if (param.names.short) |_| "-" else "--";
-        const name = if (param.names.short) |*s| (*const [1]u8)(s)[0..] else param.names.long orelse {
+        const name = if (param.names.short) |*s| @as(*const [1]u8, s)[0..] else param.names.long orelse {
             positional = param;
             continue;
         };
         if (cs.bytes_written != 0)
-            try cs.stream.write(" ");
+            try cs.outStream().writeAll(" ");
 
-        try cs.stream.print("[{}{}", prefix, name);
+        try cs.outStream().print("[{}{}", .{ prefix, name });
         if (param.takes_value)
-            try cs.stream.print(" <{}>", try valueText(context, param));
+            try cs.outStream().print(" <{}>", .{try valueText(context, param)});
 
-        try cs.stream.write("]");
+        try cs.outStream().writeAll("]");
     }
 
     if (positional) |p| {
         if (cs.bytes_written != 0)
-            try cs.stream.write(" ");
-        try cs.stream.print("<{}>", try valueText(context, p));
+            try cs.outStream().writeAll(" ");
+        try cs.outStream().print("<{}>", .{try valueText(context, p)});
     }
 }
 
@@ -516,46 +518,46 @@ pub fn usage(stream: var, params: []const Param(Help)) !void {
 
 fn testUsage(expected: []const u8, params: []const Param(Help)) !void {
     var buf: [1024]u8 = undefined;
-    var slice_stream = io.SliceOutStream.init(buf[0..]);
-    try usage(&slice_stream.stream, params);
+    var slice_stream = io.fixedBufferStream(buf[0..]);
+    try usage(slice_stream.outStream(), params);
 
     const actual = slice_stream.getWritten();
     if (!mem.eql(u8, actual, expected)) {
-        debug.warn("\n============ Expected ============\n");
-        debug.warn("{}\n", expected);
-        debug.warn("============= Actual =============\n");
-        debug.warn("{}\n", actual);
+        debug.warn("\n============ Expected ============\n", .{});
+        debug.warn("{}\n", .{expected});
+        debug.warn("============= Actual =============\n", .{});
+        debug.warn("{}\n", .{actual});
 
         var buffer: [1024 * 2]u8 = undefined;
         var fba = std.heap.FixedBufferAllocator.init(&buffer);
 
-        debug.warn("============ Expected (escaped) ============\n");
-        debug.warn("{x}\n", expected);
-        debug.warn("============ Actual (escaped) ============\n");
-        debug.warn("{x}\n", actual);
+        debug.warn("============ Expected (escaped) ============\n", .{});
+        debug.warn("{x}\n", .{expected});
+        debug.warn("============ Actual (escaped) ============\n", .{});
+        debug.warn("{x}\n", .{actual});
         testing.expect(false);
     }
 }
 
 test "usage" {
     @setEvalBranchQuota(100000);
-    try testUsage("[-ab]", comptime [_]Param(Help){
+    try testUsage("[-ab]", comptime &[_]Param(Help){
         parseParam("-a") catch unreachable,
         parseParam("-b") catch unreachable,
     });
-    try testUsage("[-a <value>] [-b <v>]", comptime [_]Param(Help){
+    try testUsage("[-a <value>] [-b <v>]", comptime &[_]Param(Help){
         parseParam("-a <value>") catch unreachable,
         parseParam("-b <v>") catch unreachable,
     });
-    try testUsage("[--a] [--b]", comptime [_]Param(Help){
+    try testUsage("[--a] [--b]", comptime &[_]Param(Help){
         parseParam("--a") catch unreachable,
         parseParam("--b") catch unreachable,
     });
-    try testUsage("[--a <value>] [--b <v>]", comptime [_]Param(Help){
+    try testUsage("[--a <value>] [--b <v>]", comptime &[_]Param(Help){
         parseParam("--a <value>") catch unreachable,
         parseParam("--b <v>") catch unreachable,
     });
-    try testUsage("<file>", comptime [_]Param(Help){
+    try testUsage("<file>", comptime &[_]Param(Help){
         Param(Help){
             .id = Help{
                 .value = "file",
@@ -563,7 +565,7 @@ test "usage" {
             .takes_value = true,
         },
     });
-    try testUsage("[-ab] [-c <value>] [-d <v>] [--e] [--f] [--g <value>] [--h <v>] <file>", comptime [_]Param(Help){
+    try testUsage("[-ab] [-c <value>] [-d <v>] [--e] [--f] [--g <value>] [--h <v>] <file>", comptime &[_]Param(Help){
         parseParam("-a") catch unreachable,
         parseParam("-b") catch unreachable,
         parseParam("-c <value>") catch unreachable,
