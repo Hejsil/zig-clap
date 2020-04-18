@@ -2,6 +2,10 @@
 
 A simple and easy to use command line argument parser library for Zig.
 
+Looking for a version that works with `zig master`? The `zig-master` branch has
+you covered. It is maintained by people who live at head (not me) and is merged
+into master on every `zig` release.
+
 ## Features
 
 * Short arguments `-a`
@@ -231,3 +235,35 @@ The `helpEx` is the generic version of `help`. It can print a help message for a
 
 The `helpFull` is even more generic, allowing the functions that get the help and value strings
 to return errors and take a context as a parameter.
+
+### `usage`
+
+The `usage`, `usageEx` and `usageFull` are functions for printing a small abbreviated version
+of the help message.
+
+```zig
+const std = @import("std");
+const clap = @import("clap");
+
+pub fn main() !void {
+    const stderr = std.io.getStdErr().outStream();
+
+    // clap.usage is a function that can print a simple usage message, given a
+    // slice of Param(Help). There is also a usageEx, which can print a
+    // usage message for any Param, but it is more verbose to call.
+    try clap.usage(
+        stderr,
+        comptime &[_]clap.Param(clap.Help){
+            clap.parseParam("-h, --help       Display this help and exit.         ") catch unreachable,
+            clap.parseParam("-v, --version    Output version information and exit.") catch unreachable,
+            clap.parseParam("    --value <N>  Output version information and exit.") catch unreachable,
+        },
+    );
+}
+
+```
+
+```
+[-hv] [--value <N>]
+```
+
