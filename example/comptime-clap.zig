@@ -28,7 +28,7 @@ pub fn main() !void {
     if (args.flag("--help"))
         debug.warn("--help\n", .{});
     if (args.option("--number")) |n|
-        debug.warn("--number = {}\n", .{ n });
+        debug.warn("--number = {}\n", .{n});
     for (args.positionals()) |pos|
-        debug.warn("{}\n", .{ pos });
+        debug.warn("{}\n", .{pos});
 }

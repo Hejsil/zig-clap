@@ -9,7 +9,9 @@ pub fn build(b: *Builder) void {
 
     const fmt_step = b.addFmt(&[_][]const u8{
         "build.zig",
+        "clap.zig",
         "clap",
+        "example",
     });
 
     const test_all_step = b.step("test", "Run all tests in all modes.");
@@ -51,6 +53,7 @@ pub fn build(b: *Builder) void {
     all_step.dependOn(example_step);
     all_step.dependOn(readme_step);
 
+    b.default_step.dependOn(&fmt_step.step);
     b.default_step.dependOn(all_step);
 }
 
