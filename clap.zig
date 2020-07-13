@@ -276,11 +276,11 @@ pub fn parse(
 ///         --long             helpText
 ///         --long <valueText> helpText
 pub fn helpFull(
-    stream: var,
+    stream: anytype,
     comptime Id: type,
     params: []const Param(Id),
     comptime Error: type,
-    context: var,
+    context: anytype,
     helpText: fn (@TypeOf(context), Param(Id)) Error![]const u8,
     valueText: fn (@TypeOf(context), Param(Id)) Error![]const u8,
 ) !void {
@@ -309,11 +309,11 @@ pub fn helpFull(
 }
 
 fn printParam(
-    stream: var,
+    stream: anytype,
     comptime Id: type,
     param: Param(Id),
     comptime Error: type,
-    context: var,
+    context: anytype,
     valueText: fn (@TypeOf(context), Param(Id)) Error![]const u8,
 ) !void {
     if (param.names.short) |s| {
@@ -337,7 +337,7 @@ fn printParam(
 /// A wrapper around helpFull for simple helpText and valueText functions that
 /// cant return an error or take a context.
 pub fn helpEx(
-    stream: var,
+    stream: anytype,
     comptime Id: type,
     params: []const Param(Id),
     helpText: fn (Param(Id)) []const u8,
@@ -376,7 +376,7 @@ pub const Help = struct {
 };
 
 /// A wrapper around helpEx that takes a Param(Help).
-pub fn help(stream: var, params: []const Param(Help)) !void {
+pub fn help(stream: anytype, params: []const Param(Help)) !void {
     try helpEx(stream, Help, params, getHelpSimple, getValueSimple);
 }
 
@@ -443,11 +443,11 @@ test "clap.help" {
 /// First all none value taking parameters, which have a short name are
 /// printed, then non positional parameters and finally the positinal.
 pub fn usageFull(
-    stream: var,
+    stream: anytype,
     comptime Id: type,
     params: []const Param(Id),
     comptime Error: type,
-    context: var,
+    context: anytype,
     valueText: fn (@TypeOf(context), Param(Id)) Error![]const u8,
 ) !void {
     var cos = io.countingOutStream(stream);
@@ -497,7 +497,7 @@ pub fn usageFull(
 /// A wrapper around usageFull for a simple valueText functions that
 /// cant return an error or take a context.
 pub fn usageEx(
-    stream: var,
+    stream: anytype,
     comptime Id: type,
     params: []const Param(Id),
     valueText: fn (Param(Id)) []const u8,
@@ -521,7 +521,7 @@ pub fn usageEx(
 }
 
 /// A wrapper around usageEx that takes a Param(Help).
-pub fn usage(stream: var, params: []const Param(Help)) !void {
+pub fn usage(stream: anytype, params: []const Param(Help)) !void {
     try usageEx(stream, Help, params, getValueSimple);
 }
 
