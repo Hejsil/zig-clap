@@ -290,7 +290,7 @@ pub fn helpFull(
             var counting_stream = io.countingOutStream(io.null_out_stream);
             try printParam(counting_stream.outStream(), Id, param, Error, context, valueText);
             if (res < counting_stream.bytes_written)
-                res = counting_stream.bytes_written;
+                res = @intCast(usize, counting_stream.bytes_written);
         }
 
         break :blk res;
@@ -303,7 +303,7 @@ pub fn helpFull(
         var counting_stream = io.countingOutStream(stream);
         try stream.print("\t", .{});
         try printParam(counting_stream.outStream(), Id, param, Error, context, valueText);
-        try stream.writeByteNTimes(' ', max_spacing - counting_stream.bytes_written);
+        try stream.writeByteNTimes(' ', max_spacing - @intCast(usize, counting_stream.bytes_written));
         try stream.print("\t{}\n", .{try helpText(context, param)});
     }
 }

@@ -46,9 +46,9 @@ pub fn main() !void {
     if (args.flag("--help"))
         debug.warn("--help\n", .{});
     if (args.option("--number")) |n|
-        debug.warn("--number = {}\n", .{ n });
+        debug.warn("--number = {}\n", .{n});
     for (args.positionals()) |pos|
-        debug.warn("{}\n", .{ pos });
+        debug.warn("{}\n", .{pos});
 }
 
 ```
@@ -125,9 +125,9 @@ pub fn main() !void {
     if (args.flag("--help"))
         debug.warn("--help\n", .{});
     if (args.option("--number")) |n|
-        debug.warn("--number = {}\n", .{ n });
+        debug.warn("--number = {}\n", .{n});
     for (args.positionals()) |pos|
-        debug.warn("{}\n", .{ pos });
+        debug.warn("{}\n", .{pos});
 }
 
 ```
@@ -179,12 +179,12 @@ pub fn main() !void {
         // arg.param will point to the parameter which matched the argument.
         switch (arg.param.id) {
             'h' => debug.warn("Help!\n", .{}),
-            'n' => debug.warn("--number = {}\n", .{ arg.value.? }),
+            'n' => debug.warn("--number = {}\n", .{arg.value.?}),
 
             // arg.value == null, if arg.param.takes_value == false.
             // Otherwise, arg.value is the value passed with the argument, such as "-a=10"
             // or "-a 10".
-            'f' => debug.warn("{}\n", .{ arg.value.? }),
+            'f' => debug.warn("{}\n", .{arg.value.?}),
             else => unreachable,
         }
     }
