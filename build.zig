@@ -59,7 +59,7 @@ pub fn build(b: *Builder) void {
 
 fn readMeStep(b: *Builder) *std.build.Step {
     const s = b.allocator.create(std.build.Step) catch unreachable;
-    s.* = std.build.Step.init("ReadMeStep", b.allocator, struct {
+    s.* = std.build.Step.init(.Custom, "ReadMeStep", b.allocator, struct {
         fn make(step: *std.build.Step) anyerror!void {
             @setEvalBranchQuota(10000);
             const file = try std.fs.cwd().createFile("README.md", .{});
