@@ -27,7 +27,7 @@ pub fn ComptimeClap(comptime Id: type, comptime params: []const clap.Param(Id)) 
     }
 
     return struct {
-        options: [options]?[]const u8,
+        options: [options]std.ArrayList([]const u8),
         flags: [flags]bool,
         pos: []const []const u8,
         allocator: *mem.Allocator,
@@ -35,11 +35,14 @@ pub fn ComptimeClap(comptime Id: type, comptime params: []const clap.Param(Id)) 
         pub fn parse(allocator: *mem.Allocator, comptime ArgIter: type, iter: *ArgIter) !@This() {
             var pos = std.ArrayList([]const u8).init(allocator);
             var res = @This(){
-                .options = [_]?[]const u8{null} ** options,
+                .options = [_]std.ArrayList([]const u8){undefined} ** options,
                 .flags = [_]bool{false} ** flags,
                 .pos = undefined,
                 .allocator = allocator,
             };
+            for (res.options) |*init_opt| {
+                init_opt.* = std.ArrayList([]const u8).init(allocator);
+            }
 
             var stream = clap.StreamingClap(usize, ArgIter){
                 .params = converted_params,
@@ -56,7 +59,7 @@ pub fn ComptimeClap(comptime Id: type, comptime params: []const clap.Param(Id)) 
 
                     // Hack: Utilize Zigs lazy analyzis to avoid a compiler error
                     if (res.options.len != 0)
-                        res.options[param.id] = arg.value.?;
+                        try res.options[param.id].append(arg.value.?);
                 } else {
                     debug.assert(res.flags.len != 0);
                     if (res.flags.len != 0)
@@ -69,6 +72,8 @@ pub fn ComptimeClap(comptime Id: type, comptime params: []const clap.Param(Id)) 
         }
 
         pub fn deinit(parser: *@This()) void {
+            for (parser.options) |o|
+                o.deinit();
             parser.allocator.free(parser.pos);
             parser.* = undefined;
         }
@@ -81,12 +86,17 @@ pub fn ComptimeClap(comptime Id: type, comptime params: []const clap.Param(Id)) 
             return parser.flags[param.id];
         }
 
-        pub fn option(parser: @This(), comptime name: []const u8) ?[]const u8 {
+        pub fn allOptions(parser: @This(), comptime name: []const u8) [][]const u8 {
             const param = comptime findParam(name);
             if (!param.takes_value)
                 @compileError(name ++ " is a flag and not an option.");
 
-            return parser.options[param.id];
+            return parser.options[param.id].items;
+        }
+
+        pub fn option(parser: @This(), comptime name: []const u8) ?[]const u8 {
+            const items = parser.allOptions(name);
+            return if (items.len > 0) items[0] else null;
         }
 
         pub fn positionals(parser: @This()) []const []const u8 {
@@ -117,6 +127,7 @@ test "clap.comptime.ComptimeClap" {
         clap.parseParam("-a, --aa    ") catch unreachable,
         clap.parseParam("-b, --bb    ") catch unreachable,
         clap.parseParam("-c, --cc <V>") catch unreachable,
+        clap.parseParam("-d, --dd <V>") catch unreachable,
         clap.Param(clap.Help){
             .takes_value = true,
         },
@@ -126,7 +137,7 @@ test "clap.comptime.ComptimeClap" {
     var fb_allocator = heap.FixedBufferAllocator.init(buf[0..]);
     var iter = clap.args.SliceIterator{
         .args = &[_][]const u8{
-            "-a", "-c", "0", "something",
+            "-a", "-c", "0", "something", "-d", "a", "--dd", "b",
         },
     };
     var args = try Clap.parse(&fb_allocator.allocator, clap.args.SliceIterator, &iter);
@@ -136,8 +147,10 @@ test "clap.comptime.ComptimeClap" {
     testing.expect(args.flag("--aa"));
     testing.expect(!args.flag("-b"));
     testing.expect(!args.flag("--bb"));
-    testing.expectEqualSlices(u8, "0", args.option("-c").?);
-    testing.expectEqualSlices(u8, "0", args.option("--cc").?);
+    testing.expectEqualStrings("0", args.option("-c").?);
+    testing.expectEqualStrings("0", args.option("--cc").?);
     testing.expectEqual(@as(usize, 1), args.positionals().len);
-    testing.expectEqualSlices(u8, "something", args.positionals()[0]);
+    testing.expectEqualStrings("something", args.positionals()[0]);
+    testing.expectEqualStrings("a", args.option("-d").?);
+    testing.expectEqualSlices([]const u8, &[_][]const u8{ "a", "b" }, args.allOptions("--dd"));
 }
