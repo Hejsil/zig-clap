@@ -13,7 +13,7 @@ pub fn ComptimeClap(comptime Id: type, comptime params: []const clap.Param(Id)) 
     for (params) |param| {
         var index: usize = 0;
         if (param.names.long != null or param.names.short != null) {
-            const ptr = if (param.takes_value) &options else &flags;
+            const ptr = if (param.takes_value != .None) &options else &flags;
             index = ptr.*;
             ptr.* += 1;
         }
@@ -52,7 +52,7 @@ pub fn ComptimeClap(comptime Id: type, comptime params: []const clap.Param(Id)) 
                 const param = arg.param;
                 if (param.names.long == null and param.names.short == null) {
                     try pos.append(arg.value.?);
-                } else if (param.takes_value) {
+                } else if (param.takes_value != .None) {
                     // If we don't have any optional parameters, then this code should
                     // never be reached.
                     debug.assert(res.options.len != 0);
@@ -80,7 +80,7 @@ pub fn ComptimeClap(comptime Id: type, comptime params: []const clap.Param(Id)) 
 
         pub fn flag(parser: @This(), comptime name: []const u8) bool {
             const param = comptime findParam(name);
-            if (param.takes_value)
+            if (param.takes_value != .None)
                 @compileError(name ++ " is an option and not a flag.");
 
             return parser.flags[param.id];
@@ -88,14 +88,21 @@ pub fn ComptimeClap(comptime Id: type, comptime params: []const clap.Param(Id)) 
 
         pub fn allOptions(parser: @This(), comptime name: []const u8) [][]const u8 {
             const param = comptime findParam(name);
-            if (!param.takes_value)
+            if (param.takes_value == .None)
                 @compileError(name ++ " is a flag and not an option.");
+            if (param.takes_value == .One)
+                @compileError(name ++ " takes one option, not multiple.");
 
             return parser.options[param.id].items;
         }
 
         pub fn option(parser: @This(), comptime name: []const u8) ?[]const u8 {
-            const items = parser.allOptions(name);
+            const param = comptime findParam(name);
+            if (param.takes_value == .None)
+                @compileError(name ++ " is a flag and not an option.");
+            if (param.takes_value == .Many)
+                @compileError(name ++ " takes many options, not one.");
+            const items = parser.options[param.id].items;
             return if (items.len > 0) items[0] else null;
         }
 
@@ -127,9 +134,9 @@ test "clap.comptime.ComptimeClap" {
         clap.parseParam("-a, --aa    ") catch unreachable,
         clap.parseParam("-b, --bb    ") catch unreachable,
         clap.parseParam("-c, --cc <V>") catch unreachable,
-        clap.parseParam("-d, --dd <V>") catch unreachable,
+        clap.parseParam("-d, --dd <V>...") catch unreachable,
         clap.Param(clap.Help){
-            .takes_value = true,
+            .takes_value = .One,
         },
     });
 
@@ -151,6 +158,6 @@ test "clap.comptime.ComptimeClap" {
     testing.expectEqualStrings("0", args.option("--cc").?);
     testing.expectEqual(@as(usize, 1), args.positionals().len);
     testing.expectEqualStrings("something", args.positionals()[0]);
-    testing.expectEqualStrings("a", args.option("-d").?);
+    testing.expectEqualSlices([]const u8, &[_][]const u8{ "a", "b" }, args.allOptions("-d"));
     testing.expectEqualSlices([]const u8, &[_][]const u8{ "a", "b" }, args.allOptions("--dd"));
 }

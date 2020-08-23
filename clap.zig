@@ -25,6 +25,12 @@ pub const Names = struct {
     long: ?[]const u8 = null,
 };
 
+pub const Values = enum {
+    None,
+    One,
+    Many,
+};
+
 /// Represents a parameter for the command line.
 /// Parameters come in three kinds:
 ///   * Short ("-a"): Should be used for the most commonly used parameters in your program.
@@ -50,7 +56,7 @@ pub fn Param(comptime Id: type) type {
     return struct {
         id: Id = Id{},
         names: Names = Names{},
-        takes_value: bool = false,
+        takes_value: Values = .None,
     };
 }
 
@@ -86,8 +92,13 @@ pub fn parseParam(line: []const u8) !Param(Help) {
                     const start = mem.indexOfScalar(u8, help_msg, '<').? + 1;
                     const len = mem.indexOfScalar(u8, help_msg[start..], '>') orelse break :blk;
                     res.id.value = help_msg[start..][0..len];
-                    res.takes_value = true;
-                    help_msg = help_msg[start + len + 1 ..];
+                    if (mem.startsWith(u8, help_msg[start + len + 1 ..], "...")) {
+                        res.takes_value = .Many;
+                        help_msg = help_msg[start + len + 1 + 3 ..];
+                    } else {
+                        res.takes_value = .One;
+                        help_msg = help_msg[start + len + 1 ..];
+                    }
                 }
             }
 
@@ -110,8 +121,13 @@ pub fn parseParam(line: []const u8) !Param(Help) {
                 const start = mem.indexOfScalar(u8, help_msg, '<').? + 1;
                 const len = mem.indexOfScalar(u8, help_msg[start..], '>') orelse break :blk;
                 res.id.value = help_msg[start..][0..len];
-                res.takes_value = true;
-                help_msg = help_msg[start + len + 1 ..];
+                if (mem.startsWith(u8, help_msg[start + len + 1 ..], "...")) {
+                    res.takes_value = .Many;
+                    help_msg = help_msg[start + len + 1 + 3 ..];
+                } else {
+                    res.takes_value = .One;
+                    help_msg = help_msg[start + len + 1 ..];
+                }
             }
         }
 
@@ -134,7 +150,20 @@ test "parseParam" {
             .short = 's',
             .long = find(text, "long"),
         },
-        .takes_value = true,
+        .takes_value = .One,
+    }, try parseParam(text));
+
+    text = "-s, --long <value>... Help text";
+    testing.expectEqual(Param(Help){
+        .id = Help{
+            .msg = find(text, "Help text"),
+            .value = find(text, "value"),
+        },
+        .names = Names{
+            .short = 's',
+            .long = find(text, "long"),
+        },
+        .takes_value = .Many,
     }, try parseParam(text));
 
     text = "--long <value> Help text";
@@ -147,7 +176,7 @@ test "parseParam" {
             .short = null,
             .long = find(text, "long"),
         },
-        .takes_value = true,
+        .takes_value = .One,
     }, try parseParam(text));
 
     text = "-s <value> Help text";
@@ -160,7 +189,7 @@ test "parseParam" {
             .short = 's',
             .long = null,
         },
-        .takes_value = true,
+        .takes_value = .One,
     }, try parseParam(text));
 
     text = "-s, --long Help text";
@@ -173,7 +202,7 @@ test "parseParam" {
             .short = 's',
             .long = find(text, "long"),
         },
-        .takes_value = false,
+        .takes_value = .None,
     }, try parseParam(text));
 
     text = "-s Help text";
@@ -186,7 +215,7 @@ test "parseParam" {
             .short = 's',
             .long = null,
         },
-        .takes_value = false,
+        .takes_value = .None,
     }, try parseParam(text));
 
     text = "--long Help text";
@@ -199,7 +228,7 @@ test "parseParam" {
             .short = null,
             .long = find(text, "long"),
         },
-        .takes_value = false,
+        .takes_value = .None,
     }, try parseParam(text));
 
     text = "--long <A | B> Help text";
@@ -212,7 +241,7 @@ test "parseParam" {
             .short = null,
             .long = find(text, "long"),
         },
-        .takes_value = true,
+        .takes_value = .One,
     }, try parseParam(text));
 
     testing.expectError(error.NoParamFound, parseParam("Help"));
@@ -334,8 +363,11 @@ fn printParam(
 
         try stream.print("--{}", .{l});
     }
-    if (param.takes_value)
-        try stream.print(" <{}>", .{valueText(context, param)});
+    switch (param.takes_value) {
+        .None => {},
+        .One => try stream.print(" <{}>", .{valueText(context, param)}),
+        .Many => try stream.print(" <{}>...", .{valueText(context, param)}),
+    }
 }
 
 /// A wrapper around helpFull for simple helpText and valueText functions that
@@ -400,28 +432,30 @@ test "clap.help" {
     try help(
         slice_stream.outStream(),
         comptime &[_]Param(Help){
-            parseParam("-a             Short flag.  ") catch unreachable,
-            parseParam("-b <V1>        Short option.") catch unreachable,
-            parseParam("--aa           Long flag.   ") catch unreachable,
-            parseParam("--bb <V2>      Long option. ") catch unreachable,
-            parseParam("-c, --cc       Both flag.   ") catch unreachable,
-            parseParam("-d, --dd <V3>  Both option. ") catch unreachable,
+            parseParam("-a                Short flag.  ") catch unreachable,
+            parseParam("-b <V1>           Short option.") catch unreachable,
+            parseParam("--aa              Long flag.   ") catch unreachable,
+            parseParam("--bb <V2>         Long option. ") catch unreachable,
+            parseParam("-c, --cc          Both flag.   ") catch unreachable,
+            parseParam("-d, --dd <V3>     Both option. ") catch unreachable,
+            parseParam("-d, --dd <V3>...  Both repeated option. ") catch unreachable,
             Param(Help){
                 .id = Help{
                     .msg = "Positional. This should not appear in the help message.",
                 },
-                .takes_value = true,
+                .takes_value = .One,
             },
         },
     );
 
     const expected = "" ++
-        "\t-a           \tShort flag.\n" ++
-        "\t-b <V1>      \tShort option.\n" ++
-        "\t    --aa     \tLong flag.\n" ++
-        "\t    --bb <V2>\tLong option.\n" ++
-        "\t-c, --cc     \tBoth flag.\n" ++
-        "\t-d, --dd <V3>\tBoth option.\n";
+        "\t-a              \tShort flag.\n" ++
+        "\t-b <V1>         \tShort option.\n" ++
+        "\t    --aa        \tLong flag.\n" ++
+        "\t    --bb <V2>   \tLong option.\n" ++
+        "\t-c, --cc        \tBoth flag.\n" ++
+        "\t-d, --dd <V3>   \tBoth option.\n" ++
+        "\t-d, --dd <V3>...\tBoth repeated option.\n";
 
     const actual = slice_stream.getWritten();
     if (!mem.eql(u8, actual, expected)) {
@@ -458,7 +492,7 @@ pub fn usageFull(
     const cs = cos.outStream();
     for (params) |param| {
         const name = param.names.short orelse continue;
-        if (param.takes_value)
+        if (param.takes_value != .None)
             continue;
 
         if (cos.bytes_written == 0)
@@ -470,7 +504,7 @@ pub fn usageFull(
 
     var positional: ?Param(Id) = null;
     for (params) |param| {
-        if (!param.takes_value and param.names.short != null)
+        if (param.takes_value == .None and param.names.short != null)
             continue;
 
         const prefix = if (param.names.short) |_| "-" else "--";
@@ -485,8 +519,11 @@ pub fn usageFull(
             try cs.writeByte(' ');
 
         try cs.print("[{}{}", .{ prefix, name });
-        if (param.takes_value)
-            try cs.print(" <{}>", .{try valueText(context, param)});
+        switch (param.takes_value) {
+            .None => {},
+            .One => try cs.print(" <{}>", .{try valueText(context, param)}),
+            .Many => try cs.print(" <{}>...", .{try valueText(context, param)}),
+        }
 
         try cs.writeByte(']');
     }
@@ -575,10 +612,10 @@ test "usage" {
             .id = Help{
                 .value = "file",
             },
-            .takes_value = true,
+            .takes_value = .One,
         },
     });
-    try testUsage("[-ab] [-c <value>] [-d <v>] [--e] [--f] [--g <value>] [--h <v>] <file>", comptime &[_]Param(Help){
+    try testUsage("[-ab] [-c <value>] [-d <v>] [--e] [--f] [--g <value>] [--h <v>] [-i <v>...] <file>", comptime &[_]Param(Help){
         parseParam("-a") catch unreachable,
         parseParam("-b") catch unreachable,
         parseParam("-c <value>") catch unreachable,
@@ -587,11 +624,12 @@ test "usage" {
         parseParam("--f") catch unreachable,
         parseParam("--g <value>") catch unreachable,
         parseParam("--h <v>") catch unreachable,
+        parseParam("-i <v>...") catch unreachable,
         Param(Help){
             .id = Help{
                 .value = "file",
             },
-            .takes_value = true,
+            .takes_value = .One,
         },
     });
 }

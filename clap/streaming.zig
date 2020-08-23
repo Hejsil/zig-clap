@@ -75,7 +75,7 @@ pub fn StreamingClap(comptime Id: type, comptime ArgIterator: type) type {
 
                                 if (!mem.eql(u8, name, match))
                                     continue;
-                                if (!param.takes_value) {
+                                if (param.takes_value == .None) {
                                     if (maybe_value != null)
                                         return error.DoesntTakeValue;
 
@@ -128,7 +128,7 @@ pub fn StreamingClap(comptime Id: type, comptime ArgIterator: type) type {
 
                 // Before we return, we have to set the new state of the clap
                 defer {
-                    if (arg.len <= next_index or param.takes_value) {
+                    if (arg.len <= next_index or param.takes_value != .None) {
                         parser.state = State.Normal;
                     } else {
                         parser.state = State{
@@ -140,7 +140,7 @@ pub fn StreamingClap(comptime Id: type, comptime ArgIterator: type) type {
                     }
                 }
 
-                if (!param.takes_value)
+                if (param.takes_value == .None)
                     return Arg(Id){ .param = param };
 
                 if (arg.len <= next_index) {
@@ -194,20 +194,26 @@ test "clap.streaming.StreamingClap: short params" {
         clap.Param(u8){
             .id = 2,
             .names = clap.Names{ .short = 'c' },
-            .takes_value = true,
+            .takes_value = .One,
+        },
+        clap.Param(u8){
+            .id = 3,
+            .names = clap.Names{ .short = 'd' },
+            .takes_value = .Many,
         },
     };
 
     const a = &params[0];
     const b = &params[1];
     const c = &params[2];
+    const d = &params[3];
 
     testNoErr(
         &params,
         &[_][]const u8{
             "-a", "-b",    "-ab",  "-ba",
             "-c", "0",     "-c=0", "-ac",
-            "0",  "-ac=0",
+            "0",  "-ac=0", "-d=0",
         },
         &[_]Arg(u8){
             Arg(u8){ .param = a },
@@ -222,6 +228,7 @@ test "clap.streaming.StreamingClap: short params" {
             Arg(u8){ .param = c, .value = "0" },
             Arg(u8){ .param = a },
             Arg(u8){ .param = c, .value = "0" },
+            Arg(u8){ .param = d, .value = "0" },
         },
     );
 }
@@ -239,26 +246,33 @@ test "clap.streaming.StreamingClap: long params" {
         clap.Param(u8){
             .id = 2,
             .names = clap.Names{ .long = "cc" },
-            .takes_value = true,
+            .takes_value = .One,
+        },
+        clap.Param(u8){
+            .id = 3,
+            .names = clap.Names{ .long = "dd" },
+            .takes_value = .Many,
         },
     };
 
     const aa = &params[0];
     const bb = &params[1];
     const cc = &params[2];
+    const dd = &params[3];
 
     testNoErr(
         &params,
         &[_][]const u8{
             "--aa",   "--bb",
             "--cc",   "0",
-            "--cc=0",
+            "--cc=0", "--dd=0",
         },
         &[_]Arg(u8){
             Arg(u8){ .param = aa },
             Arg(u8){ .param = bb },
             Arg(u8){ .param = cc, .value = "0" },
             Arg(u8){ .param = cc, .value = "0" },
+            Arg(u8){ .param = dd, .value = "0" },
         },
     );
 }
@@ -266,7 +280,7 @@ test "clap.streaming.StreamingClap: long params" {
 test "clap.streaming.StreamingClap: positional params" {
     const params = [_]clap.Param(u8){clap.Param(u8){
         .id = 0,
-        .takes_value = true,
+        .takes_value = .One,
     }};
 
     testNoErr(
@@ -301,11 +315,11 @@ test "clap.streaming.StreamingClap: all params" {
                 .short = 'c',
                 .long = "cc",
             },
-            .takes_value = true,
+            .takes_value = .One,
         },
         clap.Param(u8){
             .id = 3,
-            .takes_value = true,
+            .takes_value = .One,
         },
     };
 
