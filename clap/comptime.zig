@@ -39,7 +39,7 @@ pub fn ComptimeClap(comptime Id: type, comptime params: []const clap.Param(Id)) 
         allocator: *mem.Allocator,
 
         pub fn parse(allocator: *mem.Allocator, comptime ArgIter: type, iter: *ArgIter) !@This() {
-            var multis = [_]std.ArrayList([]const u8){undefined} ** single_options;
+            var multis = [_]std.ArrayList([]const u8){undefined} ** multi_options;
             for (multis) |*multi| {
                 multi.* = std.ArrayList([]const u8).init(allocator);
             }
@@ -64,13 +64,16 @@ pub fn ComptimeClap(comptime Id: type, comptime params: []const clap.Param(Id)) 
                     try pos.append(arg.value.?);
                 } else if (param.takes_value == .One) {
                     debug.assert(res.single_options.len != 0);
-                    res.single_options[param.id] = arg.value.?;
+                    if (res.single_options.len != 0)
+                        res.single_options[param.id] = arg.value.?;
                 } else if (param.takes_value == .Many) {
-                    debug.assert(res.multi_options.len != 0);
-                    try multis[param.id].append(arg.value.?);
+                    debug.assert(multis.len != 0);
+                    if (multis.len != 0)
+                        try multis[param.id].append(arg.value.?);
                 } else {
                     debug.assert(res.flags.len != 0);
-                    res.flags[param.id] = true;
+                    if (res.flags.len != 0)
+                        res.flags[param.id] = true;
                 }
             }
 
