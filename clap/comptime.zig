@@ -100,6 +100,15 @@ pub fn ComptimeClap(comptime Id: type, comptime params: []const clap.Param(Id)) 
             return parser.flags[param.id];
         }
 
+        pub fn option(parser: @This(), comptime name: []const u8) ?[]const u8 {
+            const param = comptime findParam(name);
+            if (param.takes_value == .None)
+                @compileError(name ++ " is a flag and not an option.");
+            if (param.takes_value == .Many)
+                @compileError(name ++ " takes many options, not one.");
+            return parser.single_options[param.id];
+        }
+
         pub fn options(parser: @This(), comptime name: []const u8) []const []const u8 {
             const param = comptime findParam(name);
             if (param.takes_value == .None)
@@ -108,15 +117,6 @@ pub fn ComptimeClap(comptime Id: type, comptime params: []const clap.Param(Id)) 
                 @compileError(name ++ " takes one option, not multiple.");
 
             return parser.multi_options[param.id];
-        }
-
-        pub fn option(parser: @This(), comptime name: []const u8) ?[]const u8 {
-            const param = comptime findParam(name);
-            if (param.takes_value == .None)
-                @compileError(name ++ " is a flag and not an option.");
-            if (param.takes_value == .Many)
-                @compileError(name ++ " takes many options, not one.");
-            return parser.single_options[param.id];
         }
 
         pub fn positionals(parser: @This()) []const []const u8 {
