@@ -277,8 +277,8 @@ pub fn Args(comptime Id: type, comptime params: []const Param(Id)) type {
             return a.clap.option(name);
         }
 
-        pub fn allOptions(a: @This(), comptime name: []const u8) [][]const u8 {
-            return a.clap.allOptions(name);
+        pub fn options(a: @This(), comptime name: []const u8) []const []const u8 {
+            return a.clap.options(name);
         }
 
         pub fn positionals(a: @This()) []const []const u8 {
