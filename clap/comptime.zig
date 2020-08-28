@@ -8,12 +8,17 @@ const debug = std.debug;
 
 pub fn ComptimeClap(comptime Id: type, comptime params: []const clap.Param(Id)) type {
     var flags: usize = 0;
-    var options: usize = 0;
+    var single_options: usize = 0;
+    var multi_options: usize = 0;
     var converted_params: []const clap.Param(usize) = &[_]clap.Param(usize){};
     for (params) |param| {
         var index: usize = 0;
         if (param.names.long != null or param.names.short != null) {
-            const ptr = if (param.takes_value != .None) &options else &flags;
+            const ptr = switch (param.takes_value) {
+                .None => &flags,
+                .One => &single_options,
+                .Many => &multi_options,
+            };
             index = ptr.*;
             ptr.* += 1;
         }
@@ -27,22 +32,27 @@ pub fn ComptimeClap(comptime Id: type, comptime params: []const clap.Param(Id)) 
     }
 
     return struct {
-        options: [options]std.ArrayList([]const u8),
+        single_options: [single_options]?[]const u8,
+        multi_options: [multi_options][]const []const u8,
         flags: [flags]bool,
         pos: []const []const u8,
         allocator: *mem.Allocator,
 
         pub fn parse(allocator: *mem.Allocator, comptime ArgIter: type, iter: *ArgIter) !@This() {
+            var multis = [_]std.ArrayList([]const u8){undefined} ** single_options;
+            for (multis) |*multi| {
+                multi.* = std.ArrayList([]const u8).init(allocator);
+            }
+
             var pos = std.ArrayList([]const u8).init(allocator);
+
             var res = @This(){
-                .options = [_]std.ArrayList([]const u8){undefined} ** options,
+                .single_options = [_]?[]const u8{null} ** single_options,
+                .multi_options = [_][]const []const u8{undefined} ** multi_options,
                 .flags = [_]bool{false} ** flags,
                 .pos = undefined,
                 .allocator = allocator,
             };
-            for (res.options) |*init_opt| {
-                init_opt.* = std.ArrayList([]const u8).init(allocator);
-            }
 
             var stream = clap.StreamingClap(usize, ArgIter){
                 .params = converted_params,
@@ -52,28 +62,29 @@ pub fn ComptimeClap(comptime Id: type, comptime params: []const clap.Param(Id)) 
                 const param = arg.param;
                 if (param.names.long == null and param.names.short == null) {
                     try pos.append(arg.value.?);
-                } else if (param.takes_value != .None) {
-                    // If we don't have any optional parameters, then this code should
-                    // never be reached.
-                    debug.assert(res.options.len != 0);
-
-                    // Hack: Utilize Zigs lazy analyzis to avoid a compiler error
-                    if (res.options.len != 0)
-                        try res.options[param.id].append(arg.value.?);
+                } else if (param.takes_value == .One) {
+                    debug.assert(res.single_options.len != 0);
+                    res.single_options[param.id] = arg.value.?;
+                } else if (param.takes_value == .Many) {
+                    debug.assert(res.multi_options.len != 0);
+                    try multis[param.id].append(arg.value.?);
                 } else {
                     debug.assert(res.flags.len != 0);
-                    if (res.flags.len != 0)
-                        res.flags[param.id] = true;
+                    res.flags[param.id] = true;
                 }
             }
 
+            for (multis) |*multi, i| {
+                res.multi_options[i] = multi.toOwnedSlice();
+            }
             res.pos = pos.toOwnedSlice();
+
             return res;
         }
 
         pub fn deinit(parser: *@This()) void {
-            for (parser.options) |o|
-                o.deinit();
+            for (parser.multi_options) |o|
+                parser.allocator.free(o);
             parser.allocator.free(parser.pos);
             parser.* = undefined;
         }
@@ -86,14 +97,14 @@ pub fn ComptimeClap(comptime Id: type, comptime params: []const clap.Param(Id)) 
             return parser.flags[param.id];
         }
 
-        pub fn allOptions(parser: @This(), comptime name: []const u8) [][]const u8 {
+        pub fn options(parser: @This(), comptime name: []const u8) []const []const u8 {
             const param = comptime findParam(name);
             if (param.takes_value == .None)
                 @compileError(name ++ " is a flag and not an option.");
             if (param.takes_value == .One)
                 @compileError(name ++ " takes one option, not multiple.");
 
-            return parser.options[param.id].items;
+            return parser.multi_options[param.id];
         }
 
         pub fn option(parser: @This(), comptime name: []const u8) ?[]const u8 {
@@ -102,8 +113,7 @@ pub fn ComptimeClap(comptime Id: type, comptime params: []const clap.Param(Id)) 
                 @compileError(name ++ " is a flag and not an option.");
             if (param.takes_value == .Many)
                 @compileError(name ++ " takes many options, not one.");
-            const items = parser.options[param.id].items;
-            return if (items.len > 0) items[0] else null;
+            return parser.single_options[param.id];
         }
 
         pub fn positionals(parser: @This()) []const []const u8 {
@@ -158,6 +168,6 @@ test "clap.comptime.ComptimeClap" {
     testing.expectEqualStrings("0", args.option("--cc").?);
     testing.expectEqual(@as(usize, 1), args.positionals().len);
     testing.expectEqualStrings("something", args.positionals()[0]);
-    testing.expectEqualSlices([]const u8, &[_][]const u8{ "a", "b" }, args.allOptions("-d"));
-    testing.expectEqualSlices([]const u8, &[_][]const u8{ "a", "b" }, args.allOptions("--dd"));
+    testing.expectEqualSlices([]const u8, &[_][]const u8{ "a", "b" }, args.options("-d"));
+    testing.expectEqualSlices([]const u8, &[_][]const u8{ "a", "b" }, args.options("--dd"));
 }
