@@ -15,11 +15,11 @@ pub fn main() !void {
         clap.Param(u8){
             .id = 'n',
             .names = clap.Names{ .short = 'n', .long = "number" },
-            .takes_value = true,
+            .takes_value = .One,
         },
         clap.Param(u8){
             .id = 'f',
-            .takes_value = true,
+            .takes_value = .One,
         },
     };
 
