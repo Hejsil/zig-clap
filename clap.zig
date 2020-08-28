@@ -25,6 +25,7 @@ pub const Names = struct {
     long: ?[]const u8 = null,
 };
 
+/// Whether a param takes no value (a flag), one value, or can be specified multiple times.
 pub const Values = enum {
     None,
     One,
