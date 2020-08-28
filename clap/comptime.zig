@@ -167,10 +167,10 @@ test "clap.comptime.ComptimeClap" {
     testing.expect(args.flag("--aa"));
     testing.expect(!args.flag("-b"));
     testing.expect(!args.flag("--bb"));
-    testing.expectEqualStrings("0", args.option("-c").?);
-    testing.expectEqualStrings("0", args.option("--cc").?);
+    testing.expectEqualSlices(u8, "0", args.option("-c").?);
+    testing.expectEqualSlices(u8, "0", args.option("--cc").?);
     testing.expectEqual(@as(usize, 1), args.positionals().len);
-    testing.expectEqualStrings("something", args.positionals()[0]);
+    testing.expectEqualSlices(u8, "something", args.positionals()[0]);
     testing.expectEqualSlices([]const u8, &[_][]const u8{ "a", "b" }, args.options("-d"));
     testing.expectEqualSlices([]const u8, &[_][]const u8{ "a", "b" }, args.options("--dd"));
 }

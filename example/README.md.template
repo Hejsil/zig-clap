@@ -14,6 +14,7 @@ into master on every `zig` release.
 * Supports both passing values using spacing and `=` (`-a 100`, `-a=100`)
   * Short args also support passing values with no spacing or `=` (`-a100`)
   * This all works with chaining (`-ba 100`, `-ba=100`, `-ba100`)
+* Supports options that can be specified multiple times (`-e 1 -e 2 -e 3`)
 * Print help message from parameter specification.
 * Parse help message to parameter specification.
 
@@ -28,7 +29,8 @@ The simplest way to use this library is to just call the `clap.parse` function.
 ```
 
 The data structure returned has lookup speed on par with array access (`arr[i]`) and validates
-that the strings you pass to `option` and `flag` are actually parameters that the program can take:
+that the strings you pass to `option`, `options` and `flag` are actually parameters that the
+program can take:
 
 ```zig
 {}

@@ -14,6 +14,7 @@ into master on every `zig` release.
 * Supports both passing values using spacing and `=` (`-a 100`, `-a=100`)
   * Short args also support passing values with no spacing or `=` (`-a100`)
   * This all works with chaining (`-ba 100`, `-ba=100`, `-ba100`)
+* Supports options that can be specified multiple times (`-e 1 -e 2 -e 3`)
 * Print help message from parameter specification.
 * Parse help message to parameter specification.
 
@@ -33,10 +34,11 @@ pub fn main() !void {
     // First we specify what parameters our program can take.
     // We can use `parseParam` to parse a string to a `Param(Help)`
     const params = comptime [_]clap.Param(clap.Help){
-        clap.parseParam("-h, --help          Display this help and exit.              ") catch unreachable,
-        clap.parseParam("-n, --number <NUM>  An option parameter, which takes a value.") catch unreachable,
+        clap.parseParam("-h, --help             Display this help and exit.              ") catch unreachable,
+        clap.parseParam("-n, --number <NUM>     An option parameter, which takes a value.") catch unreachable,
+        clap.parseParam("-s, --string <STR>...  An option parameter which can be specified multiple times.") catch unreachable,
         clap.Param(clap.Help){
-            .takes_value = true,
+            .takes_value = .One,
         },
     };
 
@@ -47,6 +49,8 @@ pub fn main() !void {
         debug.warn("--help\n", .{});
     if (args.option("--number")) |n|
         debug.warn("--number = {}\n", .{n});
+    for (args.options("--string")) |s|
+        debug.warn("--string = {}\n", .{s});
     for (args.positionals()) |pos|
         debug.warn("{}\n", .{pos});
 }
@@ -54,7 +58,8 @@ pub fn main() !void {
 ```
 
 The data structure returned has lookup speed on par with array access (`arr[i]`) and validates
-that the strings you pass to `option` and `flag` are actually parameters that the program can take:
+that the strings you pass to `option`, `options` and `flag` are actually parameters that the
+program can take:
 
 ```zig
 const std = @import("std");
@@ -106,10 +111,11 @@ pub fn main() !void {
     // First we specify what parameters our program can take.
     // We can use `parseParam` to parse a string to a `Param(Help)`
     const params = comptime [_]clap.Param(clap.Help){
-        clap.parseParam("-h, --help          Display this help and exit.              ") catch unreachable,
-        clap.parseParam("-n, --number <NUM>  An option parameter, which takes a value.") catch unreachable,
+        clap.parseParam("-h, --help             Display this help and exit.              ") catch unreachable,
+        clap.parseParam("-n, --number <NUM>     An option parameter, which takes a value.") catch unreachable,
+        clap.parseParam("-s, --string <STR>...  An option parameter which can be specified multiple times.") catch unreachable,
         clap.Param(clap.Help){
-            .takes_value = true,
+            .takes_value = .One,
         },
     };
 
@@ -126,6 +132,8 @@ pub fn main() !void {
         debug.warn("--help\n", .{});
     if (args.option("--number")) |n|
         debug.warn("--number = {}\n", .{n});
+    for (args.options("--string")) |s|
+        debug.warn("--string = {}\n", .{s});
     for (args.positionals()) |pos|
         debug.warn("{}\n", .{pos});
 }
@@ -155,11 +163,11 @@ pub fn main() !void {
         clap.Param(u8){
             .id = 'n',
             .names = clap.Names{ .short = 'n', .long = "number" },
-            .takes_value = true,
+            .takes_value = .One,
         },
         clap.Param(u8){
             .id = 'f',
-            .takes_value = true,
+            .takes_value = .One,
         },
     };
 
