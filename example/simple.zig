@@ -15,7 +15,7 @@ pub fn main() !void {
         },
     };
 
-    var args = try clap.parse(clap.Help, &params, std.heap.page_allocator);
+    var args = try clap.parse(clap.Help, &params, std.heap.page_allocator, null);
     defer args.deinit();
 
     if (args.flag("--help"))

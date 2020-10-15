@@ -6,7 +6,11 @@ const heap = std.heap;
 const mem = std.mem;
 const debug = std.debug;
 
-pub fn ComptimeClap(comptime Id: type, comptime params: []const clap.Param(Id)) type {
+pub fn ComptimeClap(
+    comptime Id: type,
+    comptime ArgIter: type,
+    comptime params: []const clap.Param(Id),
+) type {
     var flags: usize = 0;
     var single_options: usize = 0;
     var multi_options: usize = 0;
@@ -38,7 +42,7 @@ pub fn ComptimeClap(comptime Id: type, comptime params: []const clap.Param(Id)) 
         pos: []const []const u8,
         allocator: *mem.Allocator,
 
-        pub fn parse(allocator: *mem.Allocator, comptime ArgIter: type, iter: *ArgIter) !@This() {
+        pub fn parse(allocator: *mem.Allocator, iter: *ArgIter, diag: ?*clap.Diagnostic) !@This() {
             var multis = [_]std.ArrayList([]const u8){undefined} ** multi_options;
             for (multis) |*multi| {
                 multi.* = std.ArrayList([]const u8).init(allocator);
@@ -58,7 +62,7 @@ pub fn ComptimeClap(comptime Id: type, comptime params: []const clap.Param(Id)) 
                 .params = converted_params,
                 .iter = iter,
             };
-            while (try stream.next()) |arg| {
+            while (try stream.next(diag)) |arg| {
                 const param = arg.param;
                 if (param.names.long == null and param.names.short == null) {
                     try pos.append(arg.value.?);
@@ -143,7 +147,7 @@ pub fn ComptimeClap(comptime Id: type, comptime params: []const clap.Param(Id)) 
 }
 
 test "clap.comptime.ComptimeClap" {
-    const Clap = ComptimeClap(clap.Help, comptime &[_]clap.Param(clap.Help){
+    const Clap = ComptimeClap(clap.Help, clap.args.SliceIterator, comptime &[_]clap.Param(clap.Help){
         clap.parseParam("-a, --aa    ") catch unreachable,
         clap.parseParam("-b, --bb    ") catch unreachable,
         clap.parseParam("-c, --cc <V>") catch unreachable,
@@ -160,7 +164,7 @@ test "clap.comptime.ComptimeClap" {
             "-a", "-c", "0", "something", "-d", "a", "--dd", "b",
         },
     };
-    var args = try Clap.parse(&fb_allocator.allocator, clap.args.SliceIterator, &iter);
+    var args = try Clap.parse(&fb_allocator.allocator, &iter, null);
     defer args.deinit();
 
     testing.expect(args.flag("-a"));

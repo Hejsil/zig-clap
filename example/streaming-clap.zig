@@ -35,7 +35,7 @@ pub fn main() !void {
     };
 
     // Because we use a streaming parser, we have to consume each argument parsed individually.
-    while (try parser.next()) |arg| {
+    while (try parser.next(null)) |arg| {
         // arg.param will point to the parameter which matched the argument.
         switch (arg.param.id) {
             'h' => debug.warn("Help!\n", .{}),

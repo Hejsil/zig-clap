@@ -261,7 +261,7 @@ fn find(str: []const u8, f: []const u8) []const u8 {
 pub fn Args(comptime Id: type, comptime params: []const Param(Id)) type {
     return struct {
         arena: std.heap.ArenaAllocator,
-        clap: ComptimeClap(Id, params),
+        clap: ComptimeClap(Id, args.OsIterator, params),
         exe_arg: ?[]const u8,
 
         pub fn deinit(a: *@This()) void {
@@ -287,15 +287,22 @@ pub fn Args(comptime Id: type, comptime params: []const Param(Id)) type {
     };
 }
 
+/// Optional diagnostics used for reporting useful errors
+pub const Diagnostic = struct {
+    name: Names,
+};
+
 /// Parses the command line arguments passed into the program based on an
 /// array of `Param`s.
 pub fn parse(
     comptime Id: type,
     comptime params: []const Param(Id),
     allocator: *mem.Allocator,
+    diag: ?*Diagnostic,
 ) !Args(Id, params) {
     var iter = try args.OsIterator.init(allocator);
-    const clap = try ComptimeClap(Id, params).parse(allocator, args.OsIterator, &iter);
+    const Clap = ComptimeClap(Id, args.OsIterator, params);
+    const clap = try Clap.parse(allocator, &iter, diag);
     return Args(Id, params){
         .arena = iter.arena,
         .clap = clap,

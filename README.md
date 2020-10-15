@@ -42,7 +42,7 @@ pub fn main() !void {
         },
     };
 
-    var args = try clap.parse(clap.Help, &params, std.heap.page_allocator);
+    var args = try clap.parse(clap.Help, &params, std.heap.page_allocator, null);
     defer args.deinit();
 
     if (args.flag("--help"))
@@ -118,6 +118,7 @@ pub fn main() !void {
             .takes_value = .One,
         },
     };
+    const Clap = clap.ComptimeClap(clap.Help, clap.args.OsIterator, &params);
 
     // We then initialize an argument iterator. We will use the OsIterator as it nicely
     // wraps iterating over arguments the most efficient way on each os.
@@ -125,7 +126,7 @@ pub fn main() !void {
     defer iter.deinit();
 
     // Parse the arguments
-    var args = try clap.ComptimeClap(clap.Help, &params).parse(allocator, clap.args.OsIterator, &iter);
+    var args = try Clap.parse(allocator, &iter, null);
     defer args.deinit();
 
     if (args.flag("--help"))
@@ -183,7 +184,7 @@ pub fn main() !void {
     };
 
     // Because we use a streaming parser, we have to consume each argument parsed individually.
-    while (try parser.next()) |arg| {
+    while (try parser.next(null)) |arg| {
         // arg.param will point to the parameter which matched the argument.
         switch (arg.param.id) {
             'h' => debug.warn("Help!\n", .{}),
