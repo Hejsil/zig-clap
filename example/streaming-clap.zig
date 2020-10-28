@@ -34,8 +34,17 @@ pub fn main() !void {
         .iter = &iter,
     };
 
+    // Initalize our diagnostics, which can be used for reporting useful errors.
+    // This is optional. You can also just pass `null` to `parser.next` if you
+    // don't care about the extra information `Diagnostics` provides.
+    var diag: clap.Diagnostic = undefined;
+
     // Because we use a streaming parser, we have to consume each argument parsed individually.
-    while (try parser.next(null)) |arg| {
+    while (parser.next(&diag) catch |err| {
+        // Report useful error and exit
+        diag.report(std.io.getStdErr().outStream(), err) catch {};
+        return err;
+    }) |arg| {
         // arg.param will point to the parameter which matched the argument.
         switch (arg.param.id) {
             'h' => debug.warn("Help!\n", .{}),

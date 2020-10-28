@@ -62,14 +62,15 @@ pub fn StreamingClap(comptime Id: type, comptime ArgIterator: type) type {
 
                     const arg = arg_info.arg;
                     const kind = arg_info.kind;
-                    const eql_index = mem.indexOfScalar(u8, arg, '=');
 
                     switch (kind) {
                         .long => {
+                            const eql_index = mem.indexOfScalar(u8, arg, '=');
+                            const name = if (eql_index) |i| arg[0..i] else arg;
+                            const maybe_value = if (eql_index) |i| arg[i + 1 ..] else null;
+
                             for (parser.params) |*param| {
                                 const match = param.names.long orelse continue;
-                                const name = if (eql_index) |i| arg[0..i] else arg;
-                                const maybe_value = if (eql_index) |i| arg[i + 1 ..] else null;
 
                                 if (!mem.eql(u8, name, match))
                                     continue;

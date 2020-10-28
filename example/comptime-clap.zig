@@ -23,8 +23,17 @@ pub fn main() !void {
     var iter = try clap.args.OsIterator.init(allocator);
     defer iter.deinit();
 
+    // Initalize our diagnostics, which can be used for reporting useful errors.
+    // This is optional. You can also just pass `null` to `parser.next` if you
+    // don't care about the extra information `Diagnostics` provides.
+    var diag: clap.Diagnostic = undefined;
+
     // Parse the arguments
-    var args = try Clap.parse(allocator, &iter, null);
+    var args = Clap.parse(allocator, &iter, &diag) catch |err| {
+        // Report useful error and exit
+        diag.report(std.io.getStdErr().outStream(), err) catch {};
+        return err;
+    };
     defer args.deinit();
 
     if (args.flag("--help"))

@@ -290,7 +290,47 @@ pub fn Args(comptime Id: type, comptime params: []const Param(Id)) type {
 /// Optional diagnostics used for reporting useful errors
 pub const Diagnostic = struct {
     name: Names,
+
+    /// Default diagnostics reporter when all you want is English with no colors.
+    /// Use this as a reference for implementing your own if needed.
+    pub fn report(diag: Diagnostic, stream: var, err: anyerror) !void {
+        const prefix = if (diag.name.short) |_| "-" else "--";
+        const name = if (diag.name.short) |*c| @as(*const [1]u8, c)[0..] else diag.name.long.?;
+
+        switch (err) {
+            error.DoesntTakeValue => try stream.print("The argument '{}{}' does not take a value\n", .{ prefix, name }),
+            error.MissingValue => try stream.print("The argument '{}{}' requires a value but none was supplied\n", .{ prefix, name }),
+            error.InvalidArgument => try stream.print("Invalid argument '{}{}'\n", .{ prefix, name }),
+            else => try stream.print("Error while parsing arguments: {}\n", .{@errorName(err)}),
+        }
+    }
 };
+
+fn testDiag(names: Names, err: anyerror, expected: []const u8) void {
+    var buf: [1024]u8 = undefined;
+    var slice_stream = io.fixedBufferStream(&buf);
+    (Diagnostic{ .name = names }).report(slice_stream.outStream(), err) catch unreachable;
+
+    const actual = slice_stream.getWritten();
+    if (!mem.eql(u8, actual, expected)) {
+        debug.warn("\n============ Expected ============\n", .{});
+        debug.warn("{}", .{expected});
+        debug.warn("============= Actual =============\n", .{});
+        debug.warn("{}", .{actual});
+        testing.expect(false);
+    }
+}
+
+test "Diagnostic.report" {
+    testDiag(.{ .short = 'c' }, error.DoesntTakeValue, "The argument '-c' does not take a value\n");
+    testDiag(.{ .long = "cc" }, error.DoesntTakeValue, "The argument '--cc' does not take a value\n");
+    testDiag(.{ .short = 'c' }, error.MissingValue, "The argument '-c' requires a value but none was supplied\n");
+    testDiag(.{ .long = "cc" }, error.MissingValue, "The argument '--cc' requires a value but none was supplied\n");
+    testDiag(.{ .short = 'c' }, error.InvalidArgument, "Invalid argument '-c'\n");
+    testDiag(.{ .long = "cc" }, error.InvalidArgument, "Invalid argument '--cc'\n");
+    testDiag(.{ .short = 'c' }, error.SomethingElse, "Error while parsing arguments: SomethingElse\n");
+    testDiag(.{ .long = "cc" }, error.SomethingElse, "Error while parsing arguments: SomethingElse\n");
+}
 
 /// Parses the command line arguments passed into the program based on an
 /// array of `Param`s.
