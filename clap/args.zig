@@ -20,10 +20,10 @@ pub const ExampleArgIterator = struct {
 pub const SliceIterator = struct {
     const Error = error{};
 
-    args: []const [:0]const u8,
+    args: []const []const u8,
     index: usize = 0,
 
-    pub fn next(iter: *SliceIterator) Error!?[:0]const u8 {
+    pub fn next(iter: *SliceIterator) Error!?[]const u8 {
         if (iter.args.len <= iter.index)
             return null;
 
@@ -33,7 +33,7 @@ pub const SliceIterator = struct {
 };
 
 test "clap.args.SliceIterator" {
-    const args = &[_][:0]const u8{ "A", "BB", "CCC" };
+    const args = &[_][]const u8{ "A", "BB", "CCC" };
     var iter = SliceIterator{ .args = args };
 
     for (args) |a| {
