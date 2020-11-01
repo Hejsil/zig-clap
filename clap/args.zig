@@ -53,7 +53,7 @@ pub const OsIterator = struct {
     /// The executable path (this is the first argument passed to the program)
     /// TODO: Is it the right choice for this to be null? Maybe `init` should
     ///       return an error when we have no exe.
-    exe_arg: ?[]const u8,
+    exe_arg: ?[:0]const u8,
 
     pub fn init(allocator: *mem.Allocator) Error!OsIterator {
         var res = OsIterator{
@@ -69,7 +69,7 @@ pub const OsIterator = struct {
         iter.arena.deinit();
     }
 
-    pub fn next(iter: *OsIterator) Error!?[]const u8 {
+    pub fn next(iter: *OsIterator) Error!?[:0]const u8 {
         if (builtin.os.tag == .windows) {
             return try iter.args.next(&iter.arena.allocator) orelse return null;
         } else {
