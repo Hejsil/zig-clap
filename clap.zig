@@ -293,7 +293,7 @@ pub const Diagnostic = struct {
 
     /// Default diagnostics reporter when all you want is English with no colors.
     /// Use this as a reference for implementing your own if needed.
-    pub fn report(diag: Diagnostic, stream: var, err: anyerror) !void {
+    pub fn report(diag: Diagnostic, stream: anytype, err: anyerror) !void {
         const prefix = if (diag.name.short) |_| "-" else "--";
         const name = if (diag.name.short) |*c| @as(*const [1]u8, c)[0..] else diag.name.long.?;
 

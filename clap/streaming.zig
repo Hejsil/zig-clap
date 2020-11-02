@@ -157,7 +157,7 @@ pub fn StreamingClap(comptime Id: type, comptime ArgIterator: type) type {
             return err(diag, .{ .short = arg[index] }, error.InvalidArgument);
         }
 
-        fn err(diag: ?*clap.Diagnostic, names: clap.Names, _err: var) @TypeOf(_err) {
+        fn err(diag: ?*clap.Diagnostic, names: clap.Names, _err: anytype) @TypeOf(_err) {
             if (diag) |d|
                 d.name = names;
             return _err;
