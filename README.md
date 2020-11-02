@@ -42,7 +42,16 @@ pub fn main() !void {
         },
     };
 
-    var args = try clap.parse(clap.Help, &params, std.heap.page_allocator);
+    // Initalize our diagnostics, which can be used for reporting useful errors.
+    // This is optional. You can also just pass `null` to `parser.next` if you
+    // don't care about the extra information `Diagnostics` provides.
+    var diag: clap.Diagnostic = undefined;
+
+    var args = clap.parse(clap.Help, &params, std.heap.page_allocator, &diag) catch |err| {
+        // Report useful error and exit
+        diag.report(std.io.getStdErr().outStream(), err) catch {};
+        return err;
+    };
     defer args.deinit();
 
     if (args.flag("--help"))
@@ -66,13 +75,11 @@ const std = @import("std");
 const clap = @import("clap");
 
 pub fn main() !void {
-    // First we specify what parameters our program can take.
-    // We can use `parseParam` to parse a string to a `Param(Help)`
     const params = comptime [_]clap.Param(clap.Help){
         clap.parseParam("-h, --help  Display this help and exit.") catch unreachable,
     };
 
-    var args = try clap.parse(clap.Help, &params, std.heap.direct_allocator);
+    var args = try clap.parse(clap.Help, &params, std.heap.direct_allocator, null);
     defer args.deinit();
 
     _ = args.flag("--helps");
@@ -118,14 +125,24 @@ pub fn main() !void {
             .takes_value = .One,
         },
     };
+    const Clap = clap.ComptimeClap(clap.Help, clap.args.OsIterator, &params);
 
     // We then initialize an argument iterator. We will use the OsIterator as it nicely
     // wraps iterating over arguments the most efficient way on each os.
     var iter = try clap.args.OsIterator.init(allocator);
     defer iter.deinit();
 
+    // Initalize our diagnostics, which can be used for reporting useful errors.
+    // This is optional. You can also just pass `null` to `parser.next` if you
+    // don't care about the extra information `Diagnostics` provides.
+    var diag: clap.Diagnostic = undefined;
+
     // Parse the arguments
-    var args = try clap.ComptimeClap(clap.Help, &params).parse(allocator, clap.args.OsIterator, &iter);
+    var args = Clap.parse(allocator, &iter, &diag) catch |err| {
+        // Report useful error and exit
+        diag.report(std.io.getStdErr().outStream(), err) catch {};
+        return err;
+    };
     defer args.deinit();
 
     if (args.flag("--help"))
@@ -182,8 +199,17 @@ pub fn main() !void {
         .iter = &iter,
     };
 
+    // Initalize our diagnostics, which can be used for reporting useful errors.
+    // This is optional. You can also just pass `null` to `parser.next` if you
+    // don't care about the extra information `Diagnostics` provides.
+    var diag: clap.Diagnostic = undefined;
+
     // Because we use a streaming parser, we have to consume each argument parsed individually.
-    while (try parser.next()) |arg| {
+    while (parser.next(&diag) catch |err| {
+        // Report useful error and exit
+        diag.report(std.io.getStdErr().outStream(), err) catch {};
+        return err;
+    }) |arg| {
         // arg.param will point to the parameter which matched the argument.
         switch (arg.param.id) {
             'h' => debug.warn("Help!\n", .{}),

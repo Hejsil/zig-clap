@@ -16,14 +16,24 @@ pub fn main() !void {
             .takes_value = .One,
         },
     };
+    const Clap = clap.ComptimeClap(clap.Help, clap.args.OsIterator, &params);
 
     // We then initialize an argument iterator. We will use the OsIterator as it nicely
     // wraps iterating over arguments the most efficient way on each os.
     var iter = try clap.args.OsIterator.init(allocator);
     defer iter.deinit();
 
+    // Initalize our diagnostics, which can be used for reporting useful errors.
+    // This is optional. You can also just pass `null` to `parser.next` if you
+    // don't care about the extra information `Diagnostics` provides.
+    var diag: clap.Diagnostic = undefined;
+
     // Parse the arguments
-    var args = try clap.ComptimeClap(clap.Help, &params).parse(allocator, clap.args.OsIterator, &iter);
+    var args = Clap.parse(allocator, &iter, &diag) catch |err| {
+        // Report useful error and exit
+        diag.report(std.io.getStdErr().outStream(), err) catch {};
+        return err;
+    };
     defer args.deinit();
 
     if (args.flag("--help"))
