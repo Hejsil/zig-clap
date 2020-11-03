@@ -3,10 +3,12 @@ const clap = @import("../clap.zig");
 const std = @import("std");
 
 const args = clap.args;
-const testing = std.testing;
+const debug = std.debug;
 const heap = std.heap;
+const io = std.io;
 const mem = std.mem;
 const os = std.os;
+const testing = std.testing;
 
 /// The result returned from ::StreamingClap.next
 pub fn Arg(comptime Id: type) type {
@@ -76,7 +78,7 @@ pub fn StreamingClap(comptime Id: type, comptime ArgIterator: type) type {
                                     continue;
                                 if (param.takes_value == .None) {
                                     if (maybe_value != null)
-                                        return err(diag, param.names, error.DoesntTakeValue);
+                                        return err(diag, arg, .{ .long = name }, error.DoesntTakeValue);
 
                                     return Arg(Id){ .param = param };
                                 }
@@ -86,11 +88,13 @@ pub fn StreamingClap(comptime Id: type, comptime ArgIterator: type) type {
                                         break :blk v;
 
                                     break :blk (try parser.iter.next()) orelse
-                                        return err(diag, param.names, error.MissingValue);
+                                        return err(diag, arg, .{ .long = name }, error.MissingValue);
                                 };
 
                                 return Arg(Id){ .param = param, .value = value };
                             }
+
+                            return err(diag, arg, .{ .long = name }, error.InvalidArgument);
                         },
                         .short => return try parser.chainging(.{
                             .arg = full_arg,
@@ -105,10 +109,12 @@ pub fn StreamingClap(comptime Id: type, comptime ArgIterator: type) type {
 
                                 return Arg(Id){ .param = param, .value = arg };
                             }
+
+                            return err(diag, arg, .{}, error.InvalidArgument);
                         },
                     }
 
-                    return err(diag, .{ .long = arg }, error.InvalidArgument);
+                    unreachable;
                 },
                 .chaining => |state| return try parser.chainging(state, diag),
             }
@@ -138,28 +144,32 @@ pub fn StreamingClap(comptime Id: type, comptime ArgIterator: type) type {
                     }
                 }
 
-                if (param.takes_value == .None)
+                const next_is_eql = if (next_index < arg.len) arg[next_index] == '=' else false;
+                if (param.takes_value == .None) {
+                    if (next_is_eql)
+                        return err(diag, arg, .{ .short = short }, error.DoesntTakeValue);
                     return Arg(Id){ .param = param };
+                }
 
                 if (arg.len <= next_index) {
                     const value = (try parser.iter.next()) orelse
-                        return err(diag, param.names, error.MissingValue);
+                        return err(diag, arg, .{ .short = short }, error.MissingValue);
 
                     return Arg(Id){ .param = param, .value = value };
                 }
 
-                if (arg[next_index] == '=')
+                if (next_is_eql)
                     return Arg(Id){ .param = param, .value = arg[next_index + 1 ..] };
 
                 return Arg(Id){ .param = param, .value = arg[next_index..] };
             }
 
-            return err(diag, .{ .short = arg[index] }, error.InvalidArgument);
+            return err(diag, arg, .{ .short = arg[index] }, error.InvalidArgument);
         }
 
-        fn err(diag: ?*clap.Diagnostic, names: clap.Names, _err: anytype) @TypeOf(_err) {
+        fn err(diag: ?*clap.Diagnostic, arg: []const u8, names: clap.Names, _err: anytype) @TypeOf(_err) {
             if (diag) |d|
-                d.name = names;
+                d.* = .{ .arg = arg, .name = names };
             return _err;
         }
     };
@@ -187,7 +197,33 @@ fn testNoErr(params: []const clap.Param(u8), args_strings: []const []const u8, r
         unreachable;
 }
 
-test "clap.streaming.StreamingClap: short params" {
+fn testErr(params: []const clap.Param(u8), args_strings: []const []const u8, expected: []const u8) void {
+    var diag: clap.Diagnostic = undefined;
+    var iter = args.SliceIterator{ .args = args_strings };
+    var c = StreamingClap(u8, args.SliceIterator){
+        .params = params,
+        .iter = &iter,
+    };
+    while (c.next(&diag) catch |err| {
+        var buf: [1024]u8 = undefined;
+        var slice_stream = io.fixedBufferStream(&buf);
+        diag.report(slice_stream.outStream(), err) catch unreachable;
+
+        const actual = slice_stream.getWritten();
+        if (!mem.eql(u8, actual, expected)) {
+            debug.warn("\n============ Expected ============\n", .{});
+            debug.warn("{}", .{expected});
+            debug.warn("============= Actual =============\n", .{});
+            debug.warn("{}", .{actual});
+            testing.expect(false);
+        }
+        return;
+    }) |_| {}
+
+    testing.expect(false);
+}
+
+test "short params" {
     const params = [_]clap.Param(u8){
         clap.Param(u8){
             .id = 0,
@@ -239,7 +275,7 @@ test "clap.streaming.StreamingClap: short params" {
     );
 }
 
-test "clap.streaming.StreamingClap: long params" {
+test "long params" {
     const params = [_]clap.Param(u8){
         clap.Param(u8){
             .id = 0,
@@ -283,7 +319,7 @@ test "clap.streaming.StreamingClap: long params" {
     );
 }
 
-test "clap.streaming.StreamingClap: positional params" {
+test "positional params" {
     const params = [_]clap.Param(u8){clap.Param(u8){
         .id = 0,
         .takes_value = .One,
@@ -299,7 +335,7 @@ test "clap.streaming.StreamingClap: positional params" {
     );
 }
 
-test "clap.streaming.StreamingClap: all params" {
+test "all params" {
     const params = [_]clap.Param(u8){
         clap.Param(u8){
             .id = 0,
@@ -365,4 +401,32 @@ test "clap.streaming.StreamingClap: all params" {
             Arg(u8){ .param = positional, .value = "-" },
         },
     );
+}
+
+test "errors" {
+    const params = [_]clap.Param(u8){
+        clap.Param(u8){
+            .id = 0,
+            .names = clap.Names{
+                .short = 'a',
+                .long = "aa",
+            },
+        },
+        clap.Param(u8){
+            .id = 1,
+            .names = clap.Names{
+                .short = 'c',
+                .long = "cc",
+            },
+            .takes_value = .One,
+        },
+    };
+    testErr(&params, &[_][]const u8{"q"}, "Invalid argument 'q'\n");
+    testErr(&params, &[_][]const u8{"-q"}, "Invalid argument '-q'\n");
+    testErr(&params, &[_][]const u8{"--q"}, "Invalid argument '--q'\n");
+    testErr(&params, &[_][]const u8{"--q=1"}, "Invalid argument '--q'\n");
+    testErr(&params, &[_][]const u8{"-a=1"}, "The argument '-a' does not take a value\n");
+    testErr(&params, &[_][]const u8{"--aa=1"}, "The argument '--aa' does not take a value\n");
+    testErr(&params, &[_][]const u8{"-c"}, "The argument '-c' requires a value but none was supplied\n");
+    testErr(&params, &[_][]const u8{"--cc"}, "The argument '--cc' requires a value but none was supplied\n");
 }
