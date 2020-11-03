@@ -146,7 +146,7 @@ pub fn ComptimeClap(
     };
 }
 
-test "clap.comptime.ComptimeClap" {
+test "" {
     const Clap = ComptimeClap(clap.Help, clap.args.SliceIterator, comptime &[_]clap.Param(clap.Help){
         clap.parseParam("-a, --aa    ") catch unreachable,
         clap.parseParam("-b, --bb    ") catch unreachable,
