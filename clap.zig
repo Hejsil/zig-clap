@@ -8,9 +8,7 @@ const testing = std.testing;
 pub const args = @import("clap/args.zig");
 
 test "clap" {
-    _ = args;
-    _ = ComptimeClap;
-    _ = StreamingClap;
+    testing.refAllDecls(@This());
 }
 
 pub const ComptimeClap = @import("clap/comptime.zig").ComptimeClap;
@@ -64,227 +62,194 @@ pub fn Param(comptime Id: type) type {
 /// Takes a string and parses it to a Param(Help).
 /// This is the reverse of 'help' but for at single parameter only.
 pub fn parseParam(line: []const u8) !Param(Help) {
-    var z: usize = 0;
-    var res = Param(Help){
-        .id = Help{
-            // For testing, i want to be able to easily compare slices just by pointer,
-            // so I slice by a runtime value here, so that zig does not optimize this
-            // out. Maybe I should write the test better, geeh.
-            .msg = line[z..z],
-            .value = line[z..z],
-        },
-    };
-
+    var found_comma = false;
     var it = mem.tokenize(line, " \t");
     var param_str = it.next() orelse return error.NoParamFound;
-    if (!mem.startsWith(u8, param_str, "--") and mem.startsWith(u8, param_str, "-")) {
-        const found_comma = param_str[param_str.len - 1] == ',';
+
+    const short_name = if (!mem.startsWith(u8, param_str, "--") and
+        mem.startsWith(u8, param_str, "-"))
+    blk: {
+        found_comma = param_str[param_str.len - 1] == ',';
         if (found_comma)
             param_str = param_str[0 .. param_str.len - 1];
 
         if (param_str.len != 2)
             return error.InvalidShortParam;
 
-        res.names.short = param_str[1];
+        const short_name = param_str[1];
         if (!found_comma) {
-            var help_msg = it.rest();
-            if (it.next()) |next| blk: {
-                if (mem.startsWith(u8, next, "<")) {
-                    const start = mem.indexOfScalar(u8, help_msg, '<').? + 1;
-                    const len = mem.indexOfScalar(u8, help_msg[start..], '>') orelse break :blk;
-                    res.id.value = help_msg[start..][0..len];
-                    if (mem.startsWith(u8, help_msg[start + len + 1 ..], "...")) {
-                        res.takes_value = .Many;
-                        help_msg = help_msg[start + len + 1 + 3 ..];
-                    } else {
-                        res.takes_value = .One;
-                        help_msg = help_msg[start + len + 1 ..];
-                    }
-                }
-            }
-
-            res.id.msg = mem.trim(u8, help_msg, " \t");
+            var res = parseParamRest(it.rest());
+            res.names.short = short_name;
             return res;
         }
 
         param_str = it.next() orelse return error.NoParamFound;
-    }
+        break :blk short_name;
+    } else null;
 
-    if (mem.startsWith(u8, param_str, "--")) {
-        res.names.long = param_str[2..];
-
+    const long_name = if (mem.startsWith(u8, param_str, "--")) blk: {
         if (param_str[param_str.len - 1] == ',')
             return error.TrailingComma;
 
-        var help_msg = it.rest();
-        if (it.next()) |next| blk: {
-            if (mem.startsWith(u8, next, "<")) {
-                const start = mem.indexOfScalar(u8, help_msg, '<').? + 1;
-                const len = mem.indexOfScalar(u8, help_msg[start..], '>') orelse break :blk;
-                res.id.value = help_msg[start..][0..len];
-                if (mem.startsWith(u8, help_msg[start + len + 1 ..], "...")) {
-                    res.takes_value = .Many;
-                    help_msg = help_msg[start + len + 1 + 3 ..];
-                } else {
-                    res.takes_value = .One;
-                    help_msg = help_msg[start + len + 1 ..];
-                }
-            }
-        }
+        break :blk param_str[2..];
+    } else if (found_comma) {
+        return error.TrailingComma;
+    } else if (short_name == null) {
+        return parseParamRest(mem.trimLeft(u8, line, " \t"));
+    } else null;
 
-        res.id.msg = mem.trim(u8, help_msg, " \t");
-        return res;
+    var res = parseParamRest(it.rest());
+    res.names.long = param_str[2..];
+    res.names.short = short_name;
+    return res;
+}
+
+fn parseParamRest(line: []const u8) Param(Help) {
+    if (mem.startsWith(u8, line, "<")) blk: {
+        const len = mem.indexOfScalar(u8, line, '>') orelse break :blk;
+        const takes_many = mem.startsWith(u8, line[len + 1 ..], "...");
+        const help_start = len + 1 + @as(usize, 3) * @boolToInt(takes_many);
+        return Param(Help){
+            .takes_value = if (takes_many) .Many else .One,
+            .id = .{
+                .msg = mem.trim(u8, line[help_start..], " \t"),
+                .value = line[1..len],
+            },
+        };
     }
 
-    return error.NoParamFound;
+    return Param(Help){ .id = .{ .msg = mem.trim(u8, line, " \t") } };
+}
+
+fn expectParam(expect: Param(Help), actual: Param(Help)) void {
+    testing.expectEqualStrings(expect.id.msg, actual.id.msg);
+    testing.expectEqualStrings(expect.id.value, actual.id.value);
+    testing.expectEqual(expect.names.short, actual.names.short);
+    testing.expectEqual(expect.takes_value, actual.takes_value);
+    if (expect.names.long) |long| {
+        testing.expectEqualStrings(long, actual.names.long.?);
+    } else {
+        testing.expectEqual(@as(?[]const u8, null), actual.names.long);
+    }
 }
 
 test "parseParam" {
-    var z: usize = 0;
-    var text: []const u8 = "-s, --long <value> Help text";
-    testing.expectEqual(Param(Help){
+    expectParam(Param(Help){
         .id = Help{
-            .msg = find(text, "Help text"),
-            .value = find(text, "value"),
+            .msg = "Help text",
+            .value = "value",
         },
         .names = Names{
             .short = 's',
-            .long = find(text, "long"),
+            .long = "long",
         },
         .takes_value = .One,
-    }, try parseParam(text));
-
-    text = "-s, --long <value>... Help text";
-    testing.expectEqual(Param(Help){
+    }, try parseParam("-s, --long <value> Help text"));
+    expectParam(Param(Help){
         .id = Help{
-            .msg = find(text, "Help text"),
-            .value = find(text, "value"),
+            .msg = "Help text",
+            .value = "value",
         },
         .names = Names{
             .short = 's',
-            .long = find(text, "long"),
+            .long = "long",
         },
         .takes_value = .Many,
-    }, try parseParam(text));
-
-    text = "--long <value> Help text";
-    testing.expectEqual(Param(Help){
+    }, try parseParam("-s, --long <value>... Help text"));
+    expectParam(Param(Help){
         .id = Help{
-            .msg = find(text, "Help text"),
-            .value = find(text, "value"),
+            .msg = "Help text",
+            .value = "value",
         },
         .names = Names{
             .short = null,
-            .long = find(text, "long"),
+            .long = "long",
         },
         .takes_value = .One,
-    }, try parseParam(text));
-
-    text = "-s <value> Help text";
-    testing.expectEqual(Param(Help){
+    }, try parseParam("--long <value> Help text"));
+    expectParam(Param(Help){
         .id = Help{
-            .msg = find(text, "Help text"),
-            .value = find(text, "value"),
+            .msg = "Help text",
+            .value = "value",
         },
         .names = Names{
             .short = 's',
             .long = null,
         },
         .takes_value = .One,
-    }, try parseParam(text));
-
-    text = "-s, --long Help text";
-    testing.expectEqual(Param(Help){
+    }, try parseParam("-s <value> Help text"));
+    expectParam(Param(Help){
         .id = Help{
-            .msg = find(text, "Help text"),
-            .value = text[z..z],
+            .msg = "Help text",
+            .value = "",
         },
         .names = Names{
             .short = 's',
-            .long = find(text, "long"),
+            .long = "long",
         },
         .takes_value = .None,
-    }, try parseParam(text));
-
-    text = "-s Help text";
-    testing.expectEqual(Param(Help){
+    }, try parseParam("-s, --long Help text"));
+    expectParam(Param(Help){
         .id = Help{
-            .msg = find(text, "Help text"),
-            .value = text[z..z],
+            .msg = "Help text",
+            .value = "",
         },
         .names = Names{
             .short = 's',
             .long = null,
         },
         .takes_value = .None,
-    }, try parseParam(text));
-
-    text = "--long Help text";
-    testing.expectEqual(Param(Help){
+    }, try parseParam("-s Help text"));
+    expectParam(Param(Help){
         .id = Help{
-            .msg = find(text, "Help text"),
-            .value = text[z..z],
+            .msg = "Help text",
+            .value = "",
         },
         .names = Names{
             .short = null,
-            .long = find(text, "long"),
+            .long = "long",
         },
         .takes_value = .None,
-    }, try parseParam(text));
-
-    text = "--long <A | B> Help text";
-    testing.expectEqual(Param(Help){
+    }, try parseParam("--long Help text"));
+    expectParam(Param(Help){
         .id = Help{
-            .msg = find(text, "Help text"),
-            .value = find(text, "A | B"),
+            .msg = "Help text",
+            .value = "A | B",
         },
         .names = Names{
             .short = null,
-            .long = find(text, "long"),
+            .long = "long",
         },
         .takes_value = .One,
-    }, try parseParam(text));
+    }, try parseParam("--long <A | B> Help text"));
+    expectParam(Param(Help){
+        .id = Help{
+            .msg = "Help text",
+            .value = "A",
+        },
+        .names = Names{
+            .short = null,
+            .long = null,
+        },
+        .takes_value = .One,
+    }, try parseParam("<A> Help text"));
+    expectParam(Param(Help){
+        .id = Help{
+            .msg = "Help text",
+            .value = "A",
+        },
+        .names = Names{
+            .short = null,
+            .long = null,
+        },
+        .takes_value = .Many,
+    }, try parseParam("<A>... Help text"));
 
-    testing.expectError(error.NoParamFound, parseParam("Help"));
     testing.expectError(error.TrailingComma, parseParam("--long, Help"));
-    testing.expectError(error.NoParamFound, parseParam("-s, Help"));
+    testing.expectError(error.TrailingComma, parseParam("-s, Help"));
     testing.expectError(error.InvalidShortParam, parseParam("-ss Help"));
     testing.expectError(error.InvalidShortParam, parseParam("-ss <value> Help"));
     testing.expectError(error.InvalidShortParam, parseParam("- Help"));
-}
-
-fn find(str: []const u8, f: []const u8) []const u8 {
-    const i = mem.indexOf(u8, str, f).?;
-    return str[i..][0..f.len];
-}
-
-pub fn Args(comptime Id: type, comptime params: []const Param(Id)) type {
-    return struct {
-        arena: std.heap.ArenaAllocator,
-        clap: ComptimeClap(Id, args.OsIterator, params),
-        exe_arg: ?[]const u8,
-
-        pub fn deinit(a: *@This()) void {
-            a.clap.deinit();
-            a.arena.deinit();
-        }
-
-        pub fn flag(a: @This(), comptime name: []const u8) bool {
-            return a.clap.flag(name);
-        }
-
-        pub fn option(a: @This(), comptime name: []const u8) ?[]const u8 {
-            return a.clap.option(name);
-        }
-
-        pub fn options(a: @This(), comptime name: []const u8) []const []const u8 {
-            return a.clap.options(name);
-        }
-
-        pub fn positionals(a: @This()) []const []const u8 {
-            return a.clap.positionals();
-        }
-    };
 }
 
 /// Optional diagnostics used for reporting useful errors
@@ -319,15 +284,7 @@ fn testDiag(diag: Diagnostic, err: anyerror, expected: []const u8) void {
     var buf: [1024]u8 = undefined;
     var slice_stream = io.fixedBufferStream(&buf);
     diag.report(slice_stream.outStream(), err) catch unreachable;
-
-    const actual = slice_stream.getWritten();
-    if (!mem.eql(u8, actual, expected)) {
-        debug.warn("\n============ Expected ============\n", .{});
-        debug.warn("{}", .{expected});
-        debug.warn("============= Actual =============\n", .{});
-        debug.warn("{}", .{actual});
-        testing.expect(false);
-    }
+    testing.expectEqualStrings(expected, slice_stream.getWritten());
 }
 
 test "Diagnostic.report" {
@@ -341,6 +298,35 @@ test "Diagnostic.report" {
     testDiag(.{ .name = .{ .long = "cc" } }, error.InvalidArgument, "Invalid argument '--cc'\n");
     testDiag(.{ .name = .{ .short = 'c' } }, error.SomethingElse, "Error while parsing arguments: SomethingElse\n");
     testDiag(.{ .name = .{ .long = "cc" } }, error.SomethingElse, "Error while parsing arguments: SomethingElse\n");
+}
+
+pub fn Args(comptime Id: type, comptime params: []const Param(Id)) type {
+    return struct {
+        arena: std.heap.ArenaAllocator,
+        clap: ComptimeClap(Id, args.OsIterator, params),
+        exe_arg: ?[]const u8,
+
+        pub fn deinit(a: *@This()) void {
+            a.clap.deinit();
+            a.arena.deinit();
+        }
+
+        pub fn flag(a: @This(), comptime name: []const u8) bool {
+            return a.clap.flag(name);
+        }
+
+        pub fn option(a: @This(), comptime name: []const u8) ?[]const u8 {
+            return a.clap.option(name);
+        }
+
+        pub fn options(a: @This(), comptime name: []const u8) []const []const u8 {
+            return a.clap.options(name);
+        }
+
+        pub fn positionals(a: @This()) []const []const u8 {
+            return a.clap.positionals();
+        }
+    };
 }
 
 /// Parses the command line arguments passed into the program based on an
@@ -422,6 +408,7 @@ fn printParam(
 
         try stream.print("--{}", .{l});
     }
+
     switch (param.takes_value) {
         .None => {},
         .One => try stream.print(" <{}>", .{valueText(context, param)}),
@@ -516,22 +503,7 @@ test "clap.help" {
         "\t-d, --dd <V3>   \tBoth option.\n" ++
         "\t-d, --dd <V3>...\tBoth repeated option.\n";
 
-    const actual = slice_stream.getWritten();
-    if (!mem.eql(u8, actual, expected)) {
-        debug.warn("\n============ Expected ============\n", .{});
-        debug.warn("{}", .{expected});
-        debug.warn("============= Actual =============\n", .{});
-        debug.warn("{}", .{actual});
-
-        var buffer: [1024 * 2]u8 = undefined;
-        var fba = std.heap.FixedBufferAllocator.init(&buffer);
-
-        debug.warn("============ Expected (escaped) ============\n", .{});
-        debug.warn("{x}\n", .{expected});
-        debug.warn("============ Actual (escaped) ============\n", .{});
-        debug.warn("{x}\n", .{actual});
-        testing.expect(false);
-    }
+    testing.expectEqualStrings(expected, slice_stream.getWritten());
 }
 
 /// Will print a usage message in the following format:
@@ -629,23 +601,7 @@ fn testUsage(expected: []const u8, params: []const Param(Help)) !void {
     var buf: [1024]u8 = undefined;
     var fbs = io.fixedBufferStream(&buf);
     try usage(fbs.outStream(), params);
-
-    const actual = fbs.getWritten();
-    if (!mem.eql(u8, actual, expected)) {
-        debug.warn("\n============ Expected ============\n", .{});
-        debug.warn("{}\n", .{expected});
-        debug.warn("============= Actual =============\n", .{});
-        debug.warn("{}\n", .{actual});
-
-        var buffer: [1024 * 2]u8 = undefined;
-        var fba = std.heap.FixedBufferAllocator.init(&buffer);
-
-        debug.warn("============ Expected (escaped) ============\n", .{});
-        debug.warn("{x}\n", .{expected});
-        debug.warn("============ Actual (escaped) ============\n", .{});
-        debug.warn("{x}\n", .{actual});
-        testing.expect(false);
-    }
+    testing.expectEqualStrings(expected, fbs.getWritten());
 }
 
 test "usage" {

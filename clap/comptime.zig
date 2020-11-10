@@ -152,9 +152,7 @@ test "" {
         clap.parseParam("-b, --bb    ") catch unreachable,
         clap.parseParam("-c, --cc <V>") catch unreachable,
         clap.parseParam("-d, --dd <V>...") catch unreachable,
-        clap.Param(clap.Help){
-            .takes_value = .One,
-        },
+        clap.parseParam("<P>") catch unreachable,
     });
 
     var buf: [1024]u8 = undefined;

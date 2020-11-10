@@ -208,15 +208,7 @@ fn testErr(params: []const clap.Param(u8), args_strings: []const []const u8, exp
         var buf: [1024]u8 = undefined;
         var slice_stream = io.fixedBufferStream(&buf);
         diag.report(slice_stream.outStream(), err) catch unreachable;
-
-        const actual = slice_stream.getWritten();
-        if (!mem.eql(u8, actual, expected)) {
-            debug.warn("\n============ Expected ============\n", .{});
-            debug.warn("{}", .{expected});
-            debug.warn("============= Actual =============\n", .{});
-            debug.warn("{}", .{actual});
-            testing.expect(false);
-        }
+        testing.expectEqualStrings(expected, slice_stream.getWritten());
         return;
     }) |_| {}
 

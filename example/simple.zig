@@ -10,9 +10,7 @@ pub fn main() !void {
         clap.parseParam("-h, --help             Display this help and exit.              ") catch unreachable,
         clap.parseParam("-n, --number <NUM>     An option parameter, which takes a value.") catch unreachable,
         clap.parseParam("-s, --string <STR>...  An option parameter which can be specified multiple times.") catch unreachable,
-        clap.Param(clap.Help){
-            .takes_value = .One,
-        },
+        clap.parseParam("<POS>...") catch unreachable,
     };
 
     // Initalize our diagnostics, which can be used for reporting useful errors.
