@@ -303,7 +303,7 @@ test "Diagnostic.report" {
 pub fn Args(comptime Id: type, comptime params: []const Param(Id)) type {
     return struct {
         arena: std.heap.ArenaAllocator,
-        clap: ComptimeClap(Id, args.OsIterator, params),
+        clap: ComptimeClap(Id, params),
         exe_arg: ?[]const u8,
 
         pub fn deinit(a: *@This()) void {
@@ -329,8 +329,7 @@ pub fn Args(comptime Id: type, comptime params: []const Param(Id)) type {
     };
 }
 
-/// Parses the command line arguments passed into the program based on an
-/// array of `Param`s.
+/// Same as `parseEx` but uses the `args.OsIterator` by default.
 pub fn parse(
     comptime Id: type,
     comptime params: []const Param(Id),
@@ -338,13 +337,25 @@ pub fn parse(
     diag: ?*Diagnostic,
 ) !Args(Id, params) {
     var iter = try args.OsIterator.init(allocator);
-    const Clap = ComptimeClap(Id, args.OsIterator, params);
-    const clap = try Clap.parse(allocator, &iter, diag);
+    const clap = try parseEx(Id, params, allocator, &iter, diag);
     return Args(Id, params){
         .arena = iter.arena,
         .clap = clap,
         .exe_arg = iter.exe_arg,
     };
+}
+
+/// Parses the command line arguments passed into the program based on an
+/// array of `Param`s.
+pub fn parseEx(
+    comptime Id: type,
+    comptime params: []const Param(Id),
+    allocator: *mem.Allocator,
+    iter: anytype,
+    diag: ?*Diagnostic,
+) !ComptimeClap(Id, params) {
+    const Clap = ComptimeClap(Id, params);
+    return try Clap.parse(allocator, iter, diag);
 }
 
 /// Will print a help message in the following format:

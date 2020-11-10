@@ -6,9 +6,9 @@ const heap = std.heap;
 const mem = std.mem;
 const debug = std.debug;
 
+/// Deprecated: Use `parseEx` instead
 pub fn ComptimeClap(
     comptime Id: type,
-    comptime ArgIter: type,
     comptime params: []const clap.Param(Id),
 ) type {
     var flags: usize = 0;
@@ -42,7 +42,7 @@ pub fn ComptimeClap(
         pos: []const []const u8,
         allocator: *mem.Allocator,
 
-        pub fn parse(allocator: *mem.Allocator, iter: *ArgIter, diag: ?*clap.Diagnostic) !@This() {
+        pub fn parse(allocator: *mem.Allocator, iter: anytype, diag: ?*clap.Diagnostic) !@This() {
             var multis = [_]std.ArrayList([]const u8){undefined} ** multi_options;
             for (multis) |*multi| {
                 multi.* = std.ArrayList([]const u8).init(allocator);
@@ -58,7 +58,7 @@ pub fn ComptimeClap(
                 .allocator = allocator,
             };
 
-            var stream = clap.StreamingClap(usize, ArgIter){
+            var stream = clap.StreamingClap(usize, @typeInfo(@TypeOf(iter)).Pointer.child){
                 .params = converted_params,
                 .iter = iter,
             };
@@ -147,7 +147,7 @@ pub fn ComptimeClap(
 }
 
 test "" {
-    const Clap = ComptimeClap(clap.Help, clap.args.SliceIterator, comptime &[_]clap.Param(clap.Help){
+    const Clap = ComptimeClap(clap.Help, comptime &[_]clap.Param(clap.Help){
         clap.parseParam("-a, --aa    ") catch unreachable,
         clap.parseParam("-b, --bb    ") catch unreachable,
         clap.parseParam("-c, --cc <V>") catch unreachable,

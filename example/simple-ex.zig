@@ -14,7 +14,6 @@ pub fn main() !void {
         clap.parseParam("-s, --string <STR>...  An option parameter which can be specified multiple times.") catch unreachable,
         clap.parseParam("<POS>...") catch unreachable,
     };
-    const Clap = clap.ComptimeClap(clap.Help, clap.args.OsIterator, &params);
 
     // We then initialize an argument iterator. We will use the OsIterator as it nicely
     // wraps iterating over arguments the most efficient way on each os.
@@ -26,8 +25,7 @@ pub fn main() !void {
     // don't care about the extra information `Diagnostics` provides.
     var diag: clap.Diagnostic = undefined;
 
-    // Parse the arguments
-    var args = Clap.parse(allocator, &iter, &diag) catch |err| {
+    var args = clap.parseEx(clap.Help, &params, allocator, &iter, &diag) catch |err| {
         // Report useful error and exit
         diag.report(std.io.getStdErr().outStream(), err) catch {};
         return err;
