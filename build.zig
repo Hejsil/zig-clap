@@ -6,6 +6,7 @@ const Builder = std.build.Builder;
 
 pub fn build(b: *Builder) void {
     const mode = b.standardReleaseOptions();
+    const target = b.standardTargetOptions(.{});
 
     const fmt_step = b.addFmt(&[_][]const u8{
         "build.zig",
@@ -20,6 +21,7 @@ pub fn build(b: *Builder) void {
 
         const tests = b.addTest("clap.zig");
         tests.setBuildMode(test_mode);
+        tests.setTarget(target);
         tests.setNamePrefix(mode_str ++ " ");
 
         const test_step = b.step("test-" ++ mode_str, "Run all tests in " ++ mode_str ++ ".");
@@ -39,6 +41,7 @@ pub fn build(b: *Builder) void {
         const example = b.addExecutable(example_name, "example/" ++ example_name ++ ".zig");
         example.addPackagePath("clap", "clap.zig");
         example.setBuildMode(mode);
+        example.setTarget(target);
         example.install();
         example_step.dependOn(&example.step);
     }
