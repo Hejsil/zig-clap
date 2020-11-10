@@ -32,8 +32,8 @@ pub fn build(b: *Builder) void {
     const example_step = b.step("examples", "Build examples");
     inline for ([_][]const u8{
         "simple",
+        "simple-ex",
         //"simple-error",
-        "comptime-clap",
         "streaming-clap",
         "help",
         "usage",
@@ -70,7 +70,6 @@ fn readMeStep(b: *Builder) *std.build.Step {
             try stream.print(@embedFile("example/README.md.template"), .{
                 @embedFile("example/simple.zig"),
                 @embedFile("example/simple-error.zig"),
-                @embedFile("example/comptime-clap.zig"),
                 @embedFile("example/streaming-clap.zig"),
                 @embedFile("example/help.zig"),
                 @embedFile("example/usage.zig"),

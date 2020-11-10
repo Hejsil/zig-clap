@@ -50,14 +50,7 @@ zig-clap/example/simple-error.zig:16:18: note: called from here
     _ = args.flag("--helps");
 ```
 
-### `ComptimeClap`
-
-The `ComptimeClap` is the parser used by `clap.parse`. It allows the user to use a custom argument
-iterator.
-
-```zig
-{}
-```
+There is also a `parseEx` variant that takes an argument iterator.
 
 ### `StreamingClap`
 
@@ -68,7 +61,7 @@ The `StreamingClap` is the base of all the other parsers. It's a streaming parse
 {}
 ```
 
-Currently, this parse is the only parser that allow an array of `Param` that
+Currently, this parse is the only parser that allow an array of `Param` tha
 is generated at runtime.
 
 ### `help`
