@@ -142,7 +142,7 @@ pub const ShellIterator = struct {
 
                 // The state that parses the none quoted part of a argument.
                 .no_quote => switch (c) {
-                    // We are doing parsing a none quoted argument when we hit a
+                    // We're done parsing a none quoted argument when we hit a
                     // whitespace.
                     ' ', '\t', '\n' => {
                         defer iter.str = iter.str[i..];
