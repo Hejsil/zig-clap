@@ -10,7 +10,7 @@ const mem = std.mem;
 const os = std.os;
 const testing = std.testing;
 
-/// The result returned from ::StreamingClap.next
+/// The result returned from StreamingClap.next
 pub fn Arg(comptime Id: type) type {
     return struct {
         const Self = @This();
@@ -20,14 +20,15 @@ pub fn Arg(comptime Id: type) type {
     };
 }
 
-/// A command line argument parser which, given an ::ArgIterator, will parse arguments according
-/// to the ::params. ::StreamingClap parses in an iterating manner, so you have to use a loop together with
-/// ::StreamingClap.next to parse all the arguments of your program.
+/// A command line argument parser which, given an ArgIterator, will parse arguments according
+/// to the params. StreamingClap parses in an iterating manner, so you have to use a loop together with
+/// StreamingClap.next to parse all the arguments of your program.
 pub fn StreamingClap(comptime Id: type, comptime ArgIterator: type) type {
     return struct {
         const State = union(enum) {
             normal,
             chaining: Chaining,
+            rest_are_positional,
 
             const Chaining = struct {
                 arg: []const u8,
@@ -38,85 +39,73 @@ pub fn StreamingClap(comptime Id: type, comptime ArgIterator: type) type {
         params: []const clap.Param(Id),
         iter: *ArgIterator,
         state: State = .normal,
+        positional: ?*const clap.Param(Id) = null,
 
-        /// Get the next ::Arg that matches a ::Param.
+        /// Get the next Arg that matches a Param.
         pub fn next(parser: *@This(), diag: ?*clap.Diagnostic) !?Arg(Id) {
-            const ArgInfo = struct {
-                arg: []const u8,
-                kind: enum {
-                    long,
-                    short,
-                    positional,
-                },
-            };
-
             switch (parser.state) {
-                .normal => {
-                    const full_arg = (try parser.iter.next()) orelse return null;
-                    const arg_info = if (mem.eql(u8, full_arg, "--") or mem.eql(u8, full_arg, "-"))
-                        ArgInfo{ .arg = full_arg, .kind = .positional }
-                    else if (mem.startsWith(u8, full_arg, "--"))
-                        ArgInfo{ .arg = full_arg[2..], .kind = .long }
-                    else if (mem.startsWith(u8, full_arg, "-"))
-                        ArgInfo{ .arg = full_arg[1..], .kind = .short }
-                    else
-                        ArgInfo{ .arg = full_arg, .kind = .positional };
+                .normal => return try parser.normal(diag),
+                .chaining => |state| return try parser.chainging(state, diag),
+                .rest_are_positional => {
+                    const param = parser.positionalParam() orelse unreachable;
+                    const value = (try parser.iter.next()) orelse return null;
+                    return Arg(Id){ .param = param, .value = value };
+                },
+            }
+        }
 
-                    const arg = arg_info.arg;
-                    const kind = arg_info.kind;
+        fn normal(parser: *@This(), diag: ?*clap.Diagnostic) !?Arg(Id) {
+            const arg_info = (try parser.parseNextArg()) orelse return null;
+            const arg = arg_info.arg;
+            switch (arg_info.kind) {
+                .long => {
+                    const eql_index = mem.indexOfScalar(u8, arg, '=');
+                    const name = if (eql_index) |i| arg[0..i] else arg;
+                    const maybe_value = if (eql_index) |i| arg[i + 1 ..] else null;
 
-                    switch (kind) {
-                        .long => {
-                            const eql_index = mem.indexOfScalar(u8, arg, '=');
-                            const name = if (eql_index) |i| arg[0..i] else arg;
-                            const maybe_value = if (eql_index) |i| arg[i + 1 ..] else null;
+                    for (parser.params) |*param| {
+                        const match = param.names.long orelse continue;
 
-                            for (parser.params) |*param| {
-                                const match = param.names.long orelse continue;
+                        if (!mem.eql(u8, name, match))
+                            continue;
+                        if (param.takes_value == .None) {
+                            if (maybe_value != null)
+                                return err(diag, arg, .{ .long = name }, error.DoesntTakeValue);
 
-                                if (!mem.eql(u8, name, match))
-                                    continue;
-                                if (param.takes_value == .None) {
-                                    if (maybe_value != null)
-                                        return err(diag, arg, .{ .long = name }, error.DoesntTakeValue);
+                            return Arg(Id){ .param = param };
+                        }
 
-                                    return Arg(Id){ .param = param };
-                                }
+                        const value = blk: {
+                            if (maybe_value) |v|
+                                break :blk v;
 
-                                const value = blk: {
-                                    if (maybe_value) |v|
-                                        break :blk v;
+                            break :blk (try parser.iter.next()) orelse
+                                return err(diag, arg, .{ .long = name }, error.MissingValue);
+                        };
 
-                                    break :blk (try parser.iter.next()) orelse
-                                        return err(diag, arg, .{ .long = name }, error.MissingValue);
-                                };
-
-                                return Arg(Id){ .param = param, .value = value };
-                            }
-
-                            return err(diag, arg, .{ .long = name }, error.InvalidArgument);
-                        },
-                        .short => return try parser.chainging(.{
-                            .arg = full_arg,
-                            .index = full_arg.len - arg.len,
-                        }, diag),
-                        .positional => {
-                            for (parser.params) |*param| {
-                                if (param.names.long) |_|
-                                    continue;
-                                if (param.names.short) |_|
-                                    continue;
-
-                                return Arg(Id){ .param = param, .value = arg };
-                            }
-
-                            return err(diag, arg, .{}, error.InvalidArgument);
-                        },
+                        return Arg(Id){ .param = param, .value = value };
                     }
 
-                    unreachable;
+                    return err(diag, arg, .{ .long = name }, error.InvalidArgument);
                 },
-                .chaining => |state| return try parser.chainging(state, diag),
+                .short => return try parser.chainging(.{
+                    .arg = arg,
+                    .index = 0,
+                }, diag),
+                .positional => if (parser.positionalParam()) |param| {
+                    // If we find a positional with the value `--` then we
+                    // interpret the rest of the arguments as positional
+                    // arguments.
+                    if (mem.eql(u8, arg, "--")) {
+                        parser.state = .rest_are_positional;
+                        const value = (try parser.iter.next()) orelse return null;
+                        return Arg(Id){ .param = param, .value = value };
+                    }
+
+                    return Arg(Id){ .param = param, .value = arg };
+                } else {
+                    return err(diag, arg, .{}, error.InvalidArgument);
+                },
             }
         }
 
@@ -165,6 +154,44 @@ pub fn StreamingClap(comptime Id: type, comptime ArgIterator: type) type {
             }
 
             return err(diag, arg, .{ .short = arg[index] }, error.InvalidArgument);
+        }
+
+        fn positionalParam(parser: *@This()) ?*const clap.Param(Id) {
+            if (parser.positional) |p|
+                return p;
+
+            for (parser.params) |*param| {
+                if (param.names.long) |_|
+                    continue;
+                if (param.names.short) |_|
+                    continue;
+
+                parser.positional = param;
+                return param;
+            }
+
+            return null;
+        }
+
+        const ArgInfo = struct {
+            arg: []const u8,
+            kind: enum {
+                long,
+                short,
+                positional,
+            },
+        };
+
+        fn parseNextArg(parser: *@This()) !?ArgInfo {
+            const full_arg = (try parser.iter.next()) orelse return null;
+            if (mem.eql(u8, full_arg, "--") or mem.eql(u8, full_arg, "-"))
+                return ArgInfo{ .arg = full_arg, .kind = .positional };
+            if (mem.startsWith(u8, full_arg, "--"))
+                return ArgInfo{ .arg = full_arg[2..], .kind = .long };
+            if (mem.startsWith(u8, full_arg, "-"))
+                return ArgInfo{ .arg = full_arg[1..], .kind = .short };
+
+            return ArgInfo{ .arg = full_arg, .kind = .positional };
         }
 
         fn err(diag: ?*clap.Diagnostic, arg: []const u8, names: clap.Names, _err: anytype) @TypeOf(_err) {
@@ -369,7 +396,7 @@ test "all params" {
             "-c",   "0",     "-c=0",   "-ac",
             "0",    "-ac=0", "--aa",   "--bb",
             "--cc", "0",     "--cc=0", "something",
-            "--",   "-",
+            "-",    "--",    "--cc=0", "-a",
         },
         &[_]Arg(u8){
             Arg(u8){ .param = aa },
@@ -389,8 +416,9 @@ test "all params" {
             Arg(u8){ .param = cc, .value = "0" },
             Arg(u8){ .param = cc, .value = "0" },
             Arg(u8){ .param = positional, .value = "something" },
-            Arg(u8){ .param = positional, .value = "--" },
             Arg(u8){ .param = positional, .value = "-" },
+            Arg(u8){ .param = positional, .value = "--cc=0" },
+            Arg(u8){ .param = positional, .value = "-a" },
         },
     );
 }
