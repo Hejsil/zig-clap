@@ -47,7 +47,7 @@ pub fn main() !void {
 
     var args = clap.parse(clap.Help, &params, std.heap.page_allocator, &diag) catch |err| {
         // Report useful error and exit
-        diag.report(std.io.getStdErr().outStream(), err) catch {};
+        diag.report(std.io.getStdErr().writer(), err) catch {};
         return err;
     };
     defer args.deinit();
@@ -151,7 +151,7 @@ pub fn main() !void {
     // Because we use a streaming parser, we have to consume each argument parsed individually.
     while (parser.next(&diag) catch |err| {
         // Report useful error and exit
-        diag.report(std.io.getStdErr().outStream(), err) catch {};
+        diag.report(std.io.getStdErr().writer(), err) catch {};
         return err;
     }) |arg| {
         // arg.param will point to the parameter which matched the argument.
@@ -184,7 +184,7 @@ const clap = @import("clap");
 
 pub fn main() !void {
     const stderr_file = std.io.getStdErr();
-    var stderr_out_stream = stderr_file.outStream();
+    var stderr_out_stream = stderr_file.writer();
 
     // clap.help is a function that can print a simple help message, given a
     // slice of Param(Help). There is also a helpEx, which can print a
@@ -224,7 +224,7 @@ const std = @import("std");
 const clap = @import("clap");
 
 pub fn main() !void {
-    const stderr = std.io.getStdErr().outStream();
+    const stderr = std.io.getStdErr().writer();
 
     // clap.usage is a function that can print a simple usage message, given a
     // slice of Param(Help). There is also a usageEx, which can print a

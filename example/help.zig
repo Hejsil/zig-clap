@@ -3,7 +3,7 @@ const clap = @import("clap");
 
 pub fn main() !void {
     const stderr_file = std.io.getStdErr();
-    var stderr_out_stream = stderr_file.outStream();
+    var stderr_out_stream = stderr_file.writer();
 
     // clap.help is a function that can print a simple help message, given a
     // slice of Param(Help). There is also a helpEx, which can print a
