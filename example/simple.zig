@@ -20,7 +20,7 @@ pub fn main() !void {
 
     var args = clap.parse(clap.Help, &params, std.heap.page_allocator, &diag) catch |err| {
         // Report useful error and exit
-        diag.report(std.io.getStdErr().outStream(), err) catch {};
+        diag.report(std.io.getStdErr().writer(), err) catch {};
         return err;
     };
     defer args.deinit();

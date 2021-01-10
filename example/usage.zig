@@ -2,7 +2,7 @@ const std = @import("std");
 const clap = @import("clap");
 
 pub fn main() !void {
-    const stderr = std.io.getStdErr().outStream();
+    const stderr = std.io.getStdErr().writer();
 
     // clap.usage is a function that can print a simple usage message, given a
     // slice of Param(Help). There is also a usageEx, which can print a

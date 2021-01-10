@@ -272,10 +272,10 @@ pub const Diagnostic = struct {
             Arg{ .prefix = "", .name = diag.arg };
 
         switch (err) {
-            error.DoesntTakeValue => try stream.print("The argument '{}{}' does not take a value\n", .{ a.prefix, a.name }),
-            error.MissingValue => try stream.print("The argument '{}{}' requires a value but none was supplied\n", .{ a.prefix, a.name }),
-            error.InvalidArgument => try stream.print("Invalid argument '{}{}'\n", .{ a.prefix, a.name }),
-            else => try stream.print("Error while parsing arguments: {}\n", .{@errorName(err)}),
+            error.DoesntTakeValue => try stream.print("The argument '{s}{s}' does not take a value\n", .{ a.prefix, a.name }),
+            error.MissingValue => try stream.print("The argument '{s}{s}' requires a value but none was supplied\n", .{ a.prefix, a.name }),
+            error.InvalidArgument => try stream.print("Invalid argument '{s}{s}'\n", .{ a.prefix, a.name }),
+            else => try stream.print("Error while parsing arguments: {s}\n", .{@errorName(err)}),
         }
     }
 };
@@ -283,7 +283,7 @@ pub const Diagnostic = struct {
 fn testDiag(diag: Diagnostic, err: anyerror, expected: []const u8) void {
     var buf: [1024]u8 = undefined;
     var slice_stream = io.fixedBufferStream(&buf);
-    diag.report(slice_stream.outStream(), err) catch unreachable;
+    diag.report(slice_stream.writer(), err) catch unreachable;
     testing.expectEqualStrings(expected, slice_stream.getWritten());
 }
 
@@ -376,8 +376,8 @@ pub fn helpFull(
     const max_spacing = blk: {
         var res: usize = 0;
         for (params) |param| {
-            var counting_stream = io.countingOutStream(io.null_out_stream);
-            try printParam(counting_stream.outStream(), Id, param, Error, context, valueText);
+            var counting_stream = io.countingWriter(io.null_writer);
+            try printParam(counting_stream.writer(), Id, param, Error, context, valueText);
             if (res < counting_stream.bytes_written)
                 res = @intCast(usize, counting_stream.bytes_written);
         }
@@ -389,11 +389,11 @@ pub fn helpFull(
         if (param.names.short == null and param.names.long == null)
             continue;
 
-        var counting_stream = io.countingOutStream(stream);
+        var counting_stream = io.countingWriter(stream);
         try stream.print("\t", .{});
-        try printParam(counting_stream.outStream(), Id, param, Error, context, valueText);
+        try printParam(counting_stream.writer(), Id, param, Error, context, valueText);
         try stream.writeByteNTimes(' ', max_spacing - @intCast(usize, counting_stream.bytes_written));
-        try stream.print("\t{}\n", .{try helpText(context, param)});
+        try stream.print("\t{s}\n", .{try helpText(context, param)});
     }
 }
 
@@ -417,13 +417,13 @@ fn printParam(
             try stream.print("  ", .{});
         }
 
-        try stream.print("--{}", .{l});
+        try stream.print("--{s}", .{l});
     }
 
     switch (param.takes_value) {
         .None => {},
-        .One => try stream.print(" <{}>", .{valueText(context, param)}),
-        .Many => try stream.print(" <{}>...", .{valueText(context, param)}),
+        .One => try stream.print(" <{s}>", .{valueText(context, param)}),
+        .Many => try stream.print(" <{s}>...", .{valueText(context, param)}),
     }
 }
 
@@ -487,7 +487,7 @@ test "clap.help" {
 
     @setEvalBranchQuota(10000);
     try help(
-        slice_stream.outStream(),
+        slice_stream.writer(),
         comptime &[_]Param(Help){
             parseParam("-a                Short flag.  ") catch unreachable,
             parseParam("-b <V1>           Short option.") catch unreachable,
@@ -530,8 +530,8 @@ pub fn usageFull(
     context: anytype,
     valueText: fn (@TypeOf(context), Param(Id)) Error![]const u8,
 ) !void {
-    var cos = io.countingOutStream(stream);
-    const cs = cos.outStream();
+    var cos = io.countingWriter(stream);
+    const cs = cos.writer();
     for (params) |param| {
         const name = param.names.short orelse continue;
         if (param.takes_value != .None)
@@ -560,11 +560,11 @@ pub fn usageFull(
         if (cos.bytes_written != 0)
             try cs.writeByte(' ');
 
-        try cs.print("[{}{}", .{ prefix, name });
+        try cs.print("[{s}{s}", .{ prefix, name });
         switch (param.takes_value) {
             .None => {},
-            .One => try cs.print(" <{}>", .{try valueText(context, param)}),
-            .Many => try cs.print(" <{}>...", .{try valueText(context, param)}),
+            .One => try cs.print(" <{s}>", .{try valueText(context, param)}),
+            .Many => try cs.print(" <{s}>...", .{try valueText(context, param)}),
         }
 
         try cs.writeByte(']');
@@ -573,7 +573,7 @@ pub fn usageFull(
     if (positional) |p| {
         if (cos.bytes_written != 0)
             try cs.writeByte(' ');
-        try cs.print("<{}>", .{try valueText(context, p)});
+        try cs.print("<{s}>", .{try valueText(context, p)});
     }
 }
 
@@ -611,7 +611,7 @@ pub fn usage(stream: anytype, params: []const Param(Help)) !void {
 fn testUsage(expected: []const u8, params: []const Param(Help)) !void {
     var buf: [1024]u8 = undefined;
     var fbs = io.fixedBufferStream(&buf);
-    try usage(fbs.outStream(), params);
+    try usage(fbs.writer(), params);
     testing.expectEqualStrings(expected, fbs.getWritten());
 }
 
