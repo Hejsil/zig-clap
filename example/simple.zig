@@ -1,5 +1,5 @@
-const std = @import("std");
 const clap = @import("clap");
+const std = @import("std");
 
 const debug = std.debug;
 
@@ -14,11 +14,10 @@ pub fn main() !void {
     };
 
     // Initalize our diagnostics, which can be used for reporting useful errors.
-    // This is optional. You can also just pass `null` to `parser.next` if you
-    // don't care about the extra information `Diagnostics` provides.
-    var diag: clap.Diagnostic = undefined;
-
-    var args = clap.parse(clap.Help, &params, std.heap.page_allocator, &diag) catch |err| {
+    // This is optional. You can also pass `.{}` to `clap.parse` if you don't
+    // care about the extra information `Diagnostics` provides.
+    var diag = clap.Diagnostic{};
+    var args = clap.parse(clap.Help, &params, .{ .diagnostic = &diag }) catch |err| {
         // Report useful error and exit
         diag.report(std.io.getStdErr().outStream(), err) catch {};
         return err;

@@ -1,5 +1,5 @@
-const std = @import("std");
 const clap = @import("clap");
+const std = @import("std");
 
 const debug = std.debug;
 
@@ -28,19 +28,18 @@ pub fn main() !void {
     var iter = try clap.args.OsIterator.init(allocator);
     defer iter.deinit();
 
-    // Initialize our streaming parser.
+    // Initalize our diagnostics, which can be used for reporting useful errors.
+    // This is optional. You can also leave the `diagnostic` field unset if you
+    // don't care about the extra information `Diagnostic` provides.
+    var diag = clap.Diagnostic{};
     var parser = clap.StreamingClap(u8, clap.args.OsIterator){
         .params = &params,
         .iter = &iter,
+        .diagnostic = &diag,
     };
 
-    // Initalize our diagnostics, which can be used for reporting useful errors.
-    // This is optional. You can also just pass `null` to `parser.next` if you
-    // don't care about the extra information `Diagnostics` provides.
-    var diag: clap.Diagnostic = undefined;
-
     // Because we use a streaming parser, we have to consume each argument parsed individually.
-    while (parser.next(&diag) catch |err| {
+    while (parser.next() catch |err| {
         // Report useful error and exit
         diag.report(std.io.getStdErr().outStream(), err) catch {};
         return err;

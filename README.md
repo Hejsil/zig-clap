@@ -25,8 +25,8 @@ into master on every `zig` release.
 The simplest way to use this library is to just call the `clap.parse` function.
 
 ```zig
-const std = @import("std");
 const clap = @import("clap");
+const std = @import("std");
 
 const debug = std.debug;
 
@@ -41,11 +41,10 @@ pub fn main() !void {
     };
 
     // Initalize our diagnostics, which can be used for reporting useful errors.
-    // This is optional. You can also just pass `null` to `parser.next` if you
-    // don't care about the extra information `Diagnostics` provides.
-    var diag: clap.Diagnostic = undefined;
-
-    var args = clap.parse(clap.Help, &params, std.heap.page_allocator, &diag) catch |err| {
+    // This is optional. You can also pass `.{}` to `clap.parse` if you don't
+    // care about the extra information `Diagnostics` provides.
+    var diag = clap.Diagnostic{};
+    var args = clap.parse(clap.Help, &params, .{ .diagnostic = &diag }) catch |err| {
         // Report useful error and exit
         diag.report(std.io.getStdErr().outStream(), err) catch {};
         return err;
@@ -107,8 +106,8 @@ The `StreamingClap` is the base of all the other parsers. It's a streaming parse
 `args.Iterator` to provide it with arguments lazily.
 
 ```zig
-const std = @import("std");
 const clap = @import("clap");
+const std = @import("std");
 
 const debug = std.debug;
 
@@ -137,19 +136,18 @@ pub fn main() !void {
     var iter = try clap.args.OsIterator.init(allocator);
     defer iter.deinit();
 
-    // Initialize our streaming parser.
+    // Initalize our diagnostics, which can be used for reporting useful errors.
+    // This is optional. You can also leave the `diagnostic` field unset if you
+    // don't care about the extra information `Diagnostic` provides.
+    var diag = clap.Diagnostic{};
     var parser = clap.StreamingClap(u8, clap.args.OsIterator){
         .params = &params,
         .iter = &iter,
+        .diagnostic = &diag,
     };
 
-    // Initalize our diagnostics, which can be used for reporting useful errors.
-    // This is optional. You can also just pass `null` to `parser.next` if you
-    // don't care about the extra information `Diagnostics` provides.
-    var diag: clap.Diagnostic = undefined;
-
     // Because we use a streaming parser, we have to consume each argument parsed individually.
-    while (parser.next(&diag) catch |err| {
+    while (parser.next() catch |err| {
         // Report useful error and exit
         diag.report(std.io.getStdErr().outStream(), err) catch {};
         return err;
