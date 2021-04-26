@@ -1,10 +1,10 @@
 const clap = @import("../clap.zig");
 const std = @import("std");
 
-const testing = std.testing;
+const debug = std.debug;
 const heap = std.heap;
 const mem = std.mem;
-const debug = std.debug;
+const testing = std.testing;
 
 /// Deprecated: Use `parseEx` instead
 pub fn ComptimeClap(
@@ -42,7 +42,8 @@ pub fn ComptimeClap(
         pos: []const []const u8,
         allocator: *mem.Allocator,
 
-        pub fn parse(allocator: *mem.Allocator, iter: anytype, diag: ?*clap.Diagnostic) !@This() {
+        pub fn parse(iter: anytype, opt: clap.ParseOptions) !@This() {
+            const allocator = opt.allocator;
             var multis = [_]std.ArrayList([]const u8){undefined} ** multi_options;
             for (multis) |*multi| {
                 multi.* = std.ArrayList([]const u8).init(allocator);
@@ -62,7 +63,7 @@ pub fn ComptimeClap(
                 .params = converted_params,
                 .iter = iter,
             };
-            while (try stream.next(diag)) |arg| {
+            while (try stream.next()) |arg| {
                 const param = arg.param;
                 if (param.names.long == null and param.names.short == null) {
                     try pos.append(arg.value.?);
@@ -81,19 +82,17 @@ pub fn ComptimeClap(
                 }
             }
 
-            for (multis) |*multi, i| {
+            for (multis) |*multi, i|
                 res.multi_options[i] = multi.toOwnedSlice();
-            }
             res.pos = pos.toOwnedSlice();
 
             return res;
         }
 
-        pub fn deinit(parser: *@This()) void {
+        pub fn deinit(parser: @This()) void {
             for (parser.multi_options) |o|
                 parser.allocator.free(o);
             parser.allocator.free(parser.pos);
-            parser.* = undefined;
         }
 
         pub fn flag(parser: @This(), comptime name: []const u8) bool {
@@ -155,14 +154,12 @@ test "" {
         clap.parseParam("<P>") catch unreachable,
     });
 
-    var buf: [1024]u8 = undefined;
-    var fb_allocator = heap.FixedBufferAllocator.init(buf[0..]);
     var iter = clap.args.SliceIterator{
         .args = &[_][]const u8{
             "-a", "-c", "0", "something", "-d", "a", "--dd", "b",
         },
     };
-    var args = try Clap.parse(&fb_allocator.allocator, &iter, null);
+    var args = try Clap.parse(&iter, .{ .allocator = testing.allocator });
     defer args.deinit();
 
     testing.expect(args.flag("-a"));

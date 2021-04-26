@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const debug = std.debug;
+const heap = std.heap;
 const io = std.io;
 const mem = std.mem;
 const testing = std.testing;
@@ -307,7 +308,6 @@ pub fn Args(comptime Id: type, comptime params: []const Param(Id)) type {
         exe_arg: ?[]const u8,
 
         pub fn deinit(a: *@This()) void {
-            a.clap.deinit();
             a.arena.deinit();
         }
 
@@ -329,20 +329,37 @@ pub fn Args(comptime Id: type, comptime params: []const Param(Id)) type {
     };
 }
 
+/// Options that can be set to customize the behavior of parsing.
+pub const ParseOptions = struct {
+    /// The allocator used for all memory allocations. Defaults to the `heap.page_allocator`.
+    /// Note: You should probably override this allocator if you are calling `parseEx`. Unlike
+    ///       `parse`, `parseEx` does not wrap the allocator so the heap allocator can be
+    ///       quite expensive. (TODO: Can we pick a better default? For `parse`, this allocator
+    ///       is fine, as it wraps it in an arena)
+    allocator: *mem.Allocator = heap.page_allocator,
+    diagnostic: ?*Diagnostic = null,
+};
+
 /// Same as `parseEx` but uses the `args.OsIterator` by default.
 pub fn parse(
     comptime Id: type,
     comptime params: []const Param(Id),
-    allocator: *mem.Allocator,
-    diag: ?*Diagnostic,
+    opt: ParseOptions,
 ) !Args(Id, params) {
-    var iter = try args.OsIterator.init(allocator);
-    const clap = try parseEx(Id, params, allocator, &iter, diag);
-    return Args(Id, params){
+    var iter = try args.OsIterator.init(opt.allocator);
+    var res = Args(Id, params){
         .arena = iter.arena,
-        .clap = clap,
         .exe_arg = iter.exe_arg,
+        .clap = undefined,
     };
+
+    // Let's reuse the arena from the `OSIterator` since we already have
+    // it.
+    res.clap = try parseEx(Id, params, &iter, .{
+        .allocator = &res.arena.allocator,
+        .diagnostic = opt.diagnostic,
+    });
+    return res;
 }
 
 /// Parses the command line arguments passed into the program based on an
@@ -350,12 +367,11 @@ pub fn parse(
 pub fn parseEx(
     comptime Id: type,
     comptime params: []const Param(Id),
-    allocator: *mem.Allocator,
     iter: anytype,
-    diag: ?*Diagnostic,
+    opt: ParseOptions,
 ) !ComptimeClap(Id, params) {
     const Clap = ComptimeClap(Id, params);
-    return try Clap.parse(allocator, iter, diag);
+    return try Clap.parse(iter, opt);
 }
 
 /// Will print a help message in the following format:
