@@ -234,7 +234,7 @@ fn testErr(params: []const clap.Param(u8), args_strings: []const []const u8, exp
     while (c.next(&diag) catch |err| {
         var buf: [1024]u8 = undefined;
         var slice_stream = io.fixedBufferStream(&buf);
-        diag.report(slice_stream.outStream(), err) catch unreachable;
+        diag.report(slice_stream.writer(), err) catch unreachable;
         testing.expectEqualStrings(expected, slice_stream.getWritten());
         return;
     }) |_| {}

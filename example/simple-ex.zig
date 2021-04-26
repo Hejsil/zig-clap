@@ -27,7 +27,7 @@ pub fn main() !void {
 
     var args = clap.parseEx(clap.Help, &params, allocator, &iter, &diag) catch |err| {
         // Report useful error and exit
-        diag.report(std.io.getStdErr().outStream(), err) catch {};
+        diag.report(std.io.getStdErr().writer(), err) catch {};
         return err;
     };
     defer args.deinit();
