@@ -2,6 +2,7 @@ const clap = @import("clap");
 const std = @import("std");
 
 const debug = std.debug;
+const io = std.io;
 
 pub fn main() !void {
     // First we specify what parameters our program can take.
@@ -19,7 +20,7 @@ pub fn main() !void {
     var diag = clap.Diagnostic{};
     var args = clap.parse(clap.Help, &params, .{ .diagnostic = &diag }) catch |err| {
         // Report useful error and exit
-        diag.report(std.io.getStdErr().outStream(), err) catch {};
+        diag.report(io.getStdErr().writer(), err) catch {};
         return err;
     };
     defer args.deinit();

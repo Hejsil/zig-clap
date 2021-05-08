@@ -2,6 +2,7 @@ const clap = @import("clap");
 const std = @import("std");
 
 const debug = std.debug;
+const io = std.io;
 
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
@@ -29,7 +30,7 @@ pub fn main() !void {
         .diagnostic = &diag,
     }) catch |err| {
         // Report useful error and exit
-        diag.report(std.io.getStdErr().outStream(), err) catch {};
+        diag.report(io.getStdErr().writer(), err) catch {};
         return err;
     };
     defer args.deinit();

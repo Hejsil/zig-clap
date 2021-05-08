@@ -19,9 +19,9 @@ pub fn ComptimeClap(
         var index: usize = 0;
         if (param.names.long != null or param.names.short != null) {
             const ptr = switch (param.takes_value) {
-                .None => &flags,
-                .One => &single_options,
-                .Many => &multi_options,
+                .none => &flags,
+                .one => &single_options,
+                .many => &multi_options,
             };
             index = ptr.*;
             ptr.* += 1;
@@ -67,11 +67,11 @@ pub fn ComptimeClap(
                 const param = arg.param;
                 if (param.names.long == null and param.names.short == null) {
                     try pos.append(arg.value.?);
-                } else if (param.takes_value == .One) {
+                } else if (param.takes_value == .one) {
                     debug.assert(res.single_options.len != 0);
                     if (res.single_options.len != 0)
                         res.single_options[param.id] = arg.value.?;
-                } else if (param.takes_value == .Many) {
+                } else if (param.takes_value == .many) {
                     debug.assert(multis.len != 0);
                     if (multis.len != 0)
                         try multis[param.id].append(arg.value.?);
@@ -97,7 +97,7 @@ pub fn ComptimeClap(
 
         pub fn flag(parser: @This(), comptime name: []const u8) bool {
             const param = comptime findParam(name);
-            if (param.takes_value != .None)
+            if (param.takes_value != .none)
                 @compileError(name ++ " is an option and not a flag.");
 
             return parser.flags[param.id];
@@ -105,18 +105,18 @@ pub fn ComptimeClap(
 
         pub fn option(parser: @This(), comptime name: []const u8) ?[]const u8 {
             const param = comptime findParam(name);
-            if (param.takes_value == .None)
+            if (param.takes_value == .none)
                 @compileError(name ++ " is a flag and not an option.");
-            if (param.takes_value == .Many)
+            if (param.takes_value == .many)
                 @compileError(name ++ " takes many options, not one.");
             return parser.single_options[param.id];
         }
 
         pub fn options(parser: @This(), comptime name: []const u8) []const []const u8 {
             const param = comptime findParam(name);
-            if (param.takes_value == .None)
+            if (param.takes_value == .none)
                 @compileError(name ++ " is a flag and not an option.");
-            if (param.takes_value == .One)
+            if (param.takes_value == .one)
                 @compileError(name ++ " takes one option, not multiple.");
 
             return parser.multi_options[param.id];

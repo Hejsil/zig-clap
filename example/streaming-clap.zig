@@ -2,25 +2,23 @@ const clap = @import("clap");
 const std = @import("std");
 
 const debug = std.debug;
+const io = std.io;
 
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
 
     // First we specify what parameters our program can take.
     const params = [_]clap.Param(u8){
-        clap.Param(u8){
+        .{
             .id = 'h',
-            .names = clap.Names{ .short = 'h', .long = "help" },
+            .names = .{ .short = 'h', .long = "help" },
         },
-        clap.Param(u8){
+        .{
             .id = 'n',
-            .names = clap.Names{ .short = 'n', .long = "number" },
-            .takes_value = .One,
+            .names = .{ .short = 'n', .long = "number" },
+            .takes_value = .one,
         },
-        clap.Param(u8){
-            .id = 'f',
-            .takes_value = .One,
-        },
+        .{ .id = 'f', .takes_value = .one },
     };
 
     // We then initialize an argument iterator. We will use the OsIterator as it nicely
@@ -41,7 +39,7 @@ pub fn main() !void {
     // Because we use a streaming parser, we have to consume each argument parsed individually.
     while (parser.next() catch |err| {
         // Report useful error and exit
-        diag.report(std.io.getStdErr().outStream(), err) catch {};
+        diag.report(io.getStdErr().writer(), err) catch {};
         return err;
     }) |arg| {
         // arg.param will point to the parameter which matched the argument.

@@ -1,8 +1,8 @@
 const builtin = @import("builtin");
 const std = @import("std");
 
-const Mode = builtin.Mode;
 const Builder = std.build.Builder;
+const Mode = builtin.Mode;
 
 pub fn build(b: *Builder) void {
     const mode = b.standardReleaseOptions();
@@ -58,7 +58,7 @@ fn readMeStep(b: *Builder) *std.build.Step {
         fn make(step: *std.build.Step) anyerror!void {
             @setEvalBranchQuota(10000);
             const file = try std.fs.cwd().createFile("README.md", .{});
-            const stream = &file.outStream();
+            const stream = file.writer();
             try stream.print(@embedFile("example/README.md.template"), .{
                 @embedFile("example/simple.zig"),
                 @embedFile("example/simple-error.zig"),

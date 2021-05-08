@@ -29,6 +29,7 @@ const clap = @import("clap");
 const std = @import("std");
 
 const debug = std.debug;
+const io = std.io;
 
 pub fn main() !void {
     // First we specify what parameters our program can take.
@@ -46,7 +47,7 @@ pub fn main() !void {
     var diag = clap.Diagnostic{};
     var args = clap.parse(clap.Help, &params, .{ .diagnostic = &diag }) catch |err| {
         // Report useful error and exit
-        diag.report(std.io.getStdErr().outStream(), err) catch {};
+        diag.report(io.getStdErr().writer(), err) catch {};
         return err;
     };
     defer args.deinit();
@@ -68,15 +69,15 @@ that the strings you pass to `option`, `options` and `flag` are actually paramet
 program can take:
 
 ```zig
-const std = @import("std");
 const clap = @import("clap");
+const std = @import("std");
 
 pub fn main() !void {
     const params = comptime [_]clap.Param(clap.Help){
         clap.parseParam("-h, --help  Display this help and exit.") catch unreachable,
     };
 
-    var args = try clap.parse(clap.Help, &params, std.heap.direct_allocator, null);
+    var args = try clap.parse(clap.Help, &params, .{});
     defer args.deinit();
 
     _ = args.flag("--helps");
@@ -110,25 +111,23 @@ const clap = @import("clap");
 const std = @import("std");
 
 const debug = std.debug;
+const io = std.io;
 
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
 
     // First we specify what parameters our program can take.
     const params = [_]clap.Param(u8){
-        clap.Param(u8){
+        .{
             .id = 'h',
-            .names = clap.Names{ .short = 'h', .long = "help" },
+            .names = .{ .short = 'h', .long = "help" },
         },
-        clap.Param(u8){
+        .{
             .id = 'n',
-            .names = clap.Names{ .short = 'n', .long = "number" },
-            .takes_value = .One,
+            .names = .{ .short = 'n', .long = "number" },
+            .takes_value = .one,
         },
-        clap.Param(u8){
-            .id = 'f',
-            .takes_value = .One,
-        },
+        .{ .id = 'f', .takes_value = .one },
     };
 
     // We then initialize an argument iterator. We will use the OsIterator as it nicely
@@ -149,7 +148,7 @@ pub fn main() !void {
     // Because we use a streaming parser, we have to consume each argument parsed individually.
     while (parser.next() catch |err| {
         // Report useful error and exit
-        diag.report(std.io.getStdErr().outStream(), err) catch {};
+        diag.report(io.getStdErr().writer(), err) catch {};
         return err;
     }) |arg| {
         // arg.param will point to the parameter which matched the argument.
@@ -177,18 +176,15 @@ The `help`, `helpEx` and `helpFull` are functions for printing a simple list of 
 program can take.
 
 ```zig
-const std = @import("std");
 const clap = @import("clap");
+const std = @import("std");
 
 pub fn main() !void {
-    const stderr_file = std.io.getStdErr();
-    var stderr_out_stream = stderr_file.outStream();
-
     // clap.help is a function that can print a simple help message, given a
     // slice of Param(Help). There is also a helpEx, which can print a
     // help message for any Param, but it is more verbose to call.
     try clap.help(
-        stderr_out_stream,
+        std.io.getStdErr().writer(),
         comptime &[_]clap.Param(clap.Help){
             clap.parseParam("-h, --help     Display this help and exit.         ") catch unreachable,
             clap.parseParam("-v, --version  Output version information and exit.") catch unreachable,
@@ -218,17 +214,15 @@ The `usage`, `usageEx` and `usageFull` are functions for printing a small abbrev
 of the help message.
 
 ```zig
-const std = @import("std");
 const clap = @import("clap");
+const std = @import("std");
 
 pub fn main() !void {
-    const stderr = std.io.getStdErr().outStream();
-
     // clap.usage is a function that can print a simple usage message, given a
     // slice of Param(Help). There is also a usageEx, which can print a
     // usage message for any Param, but it is more verbose to call.
     try clap.usage(
-        stderr,
+        std.io.getStdErr().writer(),
         comptime &[_]clap.Param(clap.Help){
             clap.parseParam("-h, --help       Display this help and exit.         ") catch unreachable,
             clap.parseParam("-v, --version    Output version information and exit.") catch unreachable,

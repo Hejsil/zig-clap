@@ -69,7 +69,7 @@ pub fn StreamingClap(comptime Id: type, comptime ArgIterator: type) type {
 
                         if (!mem.eql(u8, name, match))
                             continue;
-                        if (param.takes_value == .None) {
+                        if (param.takes_value == .none) {
                             if (maybe_value != null)
                                 return parser.err(arg, .{ .long = name }, error.DoesntTakeValue);
 
@@ -122,7 +122,7 @@ pub fn StreamingClap(comptime Id: type, comptime ArgIterator: type) type {
 
                 // Before we return, we have to set the new state of the clap
                 defer {
-                    if (arg.len <= next_index or param.takes_value != .None) {
+                    if (arg.len <= next_index or param.takes_value != .none) {
                         parser.state = .normal;
                     } else {
                         parser.state = .{
@@ -135,7 +135,7 @@ pub fn StreamingClap(comptime Id: type, comptime ArgIterator: type) type {
                 }
 
                 const next_is_eql = if (next_index < arg.len) arg[next_index] == '=' else false;
-                if (param.takes_value == .None) {
+                if (param.takes_value == .none) {
                     if (next_is_eql)
                         return parser.err(arg, .{ .short = short }, error.DoesntTakeValue);
                     return Arg(Id){ .param = param };
@@ -235,9 +235,9 @@ fn testErr(params: []const clap.Param(u8), args_strings: []const []const u8, exp
     };
     while (c.next() catch |err| {
         var buf: [1024]u8 = undefined;
-        var slice_stream = io.fixedBufferStream(&buf);
-        diag.report(slice_stream.outStream(), err) catch unreachable;
-        testing.expectEqualStrings(expected, slice_stream.getWritten());
+        var fbs = io.fixedBufferStream(&buf);
+        diag.report(fbs.writer(), err) catch unreachable;
+        testing.expectEqualStrings(expected, fbs.getWritten());
         return;
     }) |_| {}
 
@@ -246,23 +246,17 @@ fn testErr(params: []const clap.Param(u8), args_strings: []const []const u8, exp
 
 test "short params" {
     const params = [_]clap.Param(u8){
-        clap.Param(u8){
-            .id = 0,
-            .names = clap.Names{ .short = 'a' },
-        },
-        clap.Param(u8){
-            .id = 1,
-            .names = clap.Names{ .short = 'b' },
-        },
-        clap.Param(u8){
+        .{ .id = 0, .names = .{ .short = 'a' } },
+        .{ .id = 1, .names = .{ .short = 'b' } },
+        .{
             .id = 2,
-            .names = clap.Names{ .short = 'c' },
-            .takes_value = .One,
+            .names = .{ .short = 'c' },
+            .takes_value = .one,
         },
-        clap.Param(u8){
+        .{
             .id = 3,
-            .names = clap.Names{ .short = 'd' },
-            .takes_value = .Many,
+            .names = .{ .short = 'd' },
+            .takes_value = .many,
         },
     };
 
@@ -279,42 +273,36 @@ test "short params" {
             "0",  "-ac=0", "-d=0",
         },
         &[_]Arg(u8){
-            Arg(u8){ .param = a },
-            Arg(u8){ .param = b },
-            Arg(u8){ .param = a },
-            Arg(u8){ .param = b },
-            Arg(u8){ .param = b },
-            Arg(u8){ .param = a },
-            Arg(u8){ .param = c, .value = "0" },
-            Arg(u8){ .param = c, .value = "0" },
-            Arg(u8){ .param = a },
-            Arg(u8){ .param = c, .value = "0" },
-            Arg(u8){ .param = a },
-            Arg(u8){ .param = c, .value = "0" },
-            Arg(u8){ .param = d, .value = "0" },
+            .{ .param = a },
+            .{ .param = b },
+            .{ .param = a },
+            .{ .param = b },
+            .{ .param = b },
+            .{ .param = a },
+            .{ .param = c, .value = "0" },
+            .{ .param = c, .value = "0" },
+            .{ .param = a },
+            .{ .param = c, .value = "0" },
+            .{ .param = a },
+            .{ .param = c, .value = "0" },
+            .{ .param = d, .value = "0" },
         },
     );
 }
 
 test "long params" {
     const params = [_]clap.Param(u8){
-        clap.Param(u8){
-            .id = 0,
-            .names = clap.Names{ .long = "aa" },
-        },
-        clap.Param(u8){
-            .id = 1,
-            .names = clap.Names{ .long = "bb" },
-        },
-        clap.Param(u8){
+        .{ .id = 0, .names = .{ .long = "aa" } },
+        .{ .id = 1, .names = .{ .long = "bb" } },
+        .{
             .id = 2,
-            .names = clap.Names{ .long = "cc" },
-            .takes_value = .One,
+            .names = .{ .long = "cc" },
+            .takes_value = .one,
         },
-        clap.Param(u8){
+        .{
             .id = 3,
-            .names = clap.Names{ .long = "dd" },
-            .takes_value = .Many,
+            .names = .{ .long = "dd" },
+            .takes_value = .many,
         },
     };
 
@@ -331,59 +319,47 @@ test "long params" {
             "--cc=0", "--dd=0",
         },
         &[_]Arg(u8){
-            Arg(u8){ .param = aa },
-            Arg(u8){ .param = bb },
-            Arg(u8){ .param = cc, .value = "0" },
-            Arg(u8){ .param = cc, .value = "0" },
-            Arg(u8){ .param = dd, .value = "0" },
+            .{ .param = aa },
+            .{ .param = bb },
+            .{ .param = cc, .value = "0" },
+            .{ .param = cc, .value = "0" },
+            .{ .param = dd, .value = "0" },
         },
     );
 }
 
 test "positional params" {
-    const params = [_]clap.Param(u8){clap.Param(u8){
+    const params = [_]clap.Param(u8){.{
         .id = 0,
-        .takes_value = .One,
+        .takes_value = .one,
     }};
 
     testNoErr(
         &params,
         &[_][]const u8{ "aa", "bb" },
         &[_]Arg(u8){
-            Arg(u8){ .param = &params[0], .value = "aa" },
-            Arg(u8){ .param = &params[0], .value = "bb" },
+            .{ .param = &params[0], .value = "aa" },
+            .{ .param = &params[0], .value = "bb" },
         },
     );
 }
 
 test "all params" {
     const params = [_]clap.Param(u8){
-        clap.Param(u8){
+        .{
             .id = 0,
-            .names = clap.Names{
-                .short = 'a',
-                .long = "aa",
-            },
+            .names = .{ .short = 'a', .long = "aa" },
         },
-        clap.Param(u8){
+        .{
             .id = 1,
-            .names = clap.Names{
-                .short = 'b',
-                .long = "bb",
-            },
+            .names = .{ .short = 'b', .long = "bb" },
         },
-        clap.Param(u8){
+        .{
             .id = 2,
-            .names = clap.Names{
-                .short = 'c',
-                .long = "cc",
-            },
-            .takes_value = .One,
+            .names = .{ .short = 'c', .long = "cc" },
+            .takes_value = .one,
         },
-        clap.Param(u8){
-            .id = 3,
-            .takes_value = .One,
-        },
+        .{ .id = 3, .takes_value = .one },
     };
 
     const aa = &params[0];
@@ -401,46 +377,40 @@ test "all params" {
             "-",    "--",    "--cc=0", "-a",
         },
         &[_]Arg(u8){
-            Arg(u8){ .param = aa },
-            Arg(u8){ .param = bb },
-            Arg(u8){ .param = aa },
-            Arg(u8){ .param = bb },
-            Arg(u8){ .param = bb },
-            Arg(u8){ .param = aa },
-            Arg(u8){ .param = cc, .value = "0" },
-            Arg(u8){ .param = cc, .value = "0" },
-            Arg(u8){ .param = aa },
-            Arg(u8){ .param = cc, .value = "0" },
-            Arg(u8){ .param = aa },
-            Arg(u8){ .param = cc, .value = "0" },
-            Arg(u8){ .param = aa },
-            Arg(u8){ .param = bb },
-            Arg(u8){ .param = cc, .value = "0" },
-            Arg(u8){ .param = cc, .value = "0" },
-            Arg(u8){ .param = positional, .value = "something" },
-            Arg(u8){ .param = positional, .value = "-" },
-            Arg(u8){ .param = positional, .value = "--cc=0" },
-            Arg(u8){ .param = positional, .value = "-a" },
+            .{ .param = aa },
+            .{ .param = bb },
+            .{ .param = aa },
+            .{ .param = bb },
+            .{ .param = bb },
+            .{ .param = aa },
+            .{ .param = cc, .value = "0" },
+            .{ .param = cc, .value = "0" },
+            .{ .param = aa },
+            .{ .param = cc, .value = "0" },
+            .{ .param = aa },
+            .{ .param = cc, .value = "0" },
+            .{ .param = aa },
+            .{ .param = bb },
+            .{ .param = cc, .value = "0" },
+            .{ .param = cc, .value = "0" },
+            .{ .param = positional, .value = "something" },
+            .{ .param = positional, .value = "-" },
+            .{ .param = positional, .value = "--cc=0" },
+            .{ .param = positional, .value = "-a" },
         },
     );
 }
 
 test "errors" {
     const params = [_]clap.Param(u8){
-        clap.Param(u8){
+        .{
             .id = 0,
-            .names = clap.Names{
-                .short = 'a',
-                .long = "aa",
-            },
+            .names = .{ .short = 'a', .long = "aa" },
         },
-        clap.Param(u8){
+        .{
             .id = 1,
-            .names = clap.Names{
-                .short = 'c',
-                .long = "cc",
-            },
-            .takes_value = .One,
+            .names = .{ .short = 'c', .long = "cc" },
+            .takes_value = .one,
         },
     };
     testErr(&params, &[_][]const u8{"q"}, "Invalid argument 'q'\n");
