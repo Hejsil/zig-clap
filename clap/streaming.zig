@@ -203,7 +203,7 @@ pub fn StreamingClap(comptime Id: type, comptime ArgIterator: type) type {
     };
 }
 
-fn testNoErr(params: []const clap.Param(u8), args_strings: []const []const u8, results: []const Arg(u8)) void {
+fn testNoErr(params: []const clap.Param(u8), args_strings: []const []const u8, results: []const Arg(u8)) !void {
     var iter = args.SliceIterator{ .args = args_strings };
     var c = StreamingClap(u8, args.SliceIterator){
         .params = params,
@@ -211,22 +211,22 @@ fn testNoErr(params: []const clap.Param(u8), args_strings: []const []const u8, r
     };
 
     for (results) |res| {
-        const arg = (c.next() catch unreachable) orelse unreachable;
-        testing.expectEqual(res.param, arg.param);
+        const arg = (try c.next()) orelse return error.TestFailed;
+        try testing.expectEqual(res.param, arg.param);
         const expected_value = res.value orelse {
-            testing.expectEqual(@as(@TypeOf(arg.value), null), arg.value);
+            try testing.expectEqual(@as(@TypeOf(arg.value), null), arg.value);
             continue;
         };
-        const actual_value = arg.value orelse unreachable;
-        testing.expectEqualSlices(u8, expected_value, actual_value);
+        const actual_value = arg.value orelse return error.TestFailed;
+        try testing.expectEqualSlices(u8, expected_value, actual_value);
     }
 
-    if (c.next() catch unreachable) |_|
-        unreachable;
+    if (try c.next()) |_|
+        return error.TestFailed;
 }
 
-fn testErr(params: []const clap.Param(u8), args_strings: []const []const u8, expected: []const u8) void {
-    var diag = clap.Diagnostic{};
+fn testErr(params: []const clap.Param(u8), args_strings: []const []const u8, expected: []const u8) !void {
+    var diag: clap.Diagnostic = undefined;
     var iter = args.SliceIterator{ .args = args_strings };
     var c = StreamingClap(u8, args.SliceIterator){
         .params = params,
@@ -236,12 +236,12 @@ fn testErr(params: []const clap.Param(u8), args_strings: []const []const u8, exp
     while (c.next() catch |err| {
         var buf: [1024]u8 = undefined;
         var fbs = io.fixedBufferStream(&buf);
-        diag.report(fbs.writer(), err) catch unreachable;
-        testing.expectEqualStrings(expected, fbs.getWritten());
+        diag.report(fbs.writer(), err) catch return error.TestFailed;
+        try testing.expectEqualStrings(expected, fbs.getWritten());
         return;
     }) |_| {}
 
-    testing.expect(false);
+    try testing.expect(false);
 }
 
 test "short params" {
@@ -265,14 +265,14 @@ test "short params" {
     const c = &params[2];
     const d = &params[3];
 
-    testNoErr(
+    try testNoErr(
         &params,
-        &[_][]const u8{
+        &.{
             "-a", "-b",    "-ab",  "-ba",
             "-c", "0",     "-c=0", "-ac",
             "0",  "-ac=0", "-d=0",
         },
-        &[_]Arg(u8){
+        &.{
             .{ .param = a },
             .{ .param = b },
             .{ .param = a },
@@ -311,14 +311,14 @@ test "long params" {
     const cc = &params[2];
     const dd = &params[3];
 
-    testNoErr(
+    try testNoErr(
         &params,
-        &[_][]const u8{
+        &.{
             "--aa",   "--bb",
             "--cc",   "0",
             "--cc=0", "--dd=0",
         },
-        &[_]Arg(u8){
+        &.{
             .{ .param = aa },
             .{ .param = bb },
             .{ .param = cc, .value = "0" },
@@ -334,10 +334,10 @@ test "positional params" {
         .takes_value = .one,
     }};
 
-    testNoErr(
+    try testNoErr(
         &params,
-        &[_][]const u8{ "aa", "bb" },
-        &[_]Arg(u8){
+        &.{ "aa", "bb" },
+        &.{
             .{ .param = &params[0], .value = "aa" },
             .{ .param = &params[0], .value = "bb" },
         },
@@ -367,16 +367,16 @@ test "all params" {
     const cc = &params[2];
     const positional = &params[3];
 
-    testNoErr(
+    try testNoErr(
         &params,
-        &[_][]const u8{
+        &.{
             "-a",   "-b",    "-ab",    "-ba",
             "-c",   "0",     "-c=0",   "-ac",
             "0",    "-ac=0", "--aa",   "--bb",
             "--cc", "0",     "--cc=0", "something",
             "-",    "--",    "--cc=0", "-a",
         },
-        &[_]Arg(u8){
+        &.{
             .{ .param = aa },
             .{ .param = bb },
             .{ .param = aa },
@@ -413,12 +413,12 @@ test "errors" {
             .takes_value = .one,
         },
     };
-    testErr(&params, &[_][]const u8{"q"}, "Invalid argument 'q'\n");
-    testErr(&params, &[_][]const u8{"-q"}, "Invalid argument '-q'\n");
-    testErr(&params, &[_][]const u8{"--q"}, "Invalid argument '--q'\n");
-    testErr(&params, &[_][]const u8{"--q=1"}, "Invalid argument '--q'\n");
-    testErr(&params, &[_][]const u8{"-a=1"}, "The argument '-a' does not take a value\n");
-    testErr(&params, &[_][]const u8{"--aa=1"}, "The argument '--aa' does not take a value\n");
-    testErr(&params, &[_][]const u8{"-c"}, "The argument '-c' requires a value but none was supplied\n");
-    testErr(&params, &[_][]const u8{"--cc"}, "The argument '--cc' requires a value but none was supplied\n");
+    try testErr(&params, &.{"q"}, "Invalid argument 'q'\n");
+    try testErr(&params, &.{"-q"}, "Invalid argument '-q'\n");
+    try testErr(&params, &.{"--q"}, "Invalid argument '--q'\n");
+    try testErr(&params, &.{"--q=1"}, "Invalid argument '--q'\n");
+    try testErr(&params, &.{"-a=1"}, "The argument '-a' does not take a value\n");
+    try testErr(&params, &.{"--aa=1"}, "The argument '--aa' does not take a value\n");
+    try testErr(&params, &.{"-c"}, "The argument '-c' requires a value but none was supplied\n");
+    try testErr(&params, &.{"--cc"}, "The argument '--cc' requires a value but none was supplied\n");
 }

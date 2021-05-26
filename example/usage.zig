@@ -7,7 +7,7 @@ pub fn main() !void {
     // usage message for any Param, but it is more verbose to call.
     try clap.usage(
         std.io.getStdErr().writer(),
-        comptime &[_]clap.Param(clap.Help){
+        comptime &.{
             clap.parseParam("-h, --help       Display this help and exit.         ") catch unreachable,
             clap.parseParam("-v, --version    Output version information and exit.") catch unreachable,
             clap.parseParam("    --value <N>  Output version information and exit.") catch unreachable,

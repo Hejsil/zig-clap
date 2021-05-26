@@ -122,81 +122,81 @@ fn parseParamRest(line: []const u8) Param(Help) {
     return .{ .id = .{ .msg = mem.trim(u8, line, " \t") } };
 }
 
-fn expectParam(expect: Param(Help), actual: Param(Help)) void {
-    testing.expectEqualStrings(expect.id.msg, actual.id.msg);
-    testing.expectEqualStrings(expect.id.value, actual.id.value);
-    testing.expectEqual(expect.names.short, actual.names.short);
-    testing.expectEqual(expect.takes_value, actual.takes_value);
+fn expectParam(expect: Param(Help), actual: Param(Help)) !void {
+    try testing.expectEqualStrings(expect.id.msg, actual.id.msg);
+    try testing.expectEqualStrings(expect.id.value, actual.id.value);
+    try testing.expectEqual(expect.names.short, actual.names.short);
+    try testing.expectEqual(expect.takes_value, actual.takes_value);
     if (expect.names.long) |long| {
-        testing.expectEqualStrings(long, actual.names.long.?);
+        try testing.expectEqualStrings(long, actual.names.long.?);
     } else {
-        testing.expectEqual(@as(?[]const u8, null), actual.names.long);
+        try testing.expectEqual(@as(?[]const u8, null), actual.names.long);
     }
 }
 
 test "parseParam" {
-    expectParam(Param(Help){
+    try expectParam(Param(Help){
         .id = .{ .msg = "Help text", .value = "value" },
         .names = .{ .short = 's', .long = "long" },
         .takes_value = .one,
     }, try parseParam("-s, --long <value> Help text"));
 
-    expectParam(Param(Help){
+    try expectParam(Param(Help){
         .id = .{ .msg = "Help text", .value = "value" },
         .names = .{ .short = 's', .long = "long" },
         .takes_value = .many,
     }, try parseParam("-s, --long <value>... Help text"));
 
-    expectParam(Param(Help){
+    try expectParam(Param(Help){
         .id = .{ .msg = "Help text", .value = "value" },
         .names = .{ .long = "long" },
         .takes_value = .one,
     }, try parseParam("--long <value> Help text"));
 
-    expectParam(Param(Help){
+    try expectParam(Param(Help){
         .id = .{ .msg = "Help text", .value = "value" },
         .names = .{ .short = 's' },
         .takes_value = .one,
     }, try parseParam("-s <value> Help text"));
 
-    expectParam(Param(Help){
+    try expectParam(Param(Help){
         .id = .{ .msg = "Help text" },
         .names = .{ .short = 's', .long = "long" },
     }, try parseParam("-s, --long Help text"));
 
-    expectParam(Param(Help){
+    try expectParam(Param(Help){
         .id = .{ .msg = "Help text" },
         .names = .{ .short = 's' },
     }, try parseParam("-s Help text"));
 
-    expectParam(Param(Help){
+    try expectParam(Param(Help){
         .id = .{ .msg = "Help text" },
         .names = .{ .long = "long" },
     }, try parseParam("--long Help text"));
 
-    expectParam(Param(Help){
+    try expectParam(Param(Help){
         .id = .{ .msg = "Help text", .value = "A | B" },
         .names = .{ .long = "long" },
         .takes_value = .one,
     }, try parseParam("--long <A | B> Help text"));
 
-    expectParam(Param(Help){
+    try expectParam(Param(Help){
         .id = .{ .msg = "Help text", .value = "A" },
         .names = .{},
         .takes_value = .one,
     }, try parseParam("<A> Help text"));
 
-    expectParam(Param(Help){
+    try expectParam(Param(Help){
         .id = .{ .msg = "Help text", .value = "A" },
         .names = .{},
         .takes_value = .many,
     }, try parseParam("<A>... Help text"));
 
-    testing.expectError(error.TrailingComma, parseParam("--long, Help"));
-    testing.expectError(error.TrailingComma, parseParam("-s, Help"));
-    testing.expectError(error.InvalidShortParam, parseParam("-ss Help"));
-    testing.expectError(error.InvalidShortParam, parseParam("-ss <value> Help"));
-    testing.expectError(error.InvalidShortParam, parseParam("- Help"));
+    try testing.expectError(error.TrailingComma, parseParam("--long, Help"));
+    try testing.expectError(error.TrailingComma, parseParam("-s, Help"));
+    try testing.expectError(error.InvalidShortParam, parseParam("-ss Help"));
+    try testing.expectError(error.InvalidShortParam, parseParam("-ss <value> Help"));
+    try testing.expectError(error.InvalidShortParam, parseParam("- Help"));
 }
 
 /// Optional diagnostics used for reporting useful errors
@@ -227,24 +227,24 @@ pub const Diagnostic = struct {
     }
 };
 
-fn testDiag(diag: Diagnostic, err: anyerror, expected: []const u8) void {
+fn testDiag(diag: Diagnostic, err: anyerror, expected: []const u8) !void {
     var buf: [1024]u8 = undefined;
     var slice_stream = io.fixedBufferStream(&buf);
     diag.report(slice_stream.writer(), err) catch unreachable;
-    testing.expectEqualStrings(expected, slice_stream.getWritten());
+    try testing.expectEqualStrings(expected, slice_stream.getWritten());
 }
 
 test "Diagnostic.report" {
-    testDiag(.{ .arg = "c" }, error.InvalidArgument, "Invalid argument 'c'\n");
-    testDiag(.{ .name = .{ .long = "cc" } }, error.InvalidArgument, "Invalid argument '--cc'\n");
-    testDiag(.{ .name = .{ .short = 'c' } }, error.DoesntTakeValue, "The argument '-c' does not take a value\n");
-    testDiag(.{ .name = .{ .long = "cc" } }, error.DoesntTakeValue, "The argument '--cc' does not take a value\n");
-    testDiag(.{ .name = .{ .short = 'c' } }, error.MissingValue, "The argument '-c' requires a value but none was supplied\n");
-    testDiag(.{ .name = .{ .long = "cc" } }, error.MissingValue, "The argument '--cc' requires a value but none was supplied\n");
-    testDiag(.{ .name = .{ .short = 'c' } }, error.InvalidArgument, "Invalid argument '-c'\n");
-    testDiag(.{ .name = .{ .long = "cc" } }, error.InvalidArgument, "Invalid argument '--cc'\n");
-    testDiag(.{ .name = .{ .short = 'c' } }, error.SomethingElse, "Error while parsing arguments: SomethingElse\n");
-    testDiag(.{ .name = .{ .long = "cc" } }, error.SomethingElse, "Error while parsing arguments: SomethingElse\n");
+    try testDiag(.{ .arg = "c" }, error.InvalidArgument, "Invalid argument 'c'\n");
+    try testDiag(.{ .name = .{ .long = "cc" } }, error.InvalidArgument, "Invalid argument '--cc'\n");
+    try testDiag(.{ .name = .{ .short = 'c' } }, error.DoesntTakeValue, "The argument '-c' does not take a value\n");
+    try testDiag(.{ .name = .{ .long = "cc" } }, error.DoesntTakeValue, "The argument '--cc' does not take a value\n");
+    try testDiag(.{ .name = .{ .short = 'c' } }, error.MissingValue, "The argument '-c' requires a value but none was supplied\n");
+    try testDiag(.{ .name = .{ .long = "cc" } }, error.MissingValue, "The argument '--cc' requires a value but none was supplied\n");
+    try testDiag(.{ .name = .{ .short = 'c' } }, error.InvalidArgument, "Invalid argument '-c'\n");
+    try testDiag(.{ .name = .{ .long = "cc" } }, error.InvalidArgument, "Invalid argument '--cc'\n");
+    try testDiag(.{ .name = .{ .short = 'c' } }, error.SomethingElse, "Error while parsing arguments: SomethingElse\n");
+    try testDiag(.{ .name = .{ .long = "cc" } }, error.SomethingElse, "Error while parsing arguments: SomethingElse\n");
 }
 
 pub fn Args(comptime Id: type, comptime params: []const Param(Id)) type {
@@ -338,7 +338,7 @@ pub fn helpFull(
     const max_spacing = blk: {
         var res: usize = 0;
         for (params) |param| {
-            var cs = io.countingOutStream(io.null_writer);
+            var cs = io.countingWriter(io.null_writer);
             try printParam(cs.writer(), Id, param, Error, context, valueText);
             if (res < cs.bytes_written)
                 res = @intCast(usize, cs.bytes_written);
@@ -355,7 +355,7 @@ pub fn helpFull(
         try stream.print("\t", .{});
         try printParam(cs.writer(), Id, param, Error, context, valueText);
         try stream.writeByteNTimes(' ', max_spacing - @intCast(usize, cs.bytes_written));
-        try stream.print("\t{}\n", .{try helpText(context, param)});
+        try stream.print("\t{s}\n", .{try helpText(context, param)});
     }
 }
 
@@ -450,7 +450,7 @@ test "clap.help" {
     @setEvalBranchQuota(10000);
     try help(
         slice_stream.writer(),
-        comptime &[_]Param(Help){
+        comptime &.{
             parseParam("-a                Short flag.") catch unreachable,
             parseParam("-b <V1>           Short option.") catch unreachable,
             parseParam("--aa              Long flag.") catch unreachable,
@@ -471,7 +471,7 @@ test "clap.help" {
         "\t-d, --dd <V3>   \tBoth option.\n" ++
         "\t-d, --dd <V3>...\tBoth repeated option.\n";
 
-    testing.expectEqualStrings(expected, slice_stream.getWritten());
+    try testing.expectEqualStrings(expected, slice_stream.getWritten());
 }
 
 /// Will print a usage message in the following format:
@@ -569,40 +569,40 @@ fn testUsage(expected: []const u8, params: []const Param(Help)) !void {
     var buf: [1024]u8 = undefined;
     var fbs = io.fixedBufferStream(&buf);
     try usage(fbs.writer(), params);
-    testing.expectEqualStrings(expected, fbs.getWritten());
+    try testing.expectEqualStrings(expected, fbs.getWritten());
 }
 
 test "usage" {
     @setEvalBranchQuota(100000);
-    try testUsage("[-ab]", comptime &[_]Param(Help){
-        parseParam("-a") catch unreachable,
-        parseParam("-b") catch unreachable,
+    try testUsage("[-ab]", &.{
+        try parseParam("-a"),
+        try parseParam("-b"),
     });
-    try testUsage("[-a <value>] [-b <v>]", comptime &[_]Param(Help){
-        parseParam("-a <value>") catch unreachable,
-        parseParam("-b <v>") catch unreachable,
+    try testUsage("[-a <value>] [-b <v>]", &.{
+        try parseParam("-a <value>"),
+        try parseParam("-b <v>"),
     });
-    try testUsage("[--a] [--b]", comptime &[_]Param(Help){
-        parseParam("--a") catch unreachable,
-        parseParam("--b") catch unreachable,
+    try testUsage("[--a] [--b]", &.{
+        try parseParam("--a"),
+        try parseParam("--b"),
     });
-    try testUsage("[--a <value>] [--b <v>]", comptime &[_]Param(Help){
-        parseParam("--a <value>") catch unreachable,
-        parseParam("--b <v>") catch unreachable,
+    try testUsage("[--a <value>] [--b <v>]", &.{
+        try parseParam("--a <value>"),
+        try parseParam("--b <v>"),
     });
-    try testUsage("<file>", comptime &[_]Param(Help){
-        parseParam("<file>") catch unreachable,
+    try testUsage("<file>", &.{
+        try parseParam("<file>"),
     });
-    try testUsage("[-ab] [-c <value>] [-d <v>] [--e] [--f] [--g <value>] [--h <v>] [-i <v>...] <file>", comptime &[_]Param(Help){
-        parseParam("-a") catch unreachable,
-        parseParam("-b") catch unreachable,
-        parseParam("-c <value>") catch unreachable,
-        parseParam("-d <v>") catch unreachable,
-        parseParam("--e") catch unreachable,
-        parseParam("--f") catch unreachable,
-        parseParam("--g <value>") catch unreachable,
-        parseParam("--h <v>") catch unreachable,
-        parseParam("-i <v>...") catch unreachable,
-        parseParam("<file>") catch unreachable,
+    try testUsage("[-ab] [-c <value>] [-d <v>] [--e] [--f] [--g <value>] [--h <v>] [-i <v>...] <file>", &.{
+        try parseParam("-a"),
+        try parseParam("-b"),
+        try parseParam("-c <value>"),
+        try parseParam("-d <v>"),
+        try parseParam("--e"),
+        try parseParam("--f"),
+        try parseParam("--g <value>"),
+        try parseParam("--h <v>"),
+        try parseParam("-i <v>..."),
+        try parseParam("<file>"),
     });
 }

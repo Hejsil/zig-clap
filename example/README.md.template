@@ -25,7 +25,7 @@ into master on every `zig` release.
 The simplest way to use this library is to just call the `clap.parse` function.
 
 ```zig
-{}
+{s}
 ```
 
 The data structure returned has lookup speed on par with array access (`arr[i]`) and validates
@@ -33,7 +33,7 @@ that the strings you pass to `option`, `options` and `flag` are actually paramet
 program can take:
 
 ```zig
-{}
+{s}
 ```
 
 ```
@@ -58,7 +58,7 @@ The `StreamingClap` is the base of all the other parsers. It's a streaming parse
 `args.Iterator` to provide it with arguments lazily.
 
 ```zig
-{}
+{s}
 ```
 
 Currently, this parse is the only parser that allow an array of `Param` tha
@@ -70,7 +70,7 @@ The `help`, `helpEx` and `helpFull` are functions for printing a simple list of 
 program can take.
 
 ```zig
-{}
+{s}
 ```
 
 ```
@@ -93,7 +93,7 @@ The `usage`, `usageEx` and `usageFull` are functions for printing a small abbrev
 of the help message.
 
 ```zig
-{}
+{s}
 ```
 
 ```

@@ -30,11 +30,7 @@ pub fn main() !void {
         .diagnostic = &diag,
     }) catch |err| {
         // Report useful error and exit
-<<<<<<< HEAD
-        diag.report(std.io.getStdErr().writer(), err) catch {};
-=======
         diag.report(io.getStdErr().writer(), err) catch {};
->>>>>>> master
         return err;
     };
     defer args.deinit();
@@ -42,9 +38,9 @@ pub fn main() !void {
     if (args.flag("--help"))
         debug.warn("--help\n", .{});
     if (args.option("--number")) |n|
-        debug.warn("--number = {}\n", .{n});
+        debug.warn("--number = {s}\n", .{n});
     for (args.options("--string")) |s|
-        debug.warn("--string = {}\n", .{s});
+        debug.warn("--string = {s}\n", .{s});
     for (args.positionals()) |pos|
-        debug.warn("{}\n", .{pos});
+        debug.warn("{s}\n", .{pos});
 }

@@ -1,4 +1,3 @@
-const builtin = @import("builtin");
 const std = @import("std");
 
 const Builder = std.build.Builder;
@@ -9,13 +8,13 @@ pub fn build(b: *Builder) void {
     const target = b.standardTargetOptions(.{});
 
     const test_all_step = b.step("test", "Run all tests in all modes.");
-    inline for ([_]Mode{ Mode.Debug, Mode.ReleaseFast, Mode.ReleaseSafe, Mode.ReleaseSmall }) |test_mode| {
-        const mode_str = comptime modeToString(test_mode);
+    inline for (@typeInfo(std.builtin.Mode).Enum.fields) |field| {
+        const test_mode = @field(std.builtin.Mode, field.name);
+        const mode_str = @tagName(test_mode);
 
         const tests = b.addTest("clap.zig");
         tests.setBuildMode(test_mode);
         tests.setTarget(target);
-        tests.setNamePrefix(mode_str ++ " ");
 
         const test_step = b.step("test-" ++ mode_str, "Run all tests in " ++ mode_str ++ ".");
         test_step.dependOn(&tests.step);
@@ -23,7 +22,7 @@ pub fn build(b: *Builder) void {
     }
 
     const example_step = b.step("examples", "Build examples");
-    inline for ([_][]const u8{
+    inline for (.{
         "simple",
         "simple-ex",
         //"simple-error",
@@ -69,13 +68,4 @@ fn readMeStep(b: *Builder) *std.build.Step {
         }
     }.make);
     return s;
-}
-
-fn modeToString(mode: Mode) []const u8 {
-    return switch (mode) {
-        Mode.Debug => "debug",
-        Mode.ReleaseFast => "release-fast",
-        Mode.ReleaseSafe => "release-safe",
-        Mode.ReleaseSmall => "release-small",
-    };
 }

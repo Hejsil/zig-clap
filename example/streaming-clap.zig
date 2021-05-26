@@ -39,22 +39,18 @@ pub fn main() !void {
     // Because we use a streaming parser, we have to consume each argument parsed individually.
     while (parser.next() catch |err| {
         // Report useful error and exit
-<<<<<<< HEAD
-        diag.report(std.io.getStdErr().writer(), err) catch {};
-=======
         diag.report(io.getStdErr().writer(), err) catch {};
->>>>>>> master
         return err;
     }) |arg| {
         // arg.param will point to the parameter which matched the argument.
         switch (arg.param.id) {
             'h' => debug.warn("Help!\n", .{}),
-            'n' => debug.warn("--number = {}\n", .{arg.value.?}),
+            'n' => debug.warn("--number = {s}\n", .{arg.value.?}),
 
-            // arg.value == null, if arg.param.takes_value == false.
+            // arg.value == null, if arg.param.takes_value == .none.
             // Otherwise, arg.value is the value passed with the argument, such as "-a=10"
             // or "-a 10".
-            'f' => debug.warn("{}\n", .{arg.value.?}),
+            'f' => debug.warn("{s}\n", .{arg.value.?}),
             else => unreachable,
         }
     }
