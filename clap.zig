@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const debug = std.debug;
+const heap = std.heap;
 const io = std.io;
 const mem = std.mem;
 const testing = std.testing;
@@ -25,9 +26,9 @@ pub const Names = struct {
 
 /// Whether a param takes no value (a flag), one value, or can be specified multiple times.
 pub const Values = enum {
-    None,
-    One,
-    Many,
+    none,
+    one,
+    many,
 };
 
 /// Represents a parameter for the command line.
@@ -55,7 +56,7 @@ pub fn Param(comptime Id: type) type {
     return struct {
         id: Id = Id{},
         names: Names = Names{},
-        takes_value: Values = .None,
+        takes_value: Values = .none,
     };
 }
 
@@ -109,8 +110,8 @@ fn parseParamRest(line: []const u8) Param(Help) {
         const len = mem.indexOfScalar(u8, line, '>') orelse break :blk;
         const takes_many = mem.startsWith(u8, line[len + 1 ..], "...");
         const help_start = len + 1 + @as(usize, 3) * @boolToInt(takes_many);
-        return Param(Help){
-            .takes_value = if (takes_many) .Many else .One,
+        return .{
+            .takes_value = if (takes_many) .many else .one,
             .id = .{
                 .msg = mem.trim(u8, line[help_start..], " \t"),
                 .value = line[1..len],
@@ -118,7 +119,7 @@ fn parseParamRest(line: []const u8) Param(Help) {
         };
     }
 
-    return Param(Help){ .id = .{ .msg = mem.trim(u8, line, " \t") } };
+    return .{ .id = .{ .msg = mem.trim(u8, line, " \t") } };
 }
 
 fn expectParam(expect: Param(Help), actual: Param(Help)) void {
@@ -135,114 +136,60 @@ fn expectParam(expect: Param(Help), actual: Param(Help)) void {
 
 test "parseParam" {
     expectParam(Param(Help){
-        .id = Help{
-            .msg = "Help text",
-            .value = "value",
-        },
-        .names = Names{
-            .short = 's',
-            .long = "long",
-        },
-        .takes_value = .One,
+        .id = .{ .msg = "Help text", .value = "value" },
+        .names = .{ .short = 's', .long = "long" },
+        .takes_value = .one,
     }, try parseParam("-s, --long <value> Help text"));
+
     expectParam(Param(Help){
-        .id = Help{
-            .msg = "Help text",
-            .value = "value",
-        },
-        .names = Names{
-            .short = 's',
-            .long = "long",
-        },
-        .takes_value = .Many,
+        .id = .{ .msg = "Help text", .value = "value" },
+        .names = .{ .short = 's', .long = "long" },
+        .takes_value = .many,
     }, try parseParam("-s, --long <value>... Help text"));
+
     expectParam(Param(Help){
-        .id = Help{
-            .msg = "Help text",
-            .value = "value",
-        },
-        .names = Names{
-            .short = null,
-            .long = "long",
-        },
-        .takes_value = .One,
+        .id = .{ .msg = "Help text", .value = "value" },
+        .names = .{ .long = "long" },
+        .takes_value = .one,
     }, try parseParam("--long <value> Help text"));
+
     expectParam(Param(Help){
-        .id = Help{
-            .msg = "Help text",
-            .value = "value",
-        },
-        .names = Names{
-            .short = 's',
-            .long = null,
-        },
-        .takes_value = .One,
+        .id = .{ .msg = "Help text", .value = "value" },
+        .names = .{ .short = 's' },
+        .takes_value = .one,
     }, try parseParam("-s <value> Help text"));
+
     expectParam(Param(Help){
-        .id = Help{
-            .msg = "Help text",
-            .value = "",
-        },
-        .names = Names{
-            .short = 's',
-            .long = "long",
-        },
-        .takes_value = .None,
+        .id = .{ .msg = "Help text" },
+        .names = .{ .short = 's', .long = "long" },
     }, try parseParam("-s, --long Help text"));
+
     expectParam(Param(Help){
-        .id = Help{
-            .msg = "Help text",
-            .value = "",
-        },
-        .names = Names{
-            .short = 's',
-            .long = null,
-        },
-        .takes_value = .None,
+        .id = .{ .msg = "Help text" },
+        .names = .{ .short = 's' },
     }, try parseParam("-s Help text"));
+
     expectParam(Param(Help){
-        .id = Help{
-            .msg = "Help text",
-            .value = "",
-        },
-        .names = Names{
-            .short = null,
-            .long = "long",
-        },
-        .takes_value = .None,
+        .id = .{ .msg = "Help text" },
+        .names = .{ .long = "long" },
     }, try parseParam("--long Help text"));
+
     expectParam(Param(Help){
-        .id = Help{
-            .msg = "Help text",
-            .value = "A | B",
-        },
-        .names = Names{
-            .short = null,
-            .long = "long",
-        },
-        .takes_value = .One,
+        .id = .{ .msg = "Help text", .value = "A | B" },
+        .names = .{ .long = "long" },
+        .takes_value = .one,
     }, try parseParam("--long <A | B> Help text"));
+
     expectParam(Param(Help){
-        .id = Help{
-            .msg = "Help text",
-            .value = "A",
-        },
-        .names = Names{
-            .short = null,
-            .long = null,
-        },
-        .takes_value = .One,
+        .id = .{ .msg = "Help text", .value = "A" },
+        .names = .{},
+        .takes_value = .one,
     }, try parseParam("<A> Help text"));
+
     expectParam(Param(Help){
-        .id = Help{
-            .msg = "Help text",
-            .value = "A",
-        },
-        .names = Names{
-            .short = null,
-            .long = null,
-        },
-        .takes_value = .Many,
+        .id = .{ .msg = "Help text", .value = "A" },
+        .names = .{},
+        .takes_value = .many,
     }, try parseParam("<A>... Help text"));
 
     testing.expectError(error.TrailingComma, parseParam("--long, Help"));
@@ -307,7 +254,6 @@ pub fn Args(comptime Id: type, comptime params: []const Param(Id)) type {
         exe_arg: ?[]const u8,
 
         pub fn deinit(a: *@This()) void {
-            a.clap.deinit();
             a.arena.deinit();
         }
 
@@ -329,20 +275,37 @@ pub fn Args(comptime Id: type, comptime params: []const Param(Id)) type {
     };
 }
 
+/// Options that can be set to customize the behavior of parsing.
+pub const ParseOptions = struct {
+    /// The allocator used for all memory allocations. Defaults to the `heap.page_allocator`.
+    /// Note: You should probably override this allocator if you are calling `parseEx`. Unlike
+    ///       `parse`, `parseEx` does not wrap the allocator so the heap allocator can be
+    ///       quite expensive. (TODO: Can we pick a better default? For `parse`, this allocator
+    ///       is fine, as it wraps it in an arena)
+    allocator: *mem.Allocator = heap.page_allocator,
+    diagnostic: ?*Diagnostic = null,
+};
+
 /// Same as `parseEx` but uses the `args.OsIterator` by default.
 pub fn parse(
     comptime Id: type,
     comptime params: []const Param(Id),
-    allocator: *mem.Allocator,
-    diag: ?*Diagnostic,
+    opt: ParseOptions,
 ) !Args(Id, params) {
-    var iter = try args.OsIterator.init(allocator);
-    const clap = try parseEx(Id, params, allocator, &iter, diag);
-    return Args(Id, params){
+    var iter = try args.OsIterator.init(opt.allocator);
+    var res = Args(Id, params){
         .arena = iter.arena,
-        .clap = clap,
         .exe_arg = iter.exe_arg,
+        .clap = undefined,
     };
+
+    // Let's reuse the arena from the `OSIterator` since we already have
+    // it.
+    res.clap = try parseEx(Id, params, &iter, .{
+        .allocator = &res.arena.allocator,
+        .diagnostic = opt.diagnostic,
+    });
+    return res;
 }
 
 /// Parses the command line arguments passed into the program based on an
@@ -350,12 +313,11 @@ pub fn parse(
 pub fn parseEx(
     comptime Id: type,
     comptime params: []const Param(Id),
-    allocator: *mem.Allocator,
     iter: anytype,
-    diag: ?*Diagnostic,
+    opt: ParseOptions,
 ) !ComptimeClap(Id, params) {
     const Clap = ComptimeClap(Id, params);
-    return try Clap.parse(allocator, iter, diag);
+    return try Clap.parse(iter, opt);
 }
 
 /// Will print a help message in the following format:
@@ -376,10 +338,10 @@ pub fn helpFull(
     const max_spacing = blk: {
         var res: usize = 0;
         for (params) |param| {
-            var counting_stream = io.countingWriter(io.null_writer);
-            try printParam(counting_stream.writer(), Id, param, Error, context, valueText);
-            if (res < counting_stream.bytes_written)
-                res = @intCast(usize, counting_stream.bytes_written);
+            var cs = io.countingOutStream(io.null_writer);
+            try printParam(cs.writer(), Id, param, Error, context, valueText);
+            if (res < cs.bytes_written)
+                res = @intCast(usize, cs.bytes_written);
         }
 
         break :blk res;
@@ -389,11 +351,11 @@ pub fn helpFull(
         if (param.names.short == null and param.names.long == null)
             continue;
 
-        var counting_stream = io.countingWriter(stream);
+        var cs = io.countingWriter(stream);
         try stream.print("\t", .{});
-        try printParam(counting_stream.writer(), Id, param, Error, context, valueText);
-        try stream.writeByteNTimes(' ', max_spacing - @intCast(usize, counting_stream.bytes_written));
-        try stream.print("\t{s}\n", .{try helpText(context, param)});
+        try printParam(cs.writer(), Id, param, Error, context, valueText);
+        try stream.writeByteNTimes(' ', max_spacing - @intCast(usize, cs.bytes_written));
+        try stream.print("\t{}\n", .{try helpText(context, param)});
     }
 }
 
@@ -421,9 +383,9 @@ fn printParam(
     }
 
     switch (param.takes_value) {
-        .None => {},
-        .One => try stream.print(" <{s}>", .{valueText(context, param)}),
-        .Many => try stream.print(" <{s}>...", .{valueText(context, param)}),
+        .none => {},
+        .one => try stream.print(" <{s}>", .{valueText(context, param)}),
+        .many => try stream.print(" <{s}>...", .{valueText(context, param)}),
     }
 }
 
@@ -489,19 +451,14 @@ test "clap.help" {
     try help(
         slice_stream.writer(),
         comptime &[_]Param(Help){
-            parseParam("-a                Short flag.  ") catch unreachable,
+            parseParam("-a                Short flag.") catch unreachable,
             parseParam("-b <V1>           Short option.") catch unreachable,
-            parseParam("--aa              Long flag.   ") catch unreachable,
-            parseParam("--bb <V2>         Long option. ") catch unreachable,
-            parseParam("-c, --cc          Both flag.   ") catch unreachable,
-            parseParam("-d, --dd <V3>     Both option. ") catch unreachable,
-            parseParam("-d, --dd <V3>...  Both repeated option. ") catch unreachable,
-            Param(Help){
-                .id = Help{
-                    .msg = "Positional. This should not appear in the help message.",
-                },
-                .takes_value = .One,
-            },
+            parseParam("--aa              Long flag.") catch unreachable,
+            parseParam("--bb <V2>         Long option.") catch unreachable,
+            parseParam("-c, --cc          Both flag.") catch unreachable,
+            parseParam("-d, --dd <V3>     Both option.") catch unreachable,
+            parseParam("-d, --dd <V3>...  Both repeated option.") catch unreachable,
+            parseParam("<P>               Positional. This should not appear in the help message.") catch unreachable,
         },
     );
 
@@ -534,7 +491,7 @@ pub fn usageFull(
     const cs = cos.writer();
     for (params) |param| {
         const name = param.names.short orelse continue;
-        if (param.takes_value != .None)
+        if (param.takes_value != .none)
             continue;
 
         if (cos.bytes_written == 0)
@@ -546,7 +503,7 @@ pub fn usageFull(
 
     var positional: ?Param(Id) = null;
     for (params) |param| {
-        if (param.takes_value == .None and param.names.short != null)
+        if (param.takes_value == .none and param.names.short != null)
             continue;
 
         const prefix = if (param.names.short) |_| "-" else "--";
@@ -562,9 +519,9 @@ pub fn usageFull(
 
         try cs.print("[{s}{s}", .{ prefix, name });
         switch (param.takes_value) {
-            .None => {},
-            .One => try cs.print(" <{s}>", .{try valueText(context, param)}),
-            .Many => try cs.print(" <{s}>...", .{try valueText(context, param)}),
+            .none => {},
+            .one => try cs.print(" <{s}>", .{try valueText(context, param)}),
+            .many => try cs.print(" <{s}>...", .{try valueText(context, param)}),
         }
 
         try cs.writeByte(']');
@@ -634,12 +591,7 @@ test "usage" {
         parseParam("--b <v>") catch unreachable,
     });
     try testUsage("<file>", comptime &[_]Param(Help){
-        Param(Help){
-            .id = Help{
-                .value = "file",
-            },
-            .takes_value = .One,
-        },
+        parseParam("<file>") catch unreachable,
     });
     try testUsage("[-ab] [-c <value>] [-d <v>] [--e] [--f] [--g <value>] [--h <v>] [-i <v>...] <file>", comptime &[_]Param(Help){
         parseParam("-a") catch unreachable,
@@ -651,11 +603,6 @@ test "usage" {
         parseParam("--g <value>") catch unreachable,
         parseParam("--h <v>") catch unreachable,
         parseParam("-i <v>...") catch unreachable,
-        Param(Help){
-            .id = Help{
-                .value = "file",
-            },
-            .takes_value = .One,
-        },
+        parseParam("<file>") catch unreachable,
     });
 }

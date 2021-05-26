@@ -1,10 +1,10 @@
 const clap = @import("../clap.zig");
 const std = @import("std");
 
-const testing = std.testing;
+const debug = std.debug;
 const heap = std.heap;
 const mem = std.mem;
-const debug = std.debug;
+const testing = std.testing;
 
 /// Deprecated: Use `parseEx` instead
 pub fn ComptimeClap(
@@ -19,9 +19,9 @@ pub fn ComptimeClap(
         var index: usize = 0;
         if (param.names.long != null or param.names.short != null) {
             const ptr = switch (param.takes_value) {
-                .None => &flags,
-                .One => &single_options,
-                .Many => &multi_options,
+                .none => &flags,
+                .one => &single_options,
+                .many => &multi_options,
             };
             index = ptr.*;
             ptr.* += 1;
@@ -42,7 +42,8 @@ pub fn ComptimeClap(
         pos: []const []const u8,
         allocator: *mem.Allocator,
 
-        pub fn parse(allocator: *mem.Allocator, iter: anytype, diag: ?*clap.Diagnostic) !@This() {
+        pub fn parse(iter: anytype, opt: clap.ParseOptions) !@This() {
+            const allocator = opt.allocator;
             var multis = [_]std.ArrayList([]const u8){undefined} ** multi_options;
             for (multis) |*multi| {
                 multi.* = std.ArrayList([]const u8).init(allocator);
@@ -62,15 +63,15 @@ pub fn ComptimeClap(
                 .params = converted_params,
                 .iter = iter,
             };
-            while (try stream.next(diag)) |arg| {
+            while (try stream.next()) |arg| {
                 const param = arg.param;
                 if (param.names.long == null and param.names.short == null) {
                     try pos.append(arg.value.?);
-                } else if (param.takes_value == .One) {
+                } else if (param.takes_value == .one) {
                     debug.assert(res.single_options.len != 0);
                     if (res.single_options.len != 0)
                         res.single_options[param.id] = arg.value.?;
-                } else if (param.takes_value == .Many) {
+                } else if (param.takes_value == .many) {
                     debug.assert(multis.len != 0);
                     if (multis.len != 0)
                         try multis[param.id].append(arg.value.?);
@@ -81,24 +82,22 @@ pub fn ComptimeClap(
                 }
             }
 
-            for (multis) |*multi, i| {
+            for (multis) |*multi, i|
                 res.multi_options[i] = multi.toOwnedSlice();
-            }
             res.pos = pos.toOwnedSlice();
 
             return res;
         }
 
-        pub fn deinit(parser: *@This()) void {
+        pub fn deinit(parser: @This()) void {
             for (parser.multi_options) |o|
                 parser.allocator.free(o);
             parser.allocator.free(parser.pos);
-            parser.* = undefined;
         }
 
         pub fn flag(parser: @This(), comptime name: []const u8) bool {
             const param = comptime findParam(name);
-            if (param.takes_value != .None)
+            if (param.takes_value != .none)
                 @compileError(name ++ " is an option and not a flag.");
 
             return parser.flags[param.id];
@@ -106,18 +105,18 @@ pub fn ComptimeClap(
 
         pub fn option(parser: @This(), comptime name: []const u8) ?[]const u8 {
             const param = comptime findParam(name);
-            if (param.takes_value == .None)
+            if (param.takes_value == .none)
                 @compileError(name ++ " is a flag and not an option.");
-            if (param.takes_value == .Many)
+            if (param.takes_value == .many)
                 @compileError(name ++ " takes many options, not one.");
             return parser.single_options[param.id];
         }
 
         pub fn options(parser: @This(), comptime name: []const u8) []const []const u8 {
             const param = comptime findParam(name);
-            if (param.takes_value == .None)
+            if (param.takes_value == .none)
                 @compileError(name ++ " is a flag and not an option.");
-            if (param.takes_value == .One)
+            if (param.takes_value == .one)
                 @compileError(name ++ " takes one option, not multiple.");
 
             return parser.multi_options[param.id];
@@ -155,14 +154,12 @@ test "" {
         clap.parseParam("<P>") catch unreachable,
     });
 
-    var buf: [1024]u8 = undefined;
-    var fb_allocator = heap.FixedBufferAllocator.init(buf[0..]);
     var iter = clap.args.SliceIterator{
         .args = &[_][]const u8{
             "-a", "-c", "0", "something", "-d", "a", "--dd", "b",
         },
     };
-    var args = try Clap.parse(&fb_allocator.allocator, &iter, null);
+    var args = try Clap.parse(&iter, .{ .allocator = testing.allocator });
     defer args.deinit();
 
     testing.expect(args.flag("-a"));

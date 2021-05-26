@@ -1,26 +1,24 @@
-const std = @import("std");
 const clap = @import("clap");
+const std = @import("std");
 
 const debug = std.debug;
+const io = std.io;
 
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
 
     // First we specify what parameters our program can take.
     const params = [_]clap.Param(u8){
-        clap.Param(u8){
+        .{
             .id = 'h',
-            .names = clap.Names{ .short = 'h', .long = "help" },
+            .names = .{ .short = 'h', .long = "help" },
         },
-        clap.Param(u8){
+        .{
             .id = 'n',
-            .names = clap.Names{ .short = 'n', .long = "number" },
-            .takes_value = .One,
+            .names = .{ .short = 'n', .long = "number" },
+            .takes_value = .one,
         },
-        clap.Param(u8){
-            .id = 'f',
-            .takes_value = .One,
-        },
+        .{ .id = 'f', .takes_value = .one },
     };
 
     // We then initialize an argument iterator. We will use the OsIterator as it nicely
@@ -28,21 +26,24 @@ pub fn main() !void {
     var iter = try clap.args.OsIterator.init(allocator);
     defer iter.deinit();
 
-    // Initialize our streaming parser.
+    // Initalize our diagnostics, which can be used for reporting useful errors.
+    // This is optional. You can also leave the `diagnostic` field unset if you
+    // don't care about the extra information `Diagnostic` provides.
+    var diag = clap.Diagnostic{};
     var parser = clap.StreamingClap(u8, clap.args.OsIterator){
         .params = &params,
         .iter = &iter,
+        .diagnostic = &diag,
     };
 
-    // Initalize our diagnostics, which can be used for reporting useful errors.
-    // This is optional. You can also just pass `null` to `parser.next` if you
-    // don't care about the extra information `Diagnostics` provides.
-    var diag: clap.Diagnostic = undefined;
-
     // Because we use a streaming parser, we have to consume each argument parsed individually.
-    while (parser.next(&diag) catch |err| {
+    while (parser.next() catch |err| {
         // Report useful error and exit
+<<<<<<< HEAD
         diag.report(std.io.getStdErr().writer(), err) catch {};
+=======
+        diag.report(io.getStdErr().writer(), err) catch {};
+>>>>>>> master
         return err;
     }) |arg| {
         // arg.param will point to the parameter which matched the argument.
