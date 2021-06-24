@@ -12,6 +12,7 @@ pub const ExampleArgIterator = struct {
     const Error = error{};
 
     pub fn next(iter: *ExampleArgIterator) Error!?[]const u8 {
+        _ = iter;
         return "2";
     }
 };

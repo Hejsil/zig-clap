@@ -11,10 +11,10 @@ pub fn ComptimeClap(
     comptime Id: type,
     comptime params: []const clap.Param(Id),
 ) type {
-    var flags: usize = 0;
-    var single_options: usize = 0;
-    var multi_options: usize = 0;
-    var converted_params: []const clap.Param(usize) = &.{};
+    comptime var flags: usize = 0;
+    comptime var single_options: usize = 0;
+    comptime var multi_options: usize = 0;
+    comptime var converted_params: []const clap.Param(usize) = &.{};
     for (params) |param| {
         var index: usize = 0;
         if (param.names.long != null or param.names.short != null) {
