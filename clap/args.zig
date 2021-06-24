@@ -252,7 +252,12 @@ pub const ShellIterator = struct {
         }
     }
 
-    fn result(iter: *ShellIterator, start: usize, end: usize, list: *std.ArrayList(u8)) Error!?[]const u8 {
+    fn result(
+        iter: *ShellIterator,
+        start: usize,
+        end: usize,
+        list: *std.ArrayList(u8),
+    ) Error!?[]const u8 {
         const res = iter.str[start..end];
 
         // If we already have something in `list` that means that we could not

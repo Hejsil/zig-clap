@@ -21,8 +21,8 @@ pub fn Arg(comptime Id: type) type {
 }
 
 /// A command line argument parser which, given an ArgIterator, will parse arguments according
-/// to the params. StreamingClap parses in an iterating manner, so you have to use a loop together with
-/// StreamingClap.next to parse all the arguments of your program.
+/// to the params. StreamingClap parses in an iterating manner, so you have to use a loop
+/// together with StreamingClap.next to parse all the arguments of your program.
 pub fn StreamingClap(comptime Id: type, comptime ArgIterator: type) type {
     return struct {
         const State = union(enum) {
@@ -203,7 +203,11 @@ pub fn StreamingClap(comptime Id: type, comptime ArgIterator: type) type {
     };
 }
 
-fn testNoErr(params: []const clap.Param(u8), args_strings: []const []const u8, results: []const Arg(u8)) !void {
+fn testNoErr(
+    params: []const clap.Param(u8),
+    args_strings: []const []const u8,
+    results: []const Arg(u8),
+) !void {
     var iter = args.SliceIterator{ .args = args_strings };
     var c = StreamingClap(u8, args.SliceIterator){
         .params = params,
@@ -225,7 +229,11 @@ fn testNoErr(params: []const clap.Param(u8), args_strings: []const []const u8, r
         return error.TestFailed;
 }
 
-fn testErr(params: []const clap.Param(u8), args_strings: []const []const u8, expected: []const u8) !void {
+fn testErr(
+    params: []const clap.Param(u8),
+    args_strings: []const []const u8,
+    expected: []const u8,
+) !void {
     var diag: clap.Diagnostic = undefined;
     var iter = args.SliceIterator{ .args = args_strings };
     var c = StreamingClap(u8, args.SliceIterator){
@@ -420,5 +428,9 @@ test "errors" {
     try testErr(&params, &.{"-a=1"}, "The argument '-a' does not take a value\n");
     try testErr(&params, &.{"--aa=1"}, "The argument '--aa' does not take a value\n");
     try testErr(&params, &.{"-c"}, "The argument '-c' requires a value but none was supplied\n");
-    try testErr(&params, &.{"--cc"}, "The argument '--cc' requires a value but none was supplied\n");
+    try testErr(
+        &params,
+        &.{"--cc"},
+        "The argument '--cc' requires a value but none was supplied\n",
+    );
 }

@@ -43,8 +43,8 @@ pub const Values = enum {
 ///         * "-abc value"
 ///         * "-abc=value"
 ///         * "-abcvalue"
-///   * Long ("--long-param"): Should be used for less common parameters, or when no single character
-///                            can describe the paramter.
+///   * Long ("--long-param"): Should be used for less common parameters, or when no single
+///                            character can describe the paramter.
 ///     * They can take a value two different ways.
 ///       * "--long-param value"
 ///       * "--long-param=value"
@@ -229,9 +229,18 @@ pub const Diagnostic = struct {
             Arg{ .prefix = "", .name = diag.arg };
 
         switch (err) {
-            error.DoesntTakeValue => try stream.print("The argument '{s}{s}' does not take a value\n", .{ a.prefix, a.name }),
-            error.MissingValue => try stream.print("The argument '{s}{s}' requires a value but none was supplied\n", .{ a.prefix, a.name }),
-            error.InvalidArgument => try stream.print("Invalid argument '{s}{s}'\n", .{ a.prefix, a.name }),
+            error.DoesntTakeValue => try stream.print(
+                "The argument '{s}{s}' does not take a value\n",
+                .{ a.prefix, a.name },
+            ),
+            error.MissingValue => try stream.print(
+                "The argument '{s}{s}' requires a value but none was supplied\n",
+                .{ a.prefix, a.name },
+            ),
+            error.InvalidArgument => try stream.print(
+                "Invalid argument '{s}{s}'\n",
+                .{ a.prefix, a.name },
+            ),
             else => try stream.print("Error while parsing arguments: {s}\n", .{@errorName(err)}),
         }
     }
@@ -246,15 +255,51 @@ fn testDiag(diag: Diagnostic, err: anyerror, expected: []const u8) !void {
 
 test "Diagnostic.report" {
     try testDiag(.{ .arg = "c" }, error.InvalidArgument, "Invalid argument 'c'\n");
-    try testDiag(.{ .name = .{ .long = "cc" } }, error.InvalidArgument, "Invalid argument '--cc'\n");
-    try testDiag(.{ .name = .{ .short = 'c' } }, error.DoesntTakeValue, "The argument '-c' does not take a value\n");
-    try testDiag(.{ .name = .{ .long = "cc" } }, error.DoesntTakeValue, "The argument '--cc' does not take a value\n");
-    try testDiag(.{ .name = .{ .short = 'c' } }, error.MissingValue, "The argument '-c' requires a value but none was supplied\n");
-    try testDiag(.{ .name = .{ .long = "cc" } }, error.MissingValue, "The argument '--cc' requires a value but none was supplied\n");
-    try testDiag(.{ .name = .{ .short = 'c' } }, error.InvalidArgument, "Invalid argument '-c'\n");
-    try testDiag(.{ .name = .{ .long = "cc" } }, error.InvalidArgument, "Invalid argument '--cc'\n");
-    try testDiag(.{ .name = .{ .short = 'c' } }, error.SomethingElse, "Error while parsing arguments: SomethingElse\n");
-    try testDiag(.{ .name = .{ .long = "cc" } }, error.SomethingElse, "Error while parsing arguments: SomethingElse\n");
+    try testDiag(
+        .{ .name = .{ .long = "cc" } },
+        error.InvalidArgument,
+        "Invalid argument '--cc'\n",
+    );
+    try testDiag(
+        .{ .name = .{ .short = 'c' } },
+        error.DoesntTakeValue,
+        "The argument '-c' does not take a value\n",
+    );
+    try testDiag(
+        .{ .name = .{ .long = "cc" } },
+        error.DoesntTakeValue,
+        "The argument '--cc' does not take a value\n",
+    );
+    try testDiag(
+        .{ .name = .{ .short = 'c' } },
+        error.MissingValue,
+        "The argument '-c' requires a value but none was supplied\n",
+    );
+    try testDiag(
+        .{ .name = .{ .long = "cc" } },
+        error.MissingValue,
+        "The argument '--cc' requires a value but none was supplied\n",
+    );
+    try testDiag(
+        .{ .name = .{ .short = 'c' } },
+        error.InvalidArgument,
+        "Invalid argument '-c'\n",
+    );
+    try testDiag(
+        .{ .name = .{ .long = "cc" } },
+        error.InvalidArgument,
+        "Invalid argument '--cc'\n",
+    );
+    try testDiag(
+        .{ .name = .{ .short = 'c' } },
+        error.SomethingElse,
+        "Error while parsing arguments: SomethingElse\n",
+    );
+    try testDiag(
+        .{ .name = .{ .long = "cc" } },
+        error.SomethingElse,
+        "Error while parsing arguments: SomethingElse\n",
+    );
 }
 
 pub fn Args(comptime Id: type, comptime params: []const Param(Id)) type {
@@ -466,7 +511,9 @@ test "clap.help" {
             parseParam("-c, --cc          Both flag.") catch unreachable,
             parseParam("-d, --dd <V3>     Both option.") catch unreachable,
             parseParam("-d, --dd <V3>...  Both repeated option.") catch unreachable,
-            parseParam("<P>               Positional. This should not appear in the help message.") catch unreachable,
+            parseParam(
+                "<P>               Positional. This should not appear in the help message.",
+            ) catch unreachable,
         },
     );
 
@@ -516,12 +563,16 @@ pub fn usageFull(
 
         const prefix = if (param.names.short) |_| "-" else "--";
 
-        // Seems the zig compiler is being a little wierd. I doesn't allow me to write
-        // @as(*const [1]u8, s)                  VVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
-        const name = if (param.names.short) |*s| @ptrCast([*]const u8, s)[0..1] else param.names.long orelse {
-            positional = param;
-            continue;
-        };
+        const name = if (param.names.short) |*s|
+            // Seems the zig compiler is being a little wierd. I doesn't allow me to write
+            // @as(*const [1]u8, s)
+            @ptrCast([*]const u8, s)[0..1]
+        else
+            param.names.long orelse {
+                positional = param;
+                continue;
+            };
+
         if (cos.bytes_written != 0)
             try cs.writeByte(' ');
 
@@ -601,16 +652,19 @@ test "usage" {
     try testUsage("<file>", &.{
         try parseParam("<file>"),
     });
-    try testUsage("[-ab] [-c <value>] [-d <v>] [--e] [--f] [--g <value>] [--h <v>] [-i <v>...] <file>", &.{
-        try parseParam("-a"),
-        try parseParam("-b"),
-        try parseParam("-c <value>"),
-        try parseParam("-d <v>"),
-        try parseParam("--e"),
-        try parseParam("--f"),
-        try parseParam("--g <value>"),
-        try parseParam("--h <v>"),
-        try parseParam("-i <v>..."),
-        try parseParam("<file>"),
-    });
+    try testUsage(
+        "[-ab] [-c <value>] [-d <v>] [--e] [--f] [--g <value>] [--h <v>] [-i <v>...] <file>",
+        &.{
+            try parseParam("-a"),
+            try parseParam("-b"),
+            try parseParam("-c <value>"),
+            try parseParam("-d <v>"),
+            try parseParam("--e"),
+            try parseParam("--f"),
+            try parseParam("--g <value>"),
+            try parseParam("--h <v>"),
+            try parseParam("-i <v>..."),
+            try parseParam("<file>"),
+        },
+    );
 }
