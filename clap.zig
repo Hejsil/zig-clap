@@ -63,6 +63,16 @@ pub fn Param(comptime Id: type) type {
 /// Takes a string and parses it to a Param(Help).
 /// This is the reverse of 'help' but for at single parameter only.
 pub fn parseParam(line: []const u8) !Param(Help) {
+    // This function become a lot less ergonomic to use once you hit the eval branch quota. To
+    // avoid this we pick a sane default. Sadly, the only sane default is the biggest possible
+    // value. If we pick something a lot smaller and a user hits the quota after that, they have
+    // no way of overriding it, since we set it here.
+    // We can recosider this again if:
+    // * We get parseParams: https://github.com/Hejsil/zig-clap/issues/39
+    // * We get a larger default branch quota in the zig compiler (stage 2).
+    // * Someone points out how this is a really bad idea.
+    @setEvalBranchQuota(std.math.maxInt(u32));
+
     var found_comma = false;
     var it = mem.tokenize(line, " \t");
     var param_str = it.next() orelse return error.NoParamFound;
