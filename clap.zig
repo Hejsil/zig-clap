@@ -293,19 +293,17 @@ pub fn parse(
     opt: ParseOptions,
 ) !Args(Id, params) {
     var iter = try args.OsIterator.init(opt.allocator);
-    var res = Args(Id, params){
-        .arena = iter.arena,
-        .exe_arg = iter.exe_arg,
-        .clap = undefined,
-    };
-
-    // Let's reuse the arena from the `OSIterator` since we already have
-    // it.
-    res.clap = try parseEx(Id, params, &iter, .{
-        .allocator = &res.arena.allocator,
+    const clap = try parseEx(Id, params, &iter, .{
+        // Let's reuse the arena from the `OSIterator` since we already have it.
+        .allocator = &iter.arena.allocator,
         .diagnostic = opt.diagnostic,
     });
-    return res;
+
+    return Args(Id, params){
+        .exe_arg = iter.exe_arg,
+        .arena = iter.arena,
+        .clap = clap,
+    };
 }
 
 /// Parses the command line arguments passed into the program based on an
