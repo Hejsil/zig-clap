@@ -110,7 +110,7 @@ pub fn parseParam(line: []const u8) !Param(Help) {
     } else null;
 
     var res = parseParamRest(it.rest());
-    res.names.long = param_str[2..];
+    res.names.long = long_name;
     res.names.short = short_name;
     return res;
 }
