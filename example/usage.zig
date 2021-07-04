@@ -8,9 +8,9 @@ pub fn main() !void {
     try clap.usage(
         std.io.getStdErr().writer(),
         comptime &.{
-            clap.parseParam("-h, --help       Display this help and exit.         ") catch unreachable,
-            clap.parseParam("-v, --version    Output version information and exit.") catch unreachable,
-            clap.parseParam("    --value <N>  Output version information and exit.") catch unreachable,
+            clap.parseParam("-h, --help       Display this help and exit.              ") catch unreachable,
+            clap.parseParam("-v, --version    Output version information and exit.     ") catch unreachable,
+            clap.parseParam("    --value <N>  An option parameter, which takes a value.") catch unreachable,
         },
     );
 }
