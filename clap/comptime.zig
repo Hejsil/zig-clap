@@ -3,6 +3,7 @@ const std = @import("std");
 
 const debug = std.debug;
 const heap = std.heap;
+const io = std.io;
 const mem = std.mem;
 const testing = std.testing;
 
@@ -64,6 +65,7 @@ pub fn ComptimeClap(
             var stream = clap.StreamingClap(usize, @typeInfo(@TypeOf(iter)).Pointer.child){
                 .params = converted_params,
                 .iter = iter,
+                .diagnostic = opt.diagnostic,
             };
             while (try stream.next()) |arg| {
                 const param = arg.param;
@@ -152,20 +154,20 @@ pub fn ComptimeClap(
 }
 
 test "" {
-    const Clap = ComptimeClap(clap.Help, comptime &.{
+    const params = comptime &.{
         clap.parseParam("-a, --aa") catch unreachable,
         clap.parseParam("-b, --bb") catch unreachable,
         clap.parseParam("-c, --cc <V>") catch unreachable,
         clap.parseParam("-d, --dd <V>...") catch unreachable,
         clap.parseParam("<P>") catch unreachable,
-    });
+    };
 
     var iter = clap.args.SliceIterator{
         .args = &.{
             "-a", "-c", "0", "something", "-d", "a", "--dd", "b",
         },
     };
-    var args = try Clap.parse(&iter, .{ .allocator = testing.allocator });
+    var args = try clap.parseEx(clap.Help, params, &iter, .{ .allocator = testing.allocator });
     defer args.deinit();
 
     try testing.expect(args.flag("-a"));
@@ -181,8 +183,55 @@ test "" {
 }
 
 test "empty" {
-    const Clap = ComptimeClap(clap.Help, comptime &.{});
     var iter = clap.args.SliceIterator{ .args = &.{} };
-    var args = try Clap.parse(&iter, .{ .allocator = testing.allocator });
+    var args = try clap.parseEx(u8, &.{}, &iter, .{ .allocator = testing.allocator });
     defer args.deinit();
+}
+
+fn testErr(
+    comptime params: []const clap.Param(u8),
+    args_strings: []const []const u8,
+    expected: []const u8,
+) !void {
+    var diag = clap.Diagnostic{};
+    var iter = clap.args.SliceIterator{ .args = args_strings };
+    var args = clap.parseEx(u8, params, &iter, .{
+        .allocator = testing.allocator,
+        .diagnostic = &diag,
+    }) catch |err| {
+        var buf: [1024]u8 = undefined;
+        var fbs = io.fixedBufferStream(&buf);
+        diag.report(fbs.writer(), err) catch return error.TestFailed;
+        try testing.expectEqualStrings(expected, fbs.getWritten());
+        return;
+    };
+
+    try testing.expect(false);
+}
+
+test "errors" {
+    const params = [_]clap.Param(u8){
+        .{
+            .id = 0,
+            .names = .{ .short = 'a', .long = "aa" },
+        },
+        .{
+            .id = 1,
+            .names = .{ .short = 'c', .long = "cc" },
+            .takes_value = .one,
+        },
+    };
+
+    try testErr(&params, &.{"q"}, "Invalid argument 'q'\n");
+    try testErr(&params, &.{"-q"}, "Invalid argument '-q'\n");
+    try testErr(&params, &.{"--q"}, "Invalid argument '--q'\n");
+    try testErr(&params, &.{"--q=1"}, "Invalid argument '--q'\n");
+    try testErr(&params, &.{"-a=1"}, "The argument '-a' does not take a value\n");
+    try testErr(&params, &.{"--aa=1"}, "The argument '--aa' does not take a value\n");
+    try testErr(&params, &.{"-c"}, "The argument '-c' requires a value but none was supplied\n");
+    try testErr(
+        &params,
+        &.{"--cc"},
+        "The argument '--cc' requires a value but none was supplied\n",
+    );
 }
