@@ -195,7 +195,7 @@ fn testErr(
 ) !void {
     var diag = clap.Diagnostic{};
     var iter = clap.args.SliceIterator{ .args = args_strings };
-    var args = clap.parseEx(u8, params, &iter, .{
+    _ = clap.parseEx(u8, params, &iter, .{
         .allocator = testing.allocator,
         .diagnostic = &diag,
     }) catch |err| {
