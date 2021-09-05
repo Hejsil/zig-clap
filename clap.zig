@@ -408,7 +408,16 @@ pub fn helpFull(
         try stream.print("\t", .{});
         try printParam(cs.writer(), Id, param, Error, context, valueText);
         try stream.writeByteNTimes(' ', max_spacing - @intCast(usize, cs.bytes_written));
-        try stream.print("\t{s}\n", .{try helpText(context, param)});
+        const help_text = try helpText(context, param);
+        var help_text_line_it = mem.split(help_text, "\n");
+        var indent_line = false;
+        while (help_text_line_it.next()) |line| : (indent_line = true) {
+            if (indent_line) {
+                try stream.print("\t", .{});
+                try stream.writeByteNTimes(' ', max_spacing);
+            }
+            try stream.print("\t{s}\n", .{line});
+        }
     }
 }
 
@@ -509,6 +518,7 @@ test "clap.help" {
             parseParam("--aa              Long flag.") catch unreachable,
             parseParam("--bb <V2>         Long option.") catch unreachable,
             parseParam("-c, --cc          Both flag.") catch unreachable,
+            parseParam("--complicate      Flag with a complicated and\nvery long description that\nspans multiple lines.") catch unreachable,
             parseParam("-d, --dd <V3>     Both option.") catch unreachable,
             parseParam("-d, --dd <V3>...  Both repeated option.") catch unreachable,
             parseParam(
@@ -523,6 +533,9 @@ test "clap.help" {
         "\t    --aa        \tLong flag.\n" ++
         "\t    --bb <V2>   \tLong option.\n" ++
         "\t-c, --cc        \tBoth flag.\n" ++
+        "\t    --complicate\tFlag with a complicated and\n" ++
+        "\t                \tvery long description that\n" ++
+        "\t                \tspans multiple lines.\n" ++
         "\t-d, --dd <V3>   \tBoth option.\n" ++
         "\t-d, --dd <V3>...\tBoth repeated option.\n";
 

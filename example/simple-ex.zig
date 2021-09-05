@@ -36,11 +36,11 @@ pub fn main() !void {
     defer args.deinit();
 
     if (args.flag("--help"))
-        debug.warn("--help\n", .{});
+        debug.print("--help\n", .{});
     if (args.option("--number")) |n|
-        debug.warn("--number = {s}\n", .{n});
+        debug.print("--number = {s}\n", .{n});
     for (args.options("--string")) |s|
-        debug.warn("--string = {s}\n", .{s});
+        debug.print("--string = {s}\n", .{s});
     for (args.positionals()) |pos|
-        debug.warn("{s}\n", .{pos});
+        debug.print("{s}\n", .{pos});
 }
