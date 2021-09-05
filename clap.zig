@@ -409,7 +409,7 @@ pub fn helpFull(
         try printParam(cs.writer(), Id, param, Error, context, valueText);
         try stream.writeByteNTimes(' ', max_spacing - @intCast(usize, cs.bytes_written));
         const help_text = try helpText(context, param);
-        var help_text_line_it = mem.split(help_text, "\n");
+        var help_text_line_it = mem.split(u8, help_text, "\n");
         var indent_line = false;
         while (help_text_line_it.next()) |line| : (indent_line = true) {
             if (indent_line) {
