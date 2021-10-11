@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 const Builder = std.build.Builder;
 const Mode = builtin.Mode;
