@@ -46,7 +46,7 @@ pub fn StreamingClap(comptime Id: type, comptime ArgIterator: type) type {
         pub fn next(parser: *@This()) !?Arg(Id) {
             switch (parser.state) {
                 .normal => return try parser.normal(),
-                .chaining => |state| return try parser.chainging(state),
+                .chaining => |state| return try parser.chaining(state),
                 .rest_are_positional => {
                     const param = parser.positionalParam() orelse unreachable;
                     const value = (try parser.iter.next()) orelse return null;
@@ -89,7 +89,7 @@ pub fn StreamingClap(comptime Id: type, comptime ArgIterator: type) type {
 
                     return parser.err(arg, .{ .long = name }, error.InvalidArgument);
                 },
-                .short => return try parser.chainging(.{
+                .short => return try parser.chaining(.{
                     .arg = arg,
                     .index = 0,
                 }),
@@ -110,7 +110,7 @@ pub fn StreamingClap(comptime Id: type, comptime ArgIterator: type) type {
             }
         }
 
-        fn chainging(parser: *@This(), state: State.Chaining) !?Arg(Id) {
+        fn chaining(parser: *@This(), state: State.Chaining) !?Arg(Id) {
             const arg = state.arg;
             const index = state.index;
             const next_index = index + 1;
