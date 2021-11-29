@@ -74,6 +74,7 @@ program can take.
 ```
 
 ```
+$ zig-out/bin/help --help
 	-h, --help   	Display this help and exit.
 	-v, --version	Output version information and exit.
 ```
@@ -97,6 +98,7 @@ of the help message.
 ```
 
 ```
+$ zig-out/bin/usage --help
 [-hv] [--value <N>]
 ```
 
