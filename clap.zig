@@ -337,7 +337,7 @@ pub const ParseOptions = struct {
     ///       `parse`, `parseEx` does not wrap the allocator so the heap allocator can be
     ///       quite expensive. (TODO: Can we pick a better default? For `parse`, this allocator
     ///       is fine, as it wraps it in an arena)
-    allocator: *mem.Allocator = heap.page_allocator,
+    allocator: mem.Allocator = heap.page_allocator,
     diagnostic: ?*Diagnostic = null,
 };
 
@@ -350,7 +350,7 @@ pub fn parse(
     var iter = try args.OsIterator.init(opt.allocator);
     const clap = try parseEx(Id, params, &iter, .{
         // Let's reuse the arena from the `OSIterator` since we already have it.
-        .allocator = &iter.arena.allocator,
+        .allocator = iter.arena.allocator(),
         .diagnostic = opt.diagnostic,
     });
 

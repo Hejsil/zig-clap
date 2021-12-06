@@ -41,7 +41,7 @@ pub fn ComptimeClap(
         single_options_is_set: std.PackedIntArray(u1, single_options),
         flags: std.PackedIntArray(u1, flags),
         pos: []const []const u8,
-        allocator: *mem.Allocator,
+        allocator: mem.Allocator,
 
         pub fn parse(iter: anytype, opt: clap.ParseOptions) !@This() {
             const allocator = opt.allocator;
