@@ -2,10 +2,6 @@
 
 A simple and easy to use command line argument parser library for Zig.
 
-Looking for a version that works with `zig master`? The `zig-master` branch has
-you covered. It is maintained by people who live at head (not me) and is merged
-into master on every `zig` release.
-
 ## Features
 
 * Short arguments `-a`
