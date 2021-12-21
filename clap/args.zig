@@ -57,7 +57,7 @@ pub const OsIterator = struct {
     ///       return an error when we have no exe.
     exe_arg: ?[:0]const u8,
 
-    pub fn init(allocator: *mem.Allocator) Error!OsIterator {
+    pub fn init(allocator: mem.Allocator) Error!OsIterator {
         var res = OsIterator{
             .arena = heap.ArenaAllocator.init(allocator),
             .args = process.args(),
@@ -73,7 +73,7 @@ pub const OsIterator = struct {
 
     pub fn next(iter: *OsIterator) Error!?[:0]const u8 {
         if (builtin.os.tag == .windows) {
-            return try iter.args.next(&iter.arena.allocator) orelse return null;
+            return try iter.args.next(iter.arena.allocator()) orelse return null;
         } else {
             return iter.args.nextPosix();
         }
@@ -91,7 +91,7 @@ pub const ShellIterator = struct {
     arena: heap.ArenaAllocator,
     str: []const u8,
 
-    pub fn init(allocator: *mem.Allocator, str: []const u8) ShellIterator {
+    pub fn init(allocator: mem.Allocator, str: []const u8) ShellIterator {
         return .{
             .arena = heap.ArenaAllocator.init(allocator),
             .str = str,
@@ -106,7 +106,7 @@ pub const ShellIterator = struct {
         // Whenever possible, this iterator will return slices into `str` instead of
         // allocating. Sometimes this is not possible, for example, escaped characters
         // have be be unescape, so we need to allocate in this case.
-        var list = std.ArrayList(u8).init(&iter.arena.allocator);
+        var list = std.ArrayList(u8).init(iter.arena.allocator());
         var start: usize = 0;
         var state: enum {
             skip_whitespace,
@@ -274,7 +274,7 @@ pub const ShellIterator = struct {
 
 fn testShellIteratorOk(str: []const u8, allocations: usize, expect: []const []const u8) !void {
     var allocator = testing.FailingAllocator.init(testing.allocator, allocations);
-    var it = ShellIterator.init(&allocator.allocator, str);
+    var it = ShellIterator.init(allocator.allocator(), str);
     defer it.deinit();
 
     for (expect) |e| {

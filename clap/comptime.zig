@@ -41,7 +41,7 @@ pub fn ComptimeClap(
         single_options_is_set: std.PackedIntArray(u1, single_options),
         flags: std.PackedIntArray(u1, flags),
         pos: []const []const u8,
-        allocator: *mem.Allocator,
+        allocator: mem.Allocator,
 
         pub fn parse(iter: anytype, opt: clap.ParseOptions) !@This() {
             const allocator = opt.allocator;
@@ -82,8 +82,8 @@ pub fn ComptimeClap(
                     if (multis.len != 0)
                         try multis[param.id].append(arg.value.?);
                 } else {
-                    debug.assert(res.flags.len() != 0);
-                    if (res.flags.len() != 0)
+                    debug.assert(res.flags.len != 0);
+                    if (res.flags.len != 0)
                         res.flags.set(param.id, 1);
                 }
             }
@@ -195,7 +195,7 @@ fn testErr(
 ) !void {
     var diag = clap.Diagnostic{};
     var iter = clap.args.SliceIterator{ .args = args_strings };
-    var args = clap.parseEx(u8, params, &iter, .{
+    _ = clap.parseEx(u8, params, &iter, .{
         .allocator = testing.allocator,
         .diagnostic = &diag,
     }) catch |err| {

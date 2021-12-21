@@ -52,7 +52,7 @@ pub fn build(b: *Builder) void {
 
 fn readMeStep(b: *Builder) *std.build.Step {
     const s = b.allocator.create(std.build.Step) catch unreachable;
-    s.* = std.build.Step.init(.Custom, "ReadMeStep", b.allocator, struct {
+    s.* = std.build.Step.init(.custom, "ReadMeStep", b.allocator, struct {
         fn make(step: *std.build.Step) anyerror!void {
             @setEvalBranchQuota(10000);
             _ = step;

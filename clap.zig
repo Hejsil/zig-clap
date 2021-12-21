@@ -74,7 +74,7 @@ pub fn parseParam(line: []const u8) !Param(Help) {
     @setEvalBranchQuota(std.math.maxInt(u32));
 
     var found_comma = false;
-    var it = mem.tokenize(line, " \t");
+    var it = mem.tokenize(u8, line, " \t");
     var param_str = it.next() orelse return error.NoParamFound;
 
     const short_name = if (!mem.startsWith(u8, param_str, "--") and
@@ -337,7 +337,7 @@ pub const ParseOptions = struct {
     ///       `parse`, `parseEx` does not wrap the allocator so the heap allocator can be
     ///       quite expensive. (TODO: Can we pick a better default? For `parse`, this allocator
     ///       is fine, as it wraps it in an arena)
-    allocator: *mem.Allocator = heap.page_allocator,
+    allocator: mem.Allocator = heap.page_allocator,
     diagnostic: ?*Diagnostic = null,
 };
 
@@ -350,7 +350,7 @@ pub fn parse(
     var iter = try args.OsIterator.init(opt.allocator);
     const clap = try parseEx(Id, params, &iter, .{
         // Let's reuse the arena from the `OSIterator` since we already have it.
-        .allocator = &iter.arena.allocator,
+        .allocator = iter.arena.allocator(),
         .diagnostic = opt.diagnostic,
     });
 
@@ -409,7 +409,7 @@ pub fn helpFull(
         try printParam(cs.writer(), Id, param, Error, context, valueText);
         try stream.writeByteNTimes(' ', max_spacing - @intCast(usize, cs.bytes_written));
         const help_text = try helpText(context, param);
-        var help_text_line_it = mem.split(help_text, "\n");
+        var help_text_line_it = mem.split(u8, help_text, "\n");
         var indent_line = false;
         while (help_text_line_it.next()) |line| : (indent_line = true) {
             if (indent_line) {
