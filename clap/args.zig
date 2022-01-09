@@ -73,7 +73,7 @@ pub const OsIterator = struct {
 
     pub fn next(iter: *OsIterator) Error!?[:0]const u8 {
         if (builtin.os.tag == .windows) {
-            return (try iter.args.next(iter.arena.allocator())) orelse return null;
+            return try (iter.args.next(iter.arena.allocator()) orelse return null);
         } else {
             return iter.args.nextPosix();
         }
