@@ -3,6 +3,7 @@ const std = @import("std");
 
 const debug = std.debug;
 const io = std.io;
+const process = std.process;
 
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
@@ -16,10 +17,11 @@ pub fn main() !void {
         clap.parseParam("<POS>...") catch unreachable,
     };
 
-    // We then initialize an argument iterator. We will use the OsIterator as it nicely
-    // wraps iterating over arguments the most efficient way on each os.
-    var iter = try clap.args.OsIterator.init(allocator);
+    var iter = try process.ArgIterator.initWithAllocator(allocator);
     defer iter.deinit();
+
+    // Skip exe argument
+    _ = iter.next();
 
     // Initalize our diagnostics, which can be used for reporting useful errors.
     // This is optional. You can also pass `.{}` to `clap.parse` if you don't

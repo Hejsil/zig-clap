@@ -4,6 +4,7 @@ const debug = std.debug;
 const heap = std.heap;
 const io = std.io;
 const mem = std.mem;
+const process = std.process;
 const testing = std.testing;
 
 pub const args = @import("clap/args.zig");
@@ -347,16 +348,21 @@ pub fn parse(
     comptime params: []const Param(Id),
     opt: ParseOptions,
 ) !Args(Id, params) {
-    var iter = try args.OsIterator.init(opt.allocator);
+    var arena = heap.ArenaAllocator.init(opt.allocator);
+    errdefer arena.deinit();
+
+    var iter = try process.ArgIterator.initWithAllocator(arena.allocator());
+    const exe_arg = iter.next();
+
     const clap = try parseEx(Id, params, &iter, .{
         // Let's reuse the arena from the `OSIterator` since we already have it.
-        .allocator = iter.arena.allocator(),
+        .allocator = arena.allocator(),
         .diagnostic = opt.diagnostic,
     });
 
     return Args(Id, params){
-        .exe_arg = iter.exe_arg,
-        .arena = iter.arena,
+        .exe_arg = exe_arg,
+        .arena = arena,
         .clap = clap,
     };
 }

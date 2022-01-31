@@ -108,6 +108,7 @@ const std = @import("std");
 
 const debug = std.debug;
 const io = std.io;
+const process = std.process;
 
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
@@ -126,16 +127,17 @@ pub fn main() !void {
         .{ .id = 'f', .takes_value = .one },
     };
 
-    // We then initialize an argument iterator. We will use the OsIterator as it nicely
-    // wraps iterating over arguments the most efficient way on each os.
-    var iter = try clap.args.OsIterator.init(allocator);
+    var iter = try process.ArgIterator.initWithAllocator(allocator);
     defer iter.deinit();
+
+    // Skip exe argument
+    _ = iter.next();
 
     // Initalize our diagnostics, which can be used for reporting useful errors.
     // This is optional. You can also leave the `diagnostic` field unset if you
     // don't care about the extra information `Diagnostic` provides.
     var diag = clap.Diagnostic{};
-    var parser = clap.StreamingClap(u8, clap.args.OsIterator){
+    var parser = clap.StreamingClap(u8, process.ArgIterator){
         .params = &params,
         .iter = &iter,
         .diagnostic = &diag,
