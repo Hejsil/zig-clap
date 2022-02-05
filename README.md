@@ -165,7 +165,7 @@ pub fn main() !void {
 
 ```
 
-Currently, this parse is the only parser that allow an array of `Param` tha
+Currently, this parser is the only parser that allows an array of `Param` that
 is generated at runtime.
 
 ### `help`
