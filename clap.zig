@@ -13,8 +13,8 @@ test "clap" {
     testing.refAllDecls(@This());
 }
 
-pub const ComptimeClap = @import("clap/comptime.zig").ComptimeClap;
-pub const StreamingClap = @import("clap/streaming.zig").StreamingClap;
+pub const streaming = @import("clap/streaming.zig");
+pub const untyped = @import("clap/untyped.zig");
 
 /// The names a ::Param can have.
 pub const Names = struct {
@@ -23,6 +23,23 @@ pub const Names = struct {
 
     /// '--' prefix
     long: ?[]const u8 = null,
+
+    pub fn longest(names: *const Names) Longest {
+        if (names.long) |long|
+            return .{ .kind = .long, .name = long };
+        if (names.short) |*short| {
+            // TODO: Zig cannot figure out @as(*const [1]u8, short) in the ano literal
+            const casted: *const [1]u8 = short;
+            return .{ .kind = .short, .name = casted };
+        }
+
+        return .{ .kind = .positinal, .name = "" };
+    }
+
+    pub const Longest = struct {
+        kind: enum { long, short, positinal },
+        name: []const u8,
+    };
 };
 
 /// Whether a param takes no value (a flag), one value, or can be specified multiple times.
@@ -59,155 +76,6 @@ pub fn Param(comptime Id: type) type {
         names: Names = Names{},
         takes_value: Values = .none,
     };
-}
-
-/// Takes a string and parses it to a Param(Help).
-/// This is the reverse of 'help' but for at single parameter only.
-pub fn parseParam(line: []const u8) !Param(Help) {
-    // This function become a lot less ergonomic to use once you hit the eval branch quota. To
-    // avoid this we pick a sane default. Sadly, the only sane default is the biggest possible
-    // value. If we pick something a lot smaller and a user hits the quota after that, they have
-    // no way of overriding it, since we set it here.
-    // We can recosider this again if:
-    // * We get parseParams: https://github.com/Hejsil/zig-clap/issues/39
-    // * We get a larger default branch quota in the zig compiler (stage 2).
-    // * Someone points out how this is a really bad idea.
-    @setEvalBranchQuota(std.math.maxInt(u32));
-
-    var found_comma = false;
-    var it = mem.tokenize(u8, line, " \t");
-    var param_str = it.next() orelse return error.NoParamFound;
-
-    const short_name = if (!mem.startsWith(u8, param_str, "--") and
-        mem.startsWith(u8, param_str, "-"))
-    blk: {
-        found_comma = param_str[param_str.len - 1] == ',';
-        if (found_comma)
-            param_str = param_str[0 .. param_str.len - 1];
-
-        if (param_str.len != 2)
-            return error.InvalidShortParam;
-
-        const short_name = param_str[1];
-        if (!found_comma) {
-            var res = parseParamRest(it.rest());
-            res.names.short = short_name;
-            return res;
-        }
-
-        param_str = it.next() orelse return error.NoParamFound;
-        break :blk short_name;
-    } else null;
-
-    const long_name = if (mem.startsWith(u8, param_str, "--")) blk: {
-        if (param_str[param_str.len - 1] == ',')
-            return error.TrailingComma;
-
-        break :blk param_str[2..];
-    } else if (found_comma) {
-        return error.TrailingComma;
-    } else if (short_name == null) {
-        return parseParamRest(mem.trimLeft(u8, line, " \t"));
-    } else null;
-
-    var res = parseParamRest(it.rest());
-    res.names.long = long_name;
-    res.names.short = short_name;
-    return res;
-}
-
-fn parseParamRest(line: []const u8) Param(Help) {
-    if (mem.startsWith(u8, line, "<")) blk: {
-        const len = mem.indexOfScalar(u8, line, '>') orelse break :blk;
-        const takes_many = mem.startsWith(u8, line[len + 1 ..], "...");
-        const help_start = len + 1 + @as(usize, 3) * @boolToInt(takes_many);
-        return .{
-            .takes_value = if (takes_many) .many else .one,
-            .id = .{
-                .msg = mem.trim(u8, line[help_start..], " \t"),
-                .value = line[1..len],
-            },
-        };
-    }
-
-    return .{ .id = .{ .msg = mem.trim(u8, line, " \t") } };
-}
-
-fn expectParam(expect: Param(Help), actual: Param(Help)) !void {
-    try testing.expectEqualStrings(expect.id.msg, actual.id.msg);
-    try testing.expectEqualStrings(expect.id.value, actual.id.value);
-    try testing.expectEqual(expect.names.short, actual.names.short);
-    try testing.expectEqual(expect.takes_value, actual.takes_value);
-    if (expect.names.long) |long| {
-        try testing.expectEqualStrings(long, actual.names.long.?);
-    } else {
-        try testing.expectEqual(@as(?[]const u8, null), actual.names.long);
-    }
-}
-
-test "parseParam" {
-    try expectParam(Param(Help){
-        .id = .{ .msg = "Help text", .value = "value" },
-        .names = .{ .short = 's', .long = "long" },
-        .takes_value = .one,
-    }, try parseParam("-s, --long <value> Help text"));
-
-    try expectParam(Param(Help){
-        .id = .{ .msg = "Help text", .value = "value" },
-        .names = .{ .short = 's', .long = "long" },
-        .takes_value = .many,
-    }, try parseParam("-s, --long <value>... Help text"));
-
-    try expectParam(Param(Help){
-        .id = .{ .msg = "Help text", .value = "value" },
-        .names = .{ .long = "long" },
-        .takes_value = .one,
-    }, try parseParam("--long <value> Help text"));
-
-    try expectParam(Param(Help){
-        .id = .{ .msg = "Help text", .value = "value" },
-        .names = .{ .short = 's' },
-        .takes_value = .one,
-    }, try parseParam("-s <value> Help text"));
-
-    try expectParam(Param(Help){
-        .id = .{ .msg = "Help text" },
-        .names = .{ .short = 's', .long = "long" },
-    }, try parseParam("-s, --long Help text"));
-
-    try expectParam(Param(Help){
-        .id = .{ .msg = "Help text" },
-        .names = .{ .short = 's' },
-    }, try parseParam("-s Help text"));
-
-    try expectParam(Param(Help){
-        .id = .{ .msg = "Help text" },
-        .names = .{ .long = "long" },
-    }, try parseParam("--long Help text"));
-
-    try expectParam(Param(Help){
-        .id = .{ .msg = "Help text", .value = "A | B" },
-        .names = .{ .long = "long" },
-        .takes_value = .one,
-    }, try parseParam("--long <A | B> Help text"));
-
-    try expectParam(Param(Help){
-        .id = .{ .msg = "Help text", .value = "A" },
-        .names = .{},
-        .takes_value = .one,
-    }, try parseParam("<A> Help text"));
-
-    try expectParam(Param(Help){
-        .id = .{ .msg = "Help text", .value = "A" },
-        .names = .{},
-        .takes_value = .many,
-    }, try parseParam("<A>... Help text"));
-
-    try testing.expectError(error.TrailingComma, parseParam("--long, Help"));
-    try testing.expectError(error.TrailingComma, parseParam("-s, Help"));
-    try testing.expectError(error.InvalidShortParam, parseParam("-ss Help"));
-    try testing.expectError(error.InvalidShortParam, parseParam("-ss <value> Help"));
-    try testing.expectError(error.InvalidShortParam, parseParam("- Help"));
 }
 
 /// Optional diagnostics used for reporting useful errors
@@ -306,7 +174,7 @@ test "Diagnostic.report" {
 pub fn Args(comptime Id: type, comptime params: []const Param(Id)) type {
     return struct {
         arena: std.heap.ArenaAllocator,
-        clap: ComptimeClap(Id, params),
+        clap: untyped.Clap(Id, params),
         exe_arg: ?[]const u8,
 
         pub fn deinit(a: *@This()) void {
@@ -341,43 +209,6 @@ pub const ParseOptions = struct {
     allocator: mem.Allocator = heap.page_allocator,
     diagnostic: ?*Diagnostic = null,
 };
-
-/// Same as `parseEx` but uses the `args.OsIterator` by default.
-pub fn parse(
-    comptime Id: type,
-    comptime params: []const Param(Id),
-    opt: ParseOptions,
-) !Args(Id, params) {
-    var arena = heap.ArenaAllocator.init(opt.allocator);
-    errdefer arena.deinit();
-
-    var iter = try process.ArgIterator.initWithAllocator(arena.allocator());
-    const exe_arg = iter.next();
-
-    const clap = try parseEx(Id, params, &iter, .{
-        // Let's reuse the arena from the `OSIterator` since we already have it.
-        .allocator = arena.allocator(),
-        .diagnostic = opt.diagnostic,
-    });
-
-    return Args(Id, params){
-        .exe_arg = exe_arg,
-        .arena = arena,
-        .clap = clap,
-    };
-}
-
-/// Parses the command line arguments passed into the program based on an
-/// array of `Param`s.
-pub fn parseEx(
-    comptime Id: type,
-    comptime params: []const Param(Id),
-    iter: anytype,
-    opt: ParseOptions,
-) !ComptimeClap(Id, params) {
-    const Clap = ComptimeClap(Id, params);
-    return try Clap.parse(iter, opt);
-}
 
 /// Will print a help message in the following format:
 ///     -s, --long <valueText> helpText
@@ -526,15 +357,15 @@ test "clap.help" {
     try help(
         slice_stream.writer(),
         comptime &.{
-            parseParam("-a                Short flag.") catch unreachable,
-            parseParam("-b <V1>           Short option.") catch unreachable,
-            parseParam("--aa              Long flag.") catch unreachable,
-            parseParam("--bb <V2>         Long option.") catch unreachable,
-            parseParam("-c, --cc          Both flag.") catch unreachable,
-            parseParam("--complicate      Flag with a complicated and\nvery long description that\nspans multiple lines.") catch unreachable,
-            parseParam("-d, --dd <V3>     Both option.") catch unreachable,
-            parseParam("-d, --dd <V3>...  Both repeated option.") catch unreachable,
-            parseParam(
+            untyped.parseParam("-a                Short flag.") catch unreachable,
+            untyped.parseParam("-b <V1>           Short option.") catch unreachable,
+            untyped.parseParam("--aa              Long flag.") catch unreachable,
+            untyped.parseParam("--bb <V2>         Long option.") catch unreachable,
+            untyped.parseParam("-c, --cc          Both flag.") catch unreachable,
+            untyped.parseParam("--complicate      Flag with a complicated and\nvery long description that\nspans multiple lines.") catch unreachable,
+            untyped.parseParam("-d, --dd <V3>     Both option.") catch unreachable,
+            untyped.parseParam("-d, --dd <V3>...  Both repeated option.") catch unreachable,
+            untyped.parseParam(
                 "<P>               Positional. This should not appear in the help message.",
             ) catch unreachable,
         },
@@ -667,37 +498,37 @@ fn testUsage(expected: []const u8, params: []const Param(Help)) !void {
 test "usage" {
     @setEvalBranchQuota(100000);
     try testUsage("[-ab]", &.{
-        try parseParam("-a"),
-        try parseParam("-b"),
+        try untyped.parseParam("-a"),
+        try untyped.parseParam("-b"),
     });
     try testUsage("[-a <value>] [-b <v>]", &.{
-        try parseParam("-a <value>"),
-        try parseParam("-b <v>"),
+        try untyped.parseParam("-a <value>"),
+        try untyped.parseParam("-b <v>"),
     });
     try testUsage("[--a] [--b]", &.{
-        try parseParam("--a"),
-        try parseParam("--b"),
+        try untyped.parseParam("--a"),
+        try untyped.parseParam("--b"),
     });
     try testUsage("[--a <value>] [--b <v>]", &.{
-        try parseParam("--a <value>"),
-        try parseParam("--b <v>"),
+        try untyped.parseParam("--a <value>"),
+        try untyped.parseParam("--b <v>"),
     });
     try testUsage("<file>", &.{
-        try parseParam("<file>"),
+        try untyped.parseParam("<file>"),
     });
     try testUsage(
         "[-ab] [-c <value>] [-d <v>] [--e] [--f] [--g <value>] [--h <v>] [-i <v>...] <file>",
         &.{
-            try parseParam("-a"),
-            try parseParam("-b"),
-            try parseParam("-c <value>"),
-            try parseParam("-d <v>"),
-            try parseParam("--e"),
-            try parseParam("--f"),
-            try parseParam("--g <value>"),
-            try parseParam("--h <v>"),
-            try parseParam("-i <v>..."),
-            try parseParam("<file>"),
+            try untyped.parseParam("-a"),
+            try untyped.parseParam("-b"),
+            try untyped.parseParam("-c <value>"),
+            try untyped.parseParam("-d <v>"),
+            try untyped.parseParam("--e"),
+            try untyped.parseParam("--f"),
+            try untyped.parseParam("--g <value>"),
+            try untyped.parseParam("--h <v>"),
+            try untyped.parseParam("-i <v>..."),
+            try untyped.parseParam("<file>"),
         },
     );
 }

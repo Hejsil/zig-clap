@@ -51,9 +51,9 @@ zig-clap/example/simple-error.zig:16:18: note: called from here
 
 There is also a `parseEx` variant that takes an argument iterator.
 
-### `StreamingClap`
+### `streaming.Clap`
 
-The `StreamingClap` is the base of all the other parsers. It's a streaming parser that uses an
+The `streaming.Clap` is the base of all the other parsers. It's a streaming parser that uses an
 `args.Iterator` to provide it with arguments lazily.
 
 ```zig
