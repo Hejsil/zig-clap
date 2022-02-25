@@ -32,7 +32,7 @@ pub fn main() !void {
     // This is optional. You can also leave the `diagnostic` field unset if you
     // don't care about the extra information `Diagnostic` provides.
     var diag = clap.Diagnostic{};
-    var parser = clap.StreamingClap(u8, process.ArgIterator){
+    var parser = clap.streaming.Clap(u8, process.ArgIterator){
         .params = &params,
         .iter = &iter,
         .diagnostic = &diag,
