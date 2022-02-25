@@ -7,12 +7,12 @@ pub fn main() !void {
         clap.parseParam("-v, --version  Output version information and exit.") catch unreachable,
     };
 
-    var args = try clap.parse(clap.Help, &params, .{});
-    defer args.deinit();
+    var res = try clap.parse(clap.Help, &params, clap.parsers.default, .{});
+    defer res.deinit();
 
     // clap.help is a function that can print a simple help message, given a
     // slice of Param(Help). There is also a helpEx, which can print a
     // help message for any Param, but it is more verbose to call.
-    if (args.flag("--help"))
-        return clap.help(std.io.getStdErr().writer(), &params);
+    if (res.args.help)
+        return clap.help(std.io.getStdErr().writer(), clap.Help, &params);
 }

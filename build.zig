@@ -60,7 +60,7 @@ fn readMeStep(b: *Builder) *std.build.Step {
             const stream = file.writer();
             try stream.print(@embedFile("example/README.md.template"), .{
                 @embedFile("example/simple.zig"),
-                @embedFile("example/simple-error.zig"),
+                @embedFile("example/simple-ex.zig"),
                 @embedFile("example/streaming-clap.zig"),
                 @embedFile("example/help.zig"),
                 @embedFile("example/usage.zig"),

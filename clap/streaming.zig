@@ -10,7 +10,7 @@ const mem = std.mem;
 const os = std.os;
 const testing = std.testing;
 
-/// The result returned from StreamingClap.next
+/// The result returned from Clap.next
 pub fn Arg(comptime Id: type) type {
     return struct {
         const Self = @This();
@@ -20,10 +20,18 @@ pub fn Arg(comptime Id: type) type {
     };
 }
 
+pub const Error = error{
+    MissingValue,
+    InvalidArgument,
+    DoesntTakeValue,
+};
+
 /// A command line argument parser which, given an ArgIterator, will parse arguments according
-/// to the params. StreamingClap parses in an iterating manner, so you have to use a loop
-/// together with StreamingClap.next to parse all the arguments of your program.
-pub fn StreamingClap(comptime Id: type, comptime ArgIterator: type) type {
+/// to the params. Clap parses in an iterating manner, so you have to use a loop together with
+/// Clap.next to parse all the arguments of your program.
+///
+/// This parser is the building block for all the more complicated parsers.
+pub fn Clap(comptime Id: type, comptime ArgIterator: type) type {
     return struct {
         const State = union(enum) {
             normal,
@@ -71,7 +79,7 @@ pub fn StreamingClap(comptime Id: type, comptime ArgIterator: type) type {
                             continue;
                         if (param.takes_value == .none) {
                             if (maybe_value != null)
-                                return parser.err(arg, .{ .long = name }, error.DoesntTakeValue);
+                                return parser.err(arg, .{ .long = name }, Error.DoesntTakeValue);
 
                             return Arg(Id){ .param = param };
                         }
@@ -81,13 +89,13 @@ pub fn StreamingClap(comptime Id: type, comptime ArgIterator: type) type {
                                 break :blk v;
 
                             break :blk parser.iter.next() orelse
-                                return parser.err(arg, .{ .long = name }, error.MissingValue);
+                                return parser.err(arg, .{ .long = name }, Error.MissingValue);
                         };
 
                         return Arg(Id){ .param = param, .value = value };
                     }
 
-                    return parser.err(arg, .{ .long = name }, error.InvalidArgument);
+                    return parser.err(arg, .{ .long = name }, Error.InvalidArgument);
                 },
                 .short => return try parser.chaining(.{
                     .arg = arg,
@@ -105,7 +113,7 @@ pub fn StreamingClap(comptime Id: type, comptime ArgIterator: type) type {
 
                     return Arg(Id){ .param = param, .value = arg };
                 } else {
-                    return parser.err(arg, .{}, error.InvalidArgument);
+                    return parser.err(arg, .{}, Error.InvalidArgument);
                 },
             }
         }
@@ -137,13 +145,13 @@ pub fn StreamingClap(comptime Id: type, comptime ArgIterator: type) type {
                 const next_is_eql = if (next_index < arg.len) arg[next_index] == '=' else false;
                 if (param.takes_value == .none) {
                     if (next_is_eql)
-                        return parser.err(arg, .{ .short = short }, error.DoesntTakeValue);
+                        return parser.err(arg, .{ .short = short }, Error.DoesntTakeValue);
                     return Arg(Id){ .param = param };
                 }
 
                 if (arg.len <= next_index) {
                     const value = parser.iter.next() orelse
-                        return parser.err(arg, .{ .short = short }, error.MissingValue);
+                        return parser.err(arg, .{ .short = short }, Error.MissingValue);
 
                     return Arg(Id){ .param = param, .value = value };
                 }
@@ -154,7 +162,7 @@ pub fn StreamingClap(comptime Id: type, comptime ArgIterator: type) type {
                 return Arg(Id){ .param = param, .value = arg[next_index..] };
             }
 
-            return parser.err(arg, .{ .short = arg[index] }, error.InvalidArgument);
+            return parser.err(arg, .{ .short = arg[index] }, Error.InvalidArgument);
         }
 
         fn positionalParam(parser: *@This()) ?*const clap.Param(Id) {
@@ -209,7 +217,7 @@ fn testNoErr(
     results: []const Arg(u8),
 ) !void {
     var iter = args.SliceIterator{ .args = args_strings };
-    var c = StreamingClap(u8, args.SliceIterator){
+    var c = Clap(u8, args.SliceIterator){
         .params = params,
         .iter = &iter,
     };
@@ -236,7 +244,7 @@ fn testErr(
 ) !void {
     var diag: clap.Diagnostic = undefined;
     var iter = args.SliceIterator{ .args = args_strings };
-    var c = StreamingClap(u8, args.SliceIterator){
+    var c = Clap(u8, args.SliceIterator){
         .params = params,
         .iter = &iter,
         .diagnostic = &diag,
