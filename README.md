@@ -34,30 +34,30 @@ pub fn main() !void {
     // First we specify what parameters our program can take.
     // We can use `parseParam` to parse a string to a `Param(Help)`
     const params = comptime [_]clap.Param(clap.Help){
-        clap.untyped.parseParam("-h, --help             Display this help and exit.") catch unreachable,
-        clap.untyped.parseParam("-n, --number <NUM>     An option parameter, which takes a value.") catch unreachable,
-        clap.untyped.parseParam("-s, --string <STR>...  An option parameter which can be specified multiple times.") catch unreachable,
-        clap.untyped.parseParam("<POS>...") catch unreachable,
+        clap.parseParam("-h, --help             Display this help and exit.              ") catch unreachable,
+        clap.parseParam("-n, --number <NUM>     An option parameter, which takes a value.") catch unreachable,
+        clap.parseParam("-s, --string <STR>...  An option parameter which can be specified multiple times.") catch unreachable,
+        clap.parseParam("<POS>...") catch unreachable,
     };
 
     // Initalize our diagnostics, which can be used for reporting useful errors.
     // This is optional. You can also pass `.{}` to `clap.parse` if you don't
     // care about the extra information `Diagnostics` provides.
     var diag = clap.Diagnostic{};
-    var res = clap.untyped.parse(clap.Help, &params, .{ .diagnostic = &diag }) catch |err| {
+    var args = clap.parse(clap.Help, &params, .{ .diagnostic = &diag }) catch |err| {
         // Report useful error and exit
         diag.report(io.getStdErr().writer(), err) catch {};
         return err;
     };
-    defer res.deinit();
+    defer args.deinit();
 
-    if (res.args.help)
+    if (args.flag("--help"))
         debug.print("--help\n", .{});
-    if (res.args.number) |n|
+    if (args.option("--number")) |n|
         debug.print("--number = {s}\n", .{n});
-    for (res.args.string) |s|
+    for (args.options("--string")) |s|
         debug.print("--string = {s}\n", .{s});
-    for (res.positionals) |pos|
+    for (args.positionals()) |pos|
         debug.print("{s}\n", .{pos});
 }
 
@@ -100,9 +100,9 @@ zig-clap/example/simple-error.zig:16:18: note: called from here
 
 There is also a `parseEx` variant that takes an argument iterator.
 
-### `streaming.Clap`
+### `StreamingClap`
 
-The `streaming.Clap` is the base of all the other parsers. It's a streaming parser that uses an
+The `StreamingClap` is the base of all the other parsers. It's a streaming parser that uses an
 `args.Iterator` to provide it with arguments lazily.
 
 ```zig
@@ -140,7 +140,7 @@ pub fn main() !void {
     // This is optional. You can also leave the `diagnostic` field unset if you
     // don't care about the extra information `Diagnostic` provides.
     var diag = clap.Diagnostic{};
-    var parser = clap.streaming.Clap(u8, process.ArgIterator){
+    var parser = clap.StreamingClap(u8, process.ArgIterator){
         .params = &params,
         .iter = &iter,
         .diagnostic = &diag,
@@ -182,17 +182,17 @@ const std = @import("std");
 
 pub fn main() !void {
     const params = comptime [_]clap.Param(clap.Help){
-        clap.untyped.parseParam("-h, --help     Display this help and exit.         ") catch unreachable,
-        clap.untyped.parseParam("-v, --version  Output version information and exit.") catch unreachable,
+        clap.parseParam("-h, --help     Display this help and exit.         ") catch unreachable,
+        clap.parseParam("-v, --version  Output version information and exit.") catch unreachable,
     };
 
-    var res = try clap.untyped.parse(clap.Help, &params, .{});
-    defer res.deinit();
+    var args = try clap.parse(clap.Help, &params, .{});
+    defer args.deinit();
 
     // clap.help is a function that can print a simple help message, given a
     // slice of Param(Help). There is also a helpEx, which can print a
     // help message for any Param, but it is more verbose to call.
-    if (res.args.help)
+    if (args.flag("--help"))
         return clap.help(std.io.getStdErr().writer(), &params);
 }
 
@@ -224,18 +224,18 @@ const std = @import("std");
 
 pub fn main() !void {
     const params = comptime [_]clap.Param(clap.Help){
-        clap.untyped.parseParam("-h, --help       Display this help and exit.") catch unreachable,
-        clap.untyped.parseParam("-v, --version    Output version information and exit.") catch unreachable,
-        clap.untyped.parseParam("    --value <N>  An option parameter, which takes a value.") catch unreachable,
+        clap.parseParam("-h, --help       Display this help and exit.              ") catch unreachable,
+        clap.parseParam("-v, --version    Output version information and exit.     ") catch unreachable,
+        clap.parseParam("    --value <N>  An option parameter, which takes a value.") catch unreachable,
     };
 
-    var res = try clap.untyped.parse(clap.Help, &params, .{});
-    defer res.deinit();
+    var args = try clap.parse(clap.Help, &params, .{});
+    defer args.deinit();
 
     // clap.usage is a function that can print a simple usage message, given a
     // slice of Param(Help). There is also a usageEx, which can print a
     // usage message for any Param, but it is more verbose to call.
-    if (res.args.help)
+    if (args.flag("--help"))
         return clap.usage(std.io.getStdErr().writer(), &params);
 }
 

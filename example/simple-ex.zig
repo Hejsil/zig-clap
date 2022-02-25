@@ -11,10 +11,10 @@ pub fn main() !void {
     // First we specify what parameters our program can take.
     // We can use `parseParam` to parse a string to a `Param(Help)`
     const params = comptime [_]clap.Param(clap.Help){
-        clap.untyped.parseParam("-h, --help             Display this help and exit.") catch unreachable,
-        clap.untyped.parseParam("-n, --number <NUM>     An option parameter, which takes a value.") catch unreachable,
-        clap.untyped.parseParam("-s, --string <STR>...  An option parameter which can be specified multiple times.") catch unreachable,
-        clap.untyped.parseParam("<POS>...") catch unreachable,
+        clap.parseParam("-h, --help             Display this help and exit.              ") catch unreachable,
+        clap.parseParam("-n, --number <NUM>     An option parameter, which takes a value.") catch unreachable,
+        clap.parseParam("-s, --string <STR>...  An option parameter which can be specified multiple times.") catch unreachable,
+        clap.parseParam("<POS>...") catch unreachable,
     };
 
     var iter = try process.ArgIterator.initWithAllocator(allocator);
@@ -27,7 +27,7 @@ pub fn main() !void {
     // This is optional. You can also pass `.{}` to `clap.parse` if you don't
     // care about the extra information `Diagnostics` provides.
     var diag = clap.Diagnostic{};
-    var res = clap.untyped.parseEx(clap.Help, &params, &iter, .{
+    var args = clap.parseEx(clap.Help, &params, &iter, .{
         .allocator = allocator,
         .diagnostic = &diag,
     }) catch |err| {
@@ -35,14 +35,14 @@ pub fn main() !void {
         diag.report(io.getStdErr().writer(), err) catch {};
         return err;
     };
-    defer res.deinit();
+    defer args.deinit();
 
-    if (res.args.help)
+    if (args.flag("--help"))
         debug.print("--help\n", .{});
-    if (res.args.number) |n|
+    if (args.option("--number")) |n|
         debug.print("--number = {s}\n", .{n});
-    for (res.args.string) |s|
+    for (args.options("--string")) |s|
         debug.print("--string = {s}\n", .{s});
-    for (res.positionals) |pos|
+    for (args.positionals()) |pos|
         debug.print("{s}\n", .{pos});
 }

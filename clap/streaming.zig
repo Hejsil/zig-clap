@@ -10,7 +10,7 @@ const mem = std.mem;
 const os = std.os;
 const testing = std.testing;
 
-/// The result returned from Clap.next
+/// The result returned from StreamingClap.next
 pub fn Arg(comptime Id: type) type {
     return struct {
         const Self = @This();
@@ -21,9 +21,9 @@ pub fn Arg(comptime Id: type) type {
 }
 
 /// A command line argument parser which, given an ArgIterator, will parse arguments according
-/// to the params. Clap parses in an iterating manner, so you have to use a loop
-/// together with Clap.next to parse all the arguments of your program.
-pub fn Clap(comptime Id: type, comptime ArgIterator: type) type {
+/// to the params. StreamingClap parses in an iterating manner, so you have to use a loop
+/// together with StreamingClap.next to parse all the arguments of your program.
+pub fn StreamingClap(comptime Id: type, comptime ArgIterator: type) type {
     return struct {
         const State = union(enum) {
             normal,
@@ -209,7 +209,7 @@ fn testNoErr(
     results: []const Arg(u8),
 ) !void {
     var iter = args.SliceIterator{ .args = args_strings };
-    var c = Clap(u8, args.SliceIterator){
+    var c = StreamingClap(u8, args.SliceIterator){
         .params = params,
         .iter = &iter,
     };
@@ -236,7 +236,7 @@ fn testErr(
 ) !void {
     var diag: clap.Diagnostic = undefined;
     var iter = args.SliceIterator{ .args = args_strings };
-    var c = Clap(u8, args.SliceIterator){
+    var c = StreamingClap(u8, args.SliceIterator){
         .params = params,
         .iter = &iter,
         .diagnostic = &diag,
