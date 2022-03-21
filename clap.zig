@@ -421,29 +421,26 @@ pub fn parseEx(
         .diagnostic = opt.diagnostic,
     };
     while (try stream.next()) |arg| {
+        // TODO: We cannot use `try` inside the inline for because of a compiler bug that
+        //       generates an infinit loop. For now, use a variable to store the error
+        //       and use `try` outside. The downside of this is that we have to use
+        //       `anyerror` :(
+        var res: anyerror!void = {};
         inline for (params) |*param| {
             if (param == arg.param) {
-                const parser = comptime switch (param.takes_value) {
-                    .none => undefined,
-                    .one, .many => @field(value_parsers, param.id.value()),
-                };
-
-                // TODO: Update opt.diagnostics when `parser` fails. This is blocked by compiler
-                //       bugs that causes an infinit loop.
-                const longest = comptime param.names.longest();
-                switch (longest.kind) {
-                    .short, .long => switch (param.takes_value) {
-                        .none => @field(arguments, longest.name) = true,
-                        .one => @field(arguments, longest.name) = try parser(arg.value.?),
-                        .many => {
-                            const value = try parser(arg.value.?);
-                            try @field(arguments, longest.name).append(allocator, value);
-                        },
-                    },
-                    .positinal => try positionals.append(try parser(arg.value.?)),
-                }
+                res = parseArg(
+                    Id,
+                    param.*,
+                    value_parsers,
+                    allocator,
+                    &arguments,
+                    &positionals,
+                    arg,
+                );
             }
         }
+
+        try res;
     }
 
     var result_args = Arguments(Id, params, value_parsers, .slice){};
@@ -463,6 +460,34 @@ pub fn parseEx(
         .positionals = positionals.toOwnedSlice(),
         .allocator = allocator,
     };
+}
+
+fn parseArg(
+    comptime Id: type,
+    comptime param: Param(Id),
+    comptime value_parsers: anytype,
+    allocator: mem.Allocator,
+    arguments: anytype,
+    positionals: anytype,
+    arg: streaming.Arg(Id),
+) !void {
+    const parser = comptime switch (param.takes_value) {
+        .none => undefined,
+        .one, .many => @field(value_parsers, param.id.value()),
+    };
+
+    const longest = comptime param.names.longest();
+    switch (longest.kind) {
+        .short, .long => switch (param.takes_value) {
+            .none => @field(arguments, longest.name) = true,
+            .one => @field(arguments, longest.name) = try parser(arg.value.?),
+            .many => {
+                const value = try parser(arg.value.?);
+                try @field(arguments, longest.name).append(allocator, value);
+            },
+        },
+        .positinal => try positionals.append(try parser(arg.value.?)),
+    }
 }
 
 pub fn ResultEx(
@@ -578,6 +603,21 @@ fn Arguments(
         .decls = &.{},
         .is_tuple = false,
     } });
+}
+
+test "str and u64" {
+    const params = comptime &.{
+        parseParam("--str <str>") catch unreachable,
+        parseParam("--num <u64>") catch unreachable,
+    };
+
+    var iter = args.SliceIterator{
+        .args = &.{ "--num", "10", "--str", "cooley_rec_inp_ptr" },
+    };
+    var res = try parseEx(Help, params, parsers.default, &iter, .{
+        .allocator = testing.allocator,
+    });
+    defer res.deinit();
 }
 
 test "" {
