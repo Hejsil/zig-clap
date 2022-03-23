@@ -35,8 +35,8 @@ The fields in `args` are typed. The type is based on the name of the value the p
 Since `--number` takes a `usize` the field `res.args.number` has the type `usize`.
 
 Note that this is only the case because `clap.parsers.default` has a field called `usize` which
-contains a parser that returns `usize`. You can pass in something other than `clap.parsers.default`
-if you want some other mapping.
+contains a parser that returns `usize`. You can pass in something other than
+`clap.parsers.default` if you want some other mapping.
 
 ```zig
 {s}

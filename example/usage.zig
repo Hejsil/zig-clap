@@ -2,11 +2,12 @@ const clap = @import("clap");
 const std = @import("std");
 
 pub fn main() !void {
-    const params = comptime [_]clap.Param(clap.Help){
-        clap.parseParam("-h, --help         Display this help and exit.") catch unreachable,
-        clap.parseParam("-v, --version      Output version information and exit.") catch unreachable,
-        clap.parseParam("    --value <str>  An option parameter, which takes a value.") catch unreachable,
-    };
+    const params = comptime clap.parseParamsComptime(
+        \\-h, --help         Display this help and exit.
+        \\-v, --version      Output version information and exit.
+        \\    --value <str>  An option parameter, which takes a value.
+        \\
+    );
 
     var res = try clap.parse(clap.Help, &params, clap.parsers.default, .{});
     defer res.deinit();
