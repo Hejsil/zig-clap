@@ -81,6 +81,6 @@ to have a `value` method so it can provide that in the output.
 
 ```
 $ zig-out/bin/usage --help
-[-hv] [--value <N>]
+[-hv] [--value <str>]
 ```
 
