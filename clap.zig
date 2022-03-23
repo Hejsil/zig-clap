@@ -91,63 +91,184 @@ pub fn parseParam(line: []const u8) !Param(Help) {
     // * Someone points out how this is a really bad idea.
     @setEvalBranchQuota(std.math.maxInt(u32));
 
-    var found_comma = false;
-    var it = mem.tokenize(u8, line, " \t");
-    var param_str = it.next() orelse return error.NoParamFound;
+    var res = Param(Help){};
+    var start: usize = 0;
+    var state: enum {
+        start,
 
-    const short_name = if (!mem.startsWith(u8, param_str, "--") and
-        mem.startsWith(u8, param_str, "-"))
-    blk: {
-        found_comma = param_str[param_str.len - 1] == ',';
-        if (found_comma)
-            param_str = param_str[0 .. param_str.len - 1];
+        start_of_short_name,
+        end_of_short_name,
 
-        if (param_str.len != 2)
-            return error.InvalidShortParam;
+        before_long_name_or_value_or_description,
 
-        const short_name = param_str[1];
-        if (!found_comma) {
-            var res = parseParamRest(it.rest());
-            res.names.short = short_name;
-            return res;
-        }
+        before_long_name,
+        start_of_long_name,
+        first_char_of_long_name,
+        rest_of_long_name,
 
-        param_str = it.next() orelse return error.NoParamFound;
-        break :blk short_name;
-    } else null;
+        before_value_or_description,
 
-    const long_name = if (mem.startsWith(u8, param_str, "--")) blk: {
-        if (param_str[param_str.len - 1] == ',')
-            return error.TrailingComma;
+        first_char_of_value,
+        rest_of_value,
+        end_of_one_value,
+        second_dot_of_multi_value,
+        third_dot_of_multi_value,
 
-        break :blk param_str[2..];
-    } else if (found_comma) {
-        return error.TrailingComma;
-    } else if (short_name == null) {
-        return parseParamRest(mem.trimLeft(u8, line, " \t"));
-    } else null;
+        before_description,
+        before_description_new_line,
 
-    var res = parseParamRest(it.rest());
-    res.names.long = long_name;
-    res.names.short = short_name;
-    return res;
-}
+        rest_of_description,
+        rest_of_description_new_line,
+    } = .start;
+    for (line) |c, i| switch (state) {
+        .start => switch (c) {
+            ' ', '\t', '\n' => {},
+            '-' => state = .start_of_short_name,
+            '<' => state = .first_char_of_value,
+            else => return error.InvalidParameter,
+        },
 
-fn parseParamRest(line: []const u8) Param(Help) {
-    if (mem.startsWith(u8, line, "<")) blk: {
-        const len = mem.indexOfScalar(u8, line, '>') orelse break :blk;
-        const takes_many = mem.startsWith(u8, line[len + 1 ..], "...");
-        const help_start = len + 1 + @as(usize, 3) * @boolToInt(takes_many);
-        return .{
-            .takes_value = if (takes_many) .many else .one,
-            .id = .{
-                .desc = mem.trim(u8, line[help_start..], " \t"),
-                .val = line[1..len],
+        .start_of_short_name => switch (c) {
+            '-' => state = .first_char_of_long_name,
+            'a'...'z', 'A'...'Z', '0'...'9' => {
+                res.names.short = c;
+                state = .end_of_short_name;
             },
-        };
+            else => return error.InvalidParameter,
+        },
+        .end_of_short_name => switch (c) {
+            ' ', '\t' => state = .before_long_name_or_value_or_description,
+            '\n' => state = .before_description_new_line,
+            ',' => state = .before_long_name,
+            else => return error.InvalidParameter,
+        },
+
+        .before_long_name => switch (c) {
+            ' ', '\t' => {},
+            '-' => state = .start_of_long_name,
+            else => return error.InvalidParameter,
+        },
+        .start_of_long_name => switch (c) {
+            '-' => state = .first_char_of_long_name,
+            else => return error.InvalidParameter,
+        },
+        .first_char_of_long_name => switch (c) {
+            'a'...'z', 'A'...'Z', '0'...'9' => {
+                start = i;
+                state = .rest_of_long_name;
+            },
+            else => return error.InvalidParameter,
+        },
+        .rest_of_long_name => switch (c) {
+            'a'...'z', 'A'...'Z', '0'...'9' => {},
+            ' ', '\t' => {
+                res.names.long = line[start..i];
+                state = .before_value_or_description;
+            },
+            '\n' => {
+                res.names.long = line[start..i];
+                state = .before_description_new_line;
+            },
+            else => return error.InvalidParameter,
+        },
+
+        .before_long_name_or_value_or_description => switch (c) {
+            ' ', '\t' => {},
+            ',' => state = .before_long_name,
+            '<' => state = .first_char_of_value,
+            else => {
+                start = i;
+                state = .rest_of_description;
+            },
+        },
+
+        .before_value_or_description => switch (c) {
+            ' ', '\t' => {},
+            '<' => state = .first_char_of_value,
+            else => {
+                start = i;
+                state = .rest_of_description;
+            },
+        },
+        .first_char_of_value => switch (c) {
+            '>' => return error.InvalidParameter,
+            else => {
+                start = i;
+                state = .rest_of_value;
+            },
+        },
+        .rest_of_value => switch (c) {
+            '>' => {
+                res.takes_value = .one;
+                res.id.val = line[start..i];
+                state = .end_of_one_value;
+            },
+            else => {},
+        },
+        .end_of_one_value => switch (c) {
+            '.' => state = .second_dot_of_multi_value,
+            ' ', '\t' => state = .before_description,
+            '\n' => state = .before_description_new_line,
+            else => {
+                start = i;
+                state = .rest_of_description;
+            },
+        },
+        .second_dot_of_multi_value => switch (c) {
+            '.' => state = .third_dot_of_multi_value,
+            else => return error.InvalidParameter,
+        },
+        .third_dot_of_multi_value => switch (c) {
+            '.' => {
+                res.takes_value = .many;
+                state = .before_description;
+            },
+            else => return error.InvalidParameter,
+        },
+
+        .before_description => switch (c) {
+            ' ', '\t' => {},
+            '\n' => state = .before_description_new_line,
+            else => {
+                start = i;
+                state = .rest_of_description;
+            },
+        },
+        .before_description_new_line => switch (c) {
+            ' ', '\t', '\n' => {},
+            '-' => break,
+            else => {
+                start = i;
+                state = .rest_of_description;
+            },
+        },
+        .rest_of_description => switch (c) {
+            '\n' => state = .rest_of_description_new_line,
+            else => {},
+        },
+        .rest_of_description_new_line => switch (c) {
+            ' ', '\t', '\n' => {},
+            '-' => {
+                res.id.desc = mem.trimRight(u8, line[start..i], " \t\n\r");
+                break;
+            },
+            else => state = .rest_of_description,
+        },
+    } else switch (state) {
+        .rest_of_description, .rest_of_description_new_line => {
+            res.id.desc = mem.trimRight(u8, line[start..], " \t\n\r");
+        },
+        .rest_of_long_name => res.names.long = line[start..],
+        .end_of_short_name,
+        .end_of_one_value,
+        .before_value_or_description,
+        .before_description,
+        .before_description_new_line,
+        => {},
+        else => return error.InvalidParameter,
     }
 
-    return .{ .id = .{ .desc = mem.trim(u8, line, " \t") } };
+    return res;
 }
 
 fn expectParam(expect: Param(Help), actual: Param(Help)) !void {
@@ -163,68 +284,162 @@ fn expectParam(expect: Param(Help), actual: Param(Help)) !void {
 }
 
 test "parseParam" {
-    try expectParam(Param(Help){
+    try expectParam(.{
+        .id = .{},
+        .names = .{ .short = 's' },
+    }, try parseParam("-s"));
+
+    try expectParam(.{
+        .id = .{},
+        .names = .{ .long = "str" },
+    }, try parseParam("--str"));
+
+    try expectParam(.{
+        .id = .{},
+        .names = .{ .short = 's', .long = "str" },
+    }, try parseParam("-s, --str"));
+
+    try expectParam(.{
+        .id = .{ .val = "str" },
+        .names = .{ .long = "str" },
+        .takes_value = .one,
+    }, try parseParam("--str <str>"));
+
+    try expectParam(.{
+        .id = .{ .val = "str" },
+        .names = .{ .short = 's', .long = "str" },
+        .takes_value = .one,
+    }, try parseParam("-s, --str <str>"));
+
+    try expectParam(.{
         .id = .{ .desc = "Help text", .val = "val" },
         .names = .{ .short = 's', .long = "long" },
         .takes_value = .one,
     }, try parseParam("-s, --long <val> Help text"));
 
-    try expectParam(Param(Help){
+    try expectParam(.{
         .id = .{ .desc = "Help text", .val = "val" },
         .names = .{ .short = 's', .long = "long" },
         .takes_value = .many,
     }, try parseParam("-s, --long <val>... Help text"));
 
-    try expectParam(Param(Help){
+    try expectParam(.{
         .id = .{ .desc = "Help text", .val = "val" },
         .names = .{ .long = "long" },
         .takes_value = .one,
     }, try parseParam("--long <val> Help text"));
 
-    try expectParam(Param(Help){
+    try expectParam(.{
         .id = .{ .desc = "Help text", .val = "val" },
         .names = .{ .short = 's' },
         .takes_value = .one,
     }, try parseParam("-s <val> Help text"));
 
-    try expectParam(Param(Help){
+    try expectParam(.{
         .id = .{ .desc = "Help text" },
         .names = .{ .short = 's', .long = "long" },
     }, try parseParam("-s, --long Help text"));
 
-    try expectParam(Param(Help){
+    try expectParam(.{
         .id = .{ .desc = "Help text" },
         .names = .{ .short = 's' },
     }, try parseParam("-s Help text"));
 
-    try expectParam(Param(Help){
+    try expectParam(.{
         .id = .{ .desc = "Help text" },
         .names = .{ .long = "long" },
     }, try parseParam("--long Help text"));
 
-    try expectParam(Param(Help){
+    try expectParam(.{
         .id = .{ .desc = "Help text", .val = "A | B" },
         .names = .{ .long = "long" },
         .takes_value = .one,
     }, try parseParam("--long <A | B> Help text"));
 
-    try expectParam(Param(Help){
+    try expectParam(.{
         .id = .{ .desc = "Help text", .val = "A" },
         .names = .{},
         .takes_value = .one,
     }, try parseParam("<A> Help text"));
 
-    try expectParam(Param(Help){
+    try expectParam(.{
         .id = .{ .desc = "Help text", .val = "A" },
         .names = .{},
         .takes_value = .many,
     }, try parseParam("<A>... Help text"));
 
-    try testing.expectError(error.TrailingComma, parseParam("--long, Help"));
-    try testing.expectError(error.TrailingComma, parseParam("-s, Help"));
-    try testing.expectError(error.InvalidShortParam, parseParam("-ss Help"));
-    try testing.expectError(error.InvalidShortParam, parseParam("-ss <val> Help"));
-    try testing.expectError(error.InvalidShortParam, parseParam("- Help"));
+    try expectParam(.{
+        .id = .{
+            .desc = 
+            \\This is
+            \\    help spanning multiple
+            \\    lines
+            ,
+        },
+        .names = .{ .long = "aa" },
+        .takes_value = .none,
+    }, try parseParam(
+        \\--aa This is
+        \\    help spanning multiple
+        \\    lines
+        \\
+    ));
+
+    try expectParam(.{
+        .id = .{ .desc = "This msg should end and the newline cause of new param" },
+        .names = .{ .long = "aa" },
+        .takes_value = .none,
+    }, try parseParam(
+        \\--aa This msg should end and the newline cause of new param
+        \\--bb This should not end up being parsed
+        \\
+    ));
+
+    try expectParam(.{
+        .id = .{},
+        .names = .{ .short = 'a' },
+        .takes_value = .none,
+    }, try parseParam(
+        \\-a
+        \\--bb
+        \\
+    ));
+
+    try expectParam(.{
+        .id = .{},
+        .names = .{ .long = "aa" },
+        .takes_value = .none,
+    }, try parseParam(
+        \\--aa
+        \\--bb
+        \\
+    ));
+
+    try expectParam(.{
+        .id = .{ .val = "q" },
+        .names = .{ .short = 'a' },
+        .takes_value = .one,
+    }, try parseParam(
+        \\-a <q>
+        \\--bb
+        \\
+    ));
+
+    try expectParam(.{
+        .id = .{ .val = "q" },
+        .names = .{ .short = 'a' },
+        .takes_value = .many,
+    }, try parseParam(
+        \\-a <q>...
+        \\--bb
+        \\
+    ));
+
+    try testing.expectError(error.InvalidParameter, parseParam("--long, Help"));
+    try testing.expectError(error.InvalidParameter, parseParam("-s, Help"));
+    try testing.expectError(error.InvalidParameter, parseParam("-ss Help"));
+    try testing.expectError(error.InvalidParameter, parseParam("-ss <val> Help"));
+    try testing.expectError(error.InvalidParameter, parseParam("- Help"));
 }
 
 /// Optional diagnostics used for reporting useful errors
