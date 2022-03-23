@@ -262,6 +262,6 @@ pub fn main() !void {
 
 ```
 $ zig-out/bin/usage --help
-[-hv] [--value <N>]
+[-hv] [--value <str>]
 ```
 
