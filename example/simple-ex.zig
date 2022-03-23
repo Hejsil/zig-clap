@@ -7,13 +7,14 @@ const process = std.process;
 
 pub fn main() !void {
     // First we specify what parameters our program can take.
-    // We can use `parseParam` to parse a string to a `Param(Help)`
-    const params = comptime [_]clap.Param(clap.Help){
-        clap.parseParam("-h, --help             Display this help and exit.") catch unreachable,
-        clap.parseParam("-n, --number <INT>     An option parameter, which takes a value.") catch unreachable,
-        clap.parseParam("-s, --string <STR>...  An option parameter which can be specified multiple times.") catch unreachable,
-        clap.parseParam("<FILE>...") catch unreachable,
-    };
+    // We can use `parseParamsComptime` to parse a string into an array of `Param(Help)`
+    const params = comptime clap.parseParamsComptime(
+        \\-h, --help             Display this help and exit.
+        \\-n, --number <INT>     An option parameter, which takes a value.
+        \\-s, --string <STR>...  An option parameter which can be specified multiple times.
+        \\<FILE>...
+        \\
+    );
 
     // Declare our own parsers which are used to map the argument strings to other
     // types.

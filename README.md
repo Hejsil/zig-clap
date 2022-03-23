@@ -32,13 +32,14 @@ const io = std.io;
 
 pub fn main() !void {
     // First we specify what parameters our program can take.
-    // We can use `parseParam` to parse a string to a `Param(Help)`
-    const params = comptime [_]clap.Param(clap.Help){
-        clap.parseParam("-h, --help             Display this help and exit.") catch unreachable,
-        clap.parseParam("-n, --number <usize>   An option parameter, which takes a value.") catch unreachable,
-        clap.parseParam("-s, --string <str>...  An option parameter which can be specified multiple times.") catch unreachable,
-        clap.parseParam("<str>...") catch unreachable,
-    };
+    // We can use `parseParamsComptime` to parse a string into an array of `Param(Help)`
+    const params = comptime clap.parseParamsComptime(
+        \\-h, --help             Display this help and exit.
+        \\-n, --number <usize>   An option parameter, which takes a value.
+        \\-s, --string <str>...  An option parameter which can be specified multiple times.
+        \\<str>...
+        \\
+    );
 
     // Initalize our diagnostics, which can be used for reporting useful errors.
     // This is optional. You can also pass `.{}` to `clap.parse` if you don't
@@ -73,8 +74,8 @@ The fields in `args` are typed. The type is based on the name of the value the p
 Since `--number` takes a `usize` the field `res.args.number` has the type `usize`.
 
 Note that this is only the case because `clap.parsers.default` has a field called `usize` which
-contains a parser that returns `usize`. You can pass in something other than `clap.parsers.default`
-if you want some other mapping.
+contains a parser that returns `usize`. You can pass in something other than
+`clap.parsers.default` if you want some other mapping.
 
 ```zig
 const clap = @import("clap");
@@ -86,13 +87,14 @@ const process = std.process;
 
 pub fn main() !void {
     // First we specify what parameters our program can take.
-    // We can use `parseParam` to parse a string to a `Param(Help)`
-    const params = comptime [_]clap.Param(clap.Help){
-        clap.parseParam("-h, --help             Display this help and exit.") catch unreachable,
-        clap.parseParam("-n, --number <INT>     An option parameter, which takes a value.") catch unreachable,
-        clap.parseParam("-s, --string <STR>...  An option parameter which can be specified multiple times.") catch unreachable,
-        clap.parseParam("<FILE>...") catch unreachable,
-    };
+    // We can use `parseParamsComptime` to parse a string into an array of `Param(Help)`
+    const params = comptime clap.parseParamsComptime(
+        \\-h, --help             Display this help and exit.
+        \\-n, --number <INT>     An option parameter, which takes a value.
+        \\-s, --string <STR>...  An option parameter which can be specified multiple times.
+        \\<FILE>...
+        \\
+    );
 
     // Declare our own parsers which are used to map the argument strings to other
     // types.
@@ -205,10 +207,11 @@ const clap = @import("clap");
 const std = @import("std");
 
 pub fn main() !void {
-    const params = comptime [_]clap.Param(clap.Help){
-        clap.parseParam("-h, --help     Display this help and exit.         ") catch unreachable,
-        clap.parseParam("-v, --version  Output version information and exit.") catch unreachable,
-    };
+    const params = comptime clap.parseParamsComptime(
+        \\-h, --help     Display this help and exit.
+        \\-v, --version  Output version information and exit.
+        \\
+    );
 
     var res = try clap.parse(clap.Help, &params, clap.parsers.default, .{});
     defer res.deinit();
@@ -238,11 +241,12 @@ const clap = @import("clap");
 const std = @import("std");
 
 pub fn main() !void {
-    const params = comptime [_]clap.Param(clap.Help){
-        clap.parseParam("-h, --help         Display this help and exit.") catch unreachable,
-        clap.parseParam("-v, --version      Output version information and exit.") catch unreachable,
-        clap.parseParam("    --value <str>  An option parameter, which takes a value.") catch unreachable,
-    };
+    const params = comptime clap.parseParamsComptime(
+        \\-h, --help         Display this help and exit.
+        \\-v, --version      Output version information and exit.
+        \\    --value <str>  An option parameter, which takes a value.
+        \\
+    );
 
     var res = try clap.parse(clap.Help, &params, clap.parsers.default, .{});
     defer res.deinit();

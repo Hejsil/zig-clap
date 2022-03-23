@@ -78,9 +78,76 @@ pub fn Param(comptime Id: type) type {
     };
 }
 
+/// Takes a string and parses it into many Param(Help). Returned is a newly allocated slice
+/// containing all the parsed params. The caller is responsible for freeing the slice.
+pub fn parseParams(allocator: mem.Allocator, str: []const u8) ![]Param(Help) {
+    var list = std.ArrayList(Param(Help)).init(allocator);
+    errdefer list.deinit();
+
+    try parseParamsIntoArrayList(&list, str);
+    return list.toOwnedSlice();
+}
+
+/// Takes a string and parses it into many Param(Help) at comptime. Returned is an array of
+/// exactly the number of params that was parsed from `str`. A parse error becomes a compiler
+/// error.
+pub fn parseParamsComptime(comptime str: []const u8) [countParams(str)]Param(Help) {
+    var res: [countParams(str)]Param(Help) = undefined;
+    _ = parseParamsIntoSlice(&res, str) catch unreachable;
+    return res;
+}
+
+fn countParams(str: []const u8) usize {
+    // See parseParam for reasoning. I would like to remove it from parseParam, but people depend
+    // on that function to still work conveniently at comptime, so leaving it for now.
+    @setEvalBranchQuota(std.math.maxInt(u32));
+
+    var res: usize = 0;
+    var it = mem.split(u8, str, "\n");
+    while (it.next()) |line| {
+        const trimmed = mem.trimLeft(u8, line, " \t");
+        if (mem.startsWith(u8, trimmed, "-") or
+            mem.startsWith(u8, trimmed, "<"))
+        {
+            res += 1;
+        }
+    }
+
+    return res;
+}
+
+/// Takes a string and parses it into many Param(Help), which are written to `slice`. A subslice
+/// is returned, containing all the parameters parsed. This function will fail if the input slice
+/// is to small.
+pub fn parseParamsIntoSlice(slice: []Param(Help), str: []const u8) ![]Param(Help) {
+    var null_alloc = heap.FixedBufferAllocator.init("");
+    var list = std.ArrayList(Param(Help)){
+        .allocator = null_alloc.allocator(),
+        .items = slice[0..0],
+        .capacity = slice.len,
+    };
+
+    try parseParamsIntoArrayList(&list, str);
+    return list.items;
+}
+
+/// Takes a string and parses it into many Param(Help), which are appended onto `list`.
+pub fn parseParamsIntoArrayList(list: *std.ArrayList(Param(Help)), str: []const u8) !void {
+    var i: usize = 0;
+    while (i != str.len) {
+        var end: usize = undefined;
+        try list.append(try parseParamEx(str[i..], &end));
+        i += end;
+    }
+}
+
+pub fn parseParam(str: []const u8) !Param(Help) {
+    var end: usize = undefined;
+    return parseParamEx(str, &end);
+}
+
 /// Takes a string and parses it to a Param(Help).
-/// This is the reverse of 'help' but for at single parameter only.
-pub fn parseParam(line: []const u8) !Param(Help) {
+pub fn parseParamEx(str: []const u8, end: *usize) !Param(Help) {
     // This function become a lot less ergonomic to use once you hit the eval branch quota. To
     // avoid this we pick a sane default. Sadly, the only sane default is the biggest possible
     // value. If we pick something a lot smaller and a user hits the quota after that, they have
@@ -120,155 +187,175 @@ pub fn parseParam(line: []const u8) !Param(Help) {
         rest_of_description,
         rest_of_description_new_line,
     } = .start;
-    for (line) |c, i| switch (state) {
-        .start => switch (c) {
-            ' ', '\t', '\n' => {},
-            '-' => state = .start_of_short_name,
-            '<' => state = .first_char_of_value,
-            else => return error.InvalidParameter,
-        },
+    for (str) |c, i| {
+        errdefer end.* = i;
 
-        .start_of_short_name => switch (c) {
-            '-' => state = .first_char_of_long_name,
-            'a'...'z', 'A'...'Z', '0'...'9' => {
-                res.names.short = c;
-                state = .end_of_short_name;
+        switch (state) {
+            .start => switch (c) {
+                ' ', '\t', '\n' => {},
+                '-' => state = .start_of_short_name,
+                '<' => state = .first_char_of_value,
+                else => return error.InvalidParameter,
             },
-            else => return error.InvalidParameter,
-        },
-        .end_of_short_name => switch (c) {
-            ' ', '\t' => state = .before_long_name_or_value_or_description,
-            '\n' => state = .before_description_new_line,
-            ',' => state = .before_long_name,
-            else => return error.InvalidParameter,
-        },
 
-        .before_long_name => switch (c) {
-            ' ', '\t' => {},
-            '-' => state = .start_of_long_name,
-            else => return error.InvalidParameter,
-        },
-        .start_of_long_name => switch (c) {
-            '-' => state = .first_char_of_long_name,
-            else => return error.InvalidParameter,
-        },
-        .first_char_of_long_name => switch (c) {
-            'a'...'z', 'A'...'Z', '0'...'9' => {
-                start = i;
-                state = .rest_of_long_name;
+            .start_of_short_name => switch (c) {
+                '-' => state = .first_char_of_long_name,
+                'a'...'z', 'A'...'Z', '0'...'9' => {
+                    res.names.short = c;
+                    state = .end_of_short_name;
+                },
+                else => return error.InvalidParameter,
             },
-            else => return error.InvalidParameter,
-        },
-        .rest_of_long_name => switch (c) {
-            'a'...'z', 'A'...'Z', '0'...'9' => {},
-            ' ', '\t' => {
-                res.names.long = line[start..i];
-                state = .before_value_or_description;
+            .end_of_short_name => switch (c) {
+                ' ', '\t' => state = .before_long_name_or_value_or_description,
+                '\n' => state = .before_description_new_line,
+                ',' => state = .before_long_name,
+                else => return error.InvalidParameter,
             },
-            '\n' => {
-                res.names.long = line[start..i];
-                state = .before_description_new_line;
-            },
-            else => return error.InvalidParameter,
-        },
 
-        .before_long_name_or_value_or_description => switch (c) {
-            ' ', '\t' => {},
-            ',' => state = .before_long_name,
-            '<' => state = .first_char_of_value,
-            else => {
-                start = i;
-                state = .rest_of_description;
+            .before_long_name => switch (c) {
+                ' ', '\t' => {},
+                '-' => state = .start_of_long_name,
+                else => return error.InvalidParameter,
             },
-        },
+            .start_of_long_name => switch (c) {
+                '-' => state = .first_char_of_long_name,
+                else => return error.InvalidParameter,
+            },
+            .first_char_of_long_name => switch (c) {
+                'a'...'z', 'A'...'Z', '0'...'9' => {
+                    start = i;
+                    state = .rest_of_long_name;
+                },
+                else => return error.InvalidParameter,
+            },
+            .rest_of_long_name => switch (c) {
+                'a'...'z', 'A'...'Z', '0'...'9' => {},
+                ' ', '\t' => {
+                    res.names.long = str[start..i];
+                    state = .before_value_or_description;
+                },
+                '\n' => {
+                    res.names.long = str[start..i];
+                    state = .before_description_new_line;
+                },
+                else => return error.InvalidParameter,
+            },
 
-        .before_value_or_description => switch (c) {
-            ' ', '\t' => {},
-            '<' => state = .first_char_of_value,
-            else => {
-                start = i;
-                state = .rest_of_description;
+            .before_long_name_or_value_or_description => switch (c) {
+                ' ', '\t' => {},
+                ',' => state = .before_long_name,
+                '<' => state = .first_char_of_value,
+                else => {
+                    start = i;
+                    state = .rest_of_description;
+                },
             },
-        },
-        .first_char_of_value => switch (c) {
-            '>' => return error.InvalidParameter,
-            else => {
-                start = i;
-                state = .rest_of_value;
-            },
-        },
-        .rest_of_value => switch (c) {
-            '>' => {
-                res.takes_value = .one;
-                res.id.val = line[start..i];
-                state = .end_of_one_value;
-            },
-            else => {},
-        },
-        .end_of_one_value => switch (c) {
-            '.' => state = .second_dot_of_multi_value,
-            ' ', '\t' => state = .before_description,
-            '\n' => state = .before_description_new_line,
-            else => {
-                start = i;
-                state = .rest_of_description;
-            },
-        },
-        .second_dot_of_multi_value => switch (c) {
-            '.' => state = .third_dot_of_multi_value,
-            else => return error.InvalidParameter,
-        },
-        .third_dot_of_multi_value => switch (c) {
-            '.' => {
-                res.takes_value = .many;
-                state = .before_description;
-            },
-            else => return error.InvalidParameter,
-        },
 
-        .before_description => switch (c) {
-            ' ', '\t' => {},
-            '\n' => state = .before_description_new_line,
-            else => {
-                start = i;
-                state = .rest_of_description;
+            .before_value_or_description => switch (c) {
+                ' ', '\t' => {},
+                '<' => state = .first_char_of_value,
+                else => {
+                    start = i;
+                    state = .rest_of_description;
+                },
             },
-        },
-        .before_description_new_line => switch (c) {
-            ' ', '\t', '\n' => {},
-            '-' => break,
-            else => {
-                start = i;
-                state = .rest_of_description;
+            .first_char_of_value => switch (c) {
+                '>' => return error.InvalidParameter,
+                else => {
+                    start = i;
+                    state = .rest_of_value;
+                },
             },
-        },
-        .rest_of_description => switch (c) {
-            '\n' => state = .rest_of_description_new_line,
-            else => {},
-        },
-        .rest_of_description_new_line => switch (c) {
-            ' ', '\t', '\n' => {},
-            '-' => {
-                res.id.desc = mem.trimRight(u8, line[start..i], " \t\n\r");
-                break;
+            .rest_of_value => switch (c) {
+                '>' => {
+                    res.takes_value = .one;
+                    res.id.val = str[start..i];
+                    state = .end_of_one_value;
+                },
+                else => {},
             },
-            else => state = .rest_of_description,
-        },
-    } else switch (state) {
-        .rest_of_description, .rest_of_description_new_line => {
-            res.id.desc = mem.trimRight(u8, line[start..], " \t\n\r");
-        },
-        .rest_of_long_name => res.names.long = line[start..],
-        .end_of_short_name,
-        .end_of_one_value,
-        .before_value_or_description,
-        .before_description,
-        .before_description_new_line,
-        => {},
-        else => return error.InvalidParameter,
+            .end_of_one_value => switch (c) {
+                '.' => state = .second_dot_of_multi_value,
+                ' ', '\t' => state = .before_description,
+                '\n' => state = .before_description_new_line,
+                else => {
+                    start = i;
+                    state = .rest_of_description;
+                },
+            },
+            .second_dot_of_multi_value => switch (c) {
+                '.' => state = .third_dot_of_multi_value,
+                else => return error.InvalidParameter,
+            },
+            .third_dot_of_multi_value => switch (c) {
+                '.' => {
+                    res.takes_value = .many;
+                    state = .before_description;
+                },
+                else => return error.InvalidParameter,
+            },
+
+            .before_description => switch (c) {
+                ' ', '\t' => {},
+                '\n' => state = .before_description_new_line,
+                else => {
+                    start = i;
+                    state = .rest_of_description;
+                },
+            },
+            .before_description_new_line => switch (c) {
+                ' ', '\t', '\n' => {},
+                '-', '<' => {
+                    end.* = i;
+                    break;
+                },
+                else => {
+                    start = i;
+                    state = .rest_of_description;
+                },
+            },
+            .rest_of_description => switch (c) {
+                '\n' => state = .rest_of_description_new_line,
+                else => {},
+            },
+            .rest_of_description_new_line => switch (c) {
+                ' ', '\t', '\n' => {},
+                '-', '<' => {
+                    res.id.desc = mem.trimRight(u8, str[start..i], " \t\n\r");
+                    end.* = i;
+                    break;
+                },
+                else => state = .rest_of_description,
+            },
+        }
+    } else {
+        end.* = str.len;
+        switch (state) {
+            .rest_of_description, .rest_of_description_new_line => {
+                res.id.desc = mem.trimRight(u8, str[start..], " \t\n\r");
+            },
+            .rest_of_long_name => res.names.long = str[start..],
+            .end_of_short_name,
+            .end_of_one_value,
+            .before_value_or_description,
+            .before_description,
+            .before_description_new_line,
+            => {},
+            else => return error.InvalidParameter,
+        }
     }
 
     return res;
+}
+
+fn testParseParams(str: []const u8, expected_params: []const Param(Help)) !void {
+    const actual_params = try parseParams(testing.allocator, str);
+    defer testing.allocator.free(actual_params);
+
+    try testing.expectEqual(expected_params.len, actual_params.len);
+    for (expected_params) |_, i|
+        try expectParam(expected_params[i], actual_params[i]);
 }
 
 fn expectParam(expect: Param(Help), actual: Param(Help)) !void {
@@ -283,157 +370,112 @@ fn expectParam(expect: Param(Help), actual: Param(Help)) !void {
     }
 }
 
-test "parseParam" {
-    try expectParam(.{
-        .id = .{},
-        .names = .{ .short = 's' },
-    }, try parseParam("-s"));
-
-    try expectParam(.{
-        .id = .{},
-        .names = .{ .long = "str" },
-    }, try parseParam("--str"));
-
-    try expectParam(.{
-        .id = .{},
-        .names = .{ .short = 's', .long = "str" },
-    }, try parseParam("-s, --str"));
-
-    try expectParam(.{
-        .id = .{ .val = "str" },
-        .names = .{ .long = "str" },
-        .takes_value = .one,
-    }, try parseParam("--str <str>"));
-
-    try expectParam(.{
-        .id = .{ .val = "str" },
-        .names = .{ .short = 's', .long = "str" },
-        .takes_value = .one,
-    }, try parseParam("-s, --str <str>"));
-
-    try expectParam(.{
-        .id = .{ .desc = "Help text", .val = "val" },
-        .names = .{ .short = 's', .long = "long" },
-        .takes_value = .one,
-    }, try parseParam("-s, --long <val> Help text"));
-
-    try expectParam(.{
-        .id = .{ .desc = "Help text", .val = "val" },
-        .names = .{ .short = 's', .long = "long" },
-        .takes_value = .many,
-    }, try parseParam("-s, --long <val>... Help text"));
-
-    try expectParam(.{
-        .id = .{ .desc = "Help text", .val = "val" },
-        .names = .{ .long = "long" },
-        .takes_value = .one,
-    }, try parseParam("--long <val> Help text"));
-
-    try expectParam(.{
-        .id = .{ .desc = "Help text", .val = "val" },
-        .names = .{ .short = 's' },
-        .takes_value = .one,
-    }, try parseParam("-s <val> Help text"));
-
-    try expectParam(.{
-        .id = .{ .desc = "Help text" },
-        .names = .{ .short = 's', .long = "long" },
-    }, try parseParam("-s, --long Help text"));
-
-    try expectParam(.{
-        .id = .{ .desc = "Help text" },
-        .names = .{ .short = 's' },
-    }, try parseParam("-s Help text"));
-
-    try expectParam(.{
-        .id = .{ .desc = "Help text" },
-        .names = .{ .long = "long" },
-    }, try parseParam("--long Help text"));
-
-    try expectParam(.{
-        .id = .{ .desc = "Help text", .val = "A | B" },
-        .names = .{ .long = "long" },
-        .takes_value = .one,
-    }, try parseParam("--long <A | B> Help text"));
-
-    try expectParam(.{
-        .id = .{ .desc = "Help text", .val = "A" },
-        .names = .{},
-        .takes_value = .one,
-    }, try parseParam("<A> Help text"));
-
-    try expectParam(.{
-        .id = .{ .desc = "Help text", .val = "A" },
-        .names = .{},
-        .takes_value = .many,
-    }, try parseParam("<A>... Help text"));
-
-    try expectParam(.{
-        .id = .{
-            .desc = 
-            \\This is
-            \\    help spanning multiple
-            \\    lines
-            ,
-        },
-        .names = .{ .long = "aa" },
-        .takes_value = .none,
-    }, try parseParam(
+test "parseParams" {
+    try testParseParams(
+        \\-s
+        \\--str
+        \\-s, --str
+        \\--str <str>
+        \\-s, --str <str>
+        \\-s, --long <val> Help text
+        \\-s, --long <val>... Help text
+        \\--long <val> Help text
+        \\-s <val> Help text
+        \\-s, --long Help text
+        \\-s Help text
+        \\--long Help text
+        \\--long <A | B> Help text
+        \\<A> Help text
+        \\<A>... Help text
         \\--aa This is
         \\    help spanning multiple
         \\    lines
         \\
-    ));
-
-    try expectParam(.{
-        .id = .{ .desc = "This msg should end and the newline cause of new param" },
-        .names = .{ .long = "aa" },
-        .takes_value = .none,
-    }, try parseParam(
         \\--aa This msg should end and the newline cause of new param
-        \\--bb This should not end up being parsed
+        \\--bb This should be a new param
         \\
-    ));
-
-    try expectParam(.{
-        .id = .{},
-        .names = .{ .short = 'a' },
-        .takes_value = .none,
-    }, try parseParam(
-        \\-a
-        \\--bb
-        \\
-    ));
-
-    try expectParam(.{
-        .id = .{},
-        .names = .{ .long = "aa" },
-        .takes_value = .none,
-    }, try parseParam(
-        \\--aa
-        \\--bb
-        \\
-    ));
-
-    try expectParam(.{
-        .id = .{ .val = "q" },
-        .names = .{ .short = 'a' },
-        .takes_value = .one,
-    }, try parseParam(
-        \\-a <q>
-        \\--bb
-        \\
-    ));
-
-    try expectParam(.{
-        .id = .{ .val = "q" },
-        .names = .{ .short = 'a' },
-        .takes_value = .many,
-    }, try parseParam(
-        \\-a <q>...
-        \\--bb
-        \\
-    ));
+    , &.{
+        .{ .names = .{ .short = 's' } },
+        .{ .names = .{ .long = "str" } },
+        .{ .names = .{ .short = 's', .long = "str" } },
+        .{
+            .id = .{ .val = "str" },
+            .names = .{ .long = "str" },
+            .takes_value = .one,
+        },
+        .{
+            .id = .{ .val = "str" },
+            .names = .{ .short = 's', .long = "str" },
+            .takes_value = .one,
+        },
+        .{
+            .id = .{ .desc = "Help text", .val = "val" },
+            .names = .{ .short = 's', .long = "long" },
+            .takes_value = .one,
+        },
+        .{
+            .id = .{ .desc = "Help text", .val = "val" },
+            .names = .{ .short = 's', .long = "long" },
+            .takes_value = .many,
+        },
+        .{
+            .id = .{ .desc = "Help text", .val = "val" },
+            .names = .{ .long = "long" },
+            .takes_value = .one,
+        },
+        .{
+            .id = .{ .desc = "Help text", .val = "val" },
+            .names = .{ .short = 's' },
+            .takes_value = .one,
+        },
+        .{
+            .id = .{ .desc = "Help text" },
+            .names = .{ .short = 's', .long = "long" },
+        },
+        .{
+            .id = .{ .desc = "Help text" },
+            .names = .{ .short = 's' },
+        },
+        .{
+            .id = .{ .desc = "Help text" },
+            .names = .{ .long = "long" },
+        },
+        .{
+            .id = .{ .desc = "Help text", .val = "A | B" },
+            .names = .{ .long = "long" },
+            .takes_value = .one,
+        },
+        .{
+            .id = .{ .desc = "Help text", .val = "A" },
+            .takes_value = .one,
+        },
+        .{
+            .id = .{ .desc = "Help text", .val = "A" },
+            .names = .{},
+            .takes_value = .many,
+        },
+        .{
+            .id = .{
+                .desc = 
+                \\This is
+                \\    help spanning multiple
+                \\    lines
+                ,
+            },
+            .names = .{ .long = "aa" },
+            .takes_value = .none,
+        },
+        .{
+            .id = .{ .desc = "This msg should end and the newline cause of new param" },
+            .names = .{ .long = "aa" },
+            .takes_value = .none,
+        },
+        .{
+            .id = .{ .desc = "This should be a new param" },
+            .names = .{ .long = "bb" },
+            .takes_value = .none,
+        },
+    });
 
     try testing.expectError(error.InvalidParameter, parseParam("--long, Help"));
     try testing.expectError(error.InvalidParameter, parseParam("-s, Help"));
@@ -821,33 +863,35 @@ fn Arguments(
 }
 
 test "str and u64" {
-    const params = comptime &.{
-        parseParam("--str <str>") catch unreachable,
-        parseParam("--num <u64>") catch unreachable,
-    };
+    const params = comptime parseParamsComptime(
+        \\--str <str>
+        \\--num <u64>
+        \\
+    );
 
     var iter = args.SliceIterator{
         .args = &.{ "--num", "10", "--str", "cooley_rec_inp_ptr" },
     };
-    var res = try parseEx(Help, params, parsers.default, &iter, .{
+    var res = try parseEx(Help, &params, parsers.default, &iter, .{
         .allocator = testing.allocator,
     });
     defer res.deinit();
 }
 
 test "" {
-    const params = comptime &.{
-        parseParam("-a, --aa") catch unreachable,
-        parseParam("-b, --bb") catch unreachable,
-        parseParam("-c, --cc <str>") catch unreachable,
-        parseParam("-d, --dd <usize>...") catch unreachable,
-        parseParam("<str>") catch unreachable,
-    };
+    const params = comptime parseParamsComptime(
+        \\-a, --aa
+        \\-b, --bb
+        \\-c, --cc <str>
+        \\-d, --dd <usize>...
+        \\<str>
+        \\
+    );
 
     var iter = args.SliceIterator{
         .args = &.{ "-a", "-c", "0", "something", "-d", "1", "--dd", "2" },
     };
-    var res = try parseEx(Help, params, parsers.default, &iter, .{
+    var res = try parseEx(Help, &params, parsers.default, &iter, .{
         .allocator = testing.allocator,
     });
     defer res.deinit();
@@ -888,10 +932,11 @@ fn testErr(
 }
 
 test "errors" {
-    const params = comptime [_]Param(Help){
-        parseParam("-a, --aa") catch unreachable,
-        parseParam("-c, --cc <str>") catch unreachable,
-    };
+    const params = comptime parseParamsComptime(
+        \\-a, --aa
+        \\-c, --cc <str>
+        \\
+    );
 
     try testErr(&params, &.{"q"}, "Invalid argument 'q'\n");
     try testErr(&params, &.{"-q"}, "Invalid argument '-q'\n");
@@ -957,7 +1002,7 @@ pub fn help(stream: anytype, comptime Id: type, params: []const Param(Id)) !void
                 try stream.writeByteNTimes(' ', max_spacing);
             }
             try stream.writeAll("\t");
-            try stream.writeAll(line);
+            try stream.writeAll(mem.trimLeft(u8, line, " \t"));
             try stream.writeAll("\n");
         }
     }
@@ -998,25 +1043,22 @@ test "clap.help" {
     var buf: [1024]u8 = undefined;
     var slice_stream = io.fixedBufferStream(&buf);
 
-    @setEvalBranchQuota(10000);
-    try help(
-        slice_stream.writer(),
-        Help,
-        comptime &.{
-            parseParam("-a                Short flag.") catch unreachable,
-            parseParam("-b <V1>           Short option.") catch unreachable,
-            parseParam("--aa              Long flag.") catch unreachable,
-            parseParam("--bb <V2>         Long option.") catch unreachable,
-            parseParam("-c, --cc          Both flag.") catch unreachable,
-            parseParam("--complicate      Flag with a complicated and\nvery long description that\nspans multiple lines.") catch unreachable,
-            parseParam("-d, --dd <V3>     Both option.") catch unreachable,
-            parseParam("-d, --dd <V3>...  Both repeated option.") catch unreachable,
-            parseParam(
-                "<P>               Positional. This should not appear in the help message.",
-            ) catch unreachable,
-        },
+    const params = comptime parseParamsComptime(
+        \\-a                Short flag.
+        \\-b <V1>           Short option.
+        \\--aa              Long flag.
+        \\--bb <V2>         Long option.
+        \\-c, --cc          Both flag.
+        \\--complicate      Flag with a complicated and
+        \\    very long description that
+        \\    spans multiple lines.
+        \\-d, --dd <V3>     Both option.
+        \\-d, --dd <V3>...  Both repeated option.
+        \\<P>               Positional. This should not appear in the help message.
+        \\
     );
 
+    try help(slice_stream.writer(), Help, &params);
     const expected = "" ++
         "\t-a              \tShort flag.\n" ++
         "\t-b <V1>         \tShort option.\n" ++
@@ -1105,38 +1147,44 @@ fn testUsage(expected: []const u8, params: []const Param(Help)) !void {
 
 test "usage" {
     @setEvalBranchQuota(100000);
-    try testUsage("[-ab]", &.{
-        try parseParam("-a"),
-        try parseParam("-b"),
-    });
-    try testUsage("[-a <value>] [-b <v>]", &.{
-        try parseParam("-a <value>"),
-        try parseParam("-b <v>"),
-    });
-    try testUsage("[--a] [--b]", &.{
-        try parseParam("--a"),
-        try parseParam("--b"),
-    });
-    try testUsage("[--a <value>] [--b <v>]", &.{
-        try parseParam("--a <value>"),
-        try parseParam("--b <v>"),
-    });
-    try testUsage("<file>", &.{
-        try parseParam("<file>"),
-    });
+    try testUsage("[-ab]", &comptime parseParamsComptime(
+        \\-a
+        \\-b
+        \\
+    ));
+    try testUsage("[-a <value>] [-b <v>]", &comptime parseParamsComptime(
+        \\-a <value>
+        \\-b <v>
+        \\
+    ));
+    try testUsage("[--a] [--b]", &comptime parseParamsComptime(
+        \\--a
+        \\--b
+        \\
+    ));
+    try testUsage("[--a <value>] [--b <v>]", &comptime parseParamsComptime(
+        \\--a <value>
+        \\--b <v>
+        \\
+    ));
+    try testUsage("<file>", &comptime parseParamsComptime(
+        \\<file>
+        \\
+    ));
     try testUsage(
         "[-ab] [-c <value>] [-d <v>] [--e] [--f] [--g <value>] [--h <v>] [-i <v>...] <file>",
-        &.{
-            try parseParam("-a"),
-            try parseParam("-b"),
-            try parseParam("-c <value>"),
-            try parseParam("-d <v>"),
-            try parseParam("--e"),
-            try parseParam("--f"),
-            try parseParam("--g <value>"),
-            try parseParam("--h <v>"),
-            try parseParam("-i <v>..."),
-            try parseParam("<file>"),
-        },
+        &comptime parseParamsComptime(
+            \\-a
+            \\-b
+            \\-c <value>
+            \\-d <v>
+            \\--e
+            \\--f
+            \\--g <value>
+            \\--h <v>
+            \\-i <v>...
+            \\<file>
+            \\
+        ),
     );
 }
