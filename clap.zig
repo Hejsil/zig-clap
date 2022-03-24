@@ -223,14 +223,14 @@ pub fn parseParamEx(str: []const u8, end: *usize) !Param(Help) {
                 else => return error.InvalidParameter,
             },
             .first_char_of_long_name => switch (c) {
-                'a'...'z', 'A'...'Z', '0'...'9' => {
+                'a'...'z', 'A'...'Z', '0'...'9', '-', '_' => {
                     start = i;
                     state = .rest_of_long_name;
                 },
                 else => return error.InvalidParameter,
             },
             .rest_of_long_name => switch (c) {
-                'a'...'z', 'A'...'Z', '0'...'9' => {},
+                'a'...'z', 'A'...'Z', '0'...'9', '-', '_' => {},
                 ' ', '\t' => {
                     res.names.long = str[start..i];
                     state = .before_value_or_description;
@@ -374,6 +374,8 @@ test "parseParams" {
     try testParseParams(
         \\-s
         \\--str
+        \\--str-str
+        \\--str_str
         \\-s, --str
         \\--str <str>
         \\-s, --str <str>
@@ -397,6 +399,8 @@ test "parseParams" {
     , &.{
         .{ .names = .{ .short = 's' } },
         .{ .names = .{ .long = "str" } },
+        .{ .names = .{ .long = "str-str" } },
+        .{ .names = .{ .long = "str_str" } },
         .{ .names = .{ .short = 's', .long = "str" } },
         .{
             .id = .{ .val = "str" },
