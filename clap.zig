@@ -4,6 +4,7 @@ const builtin = std.builtin;
 const debug = std.debug;
 const heap = std.heap;
 const io = std.io;
+const math = std.math;
 const mem = std.mem;
 const process = std.process;
 const testing = std.testing;
@@ -81,10 +82,17 @@ pub fn Param(comptime Id: type) type {
 /// Takes a string and parses it into many Param(Help). Returned is a newly allocated slice
 /// containing all the parsed params. The caller is responsible for freeing the slice.
 pub fn parseParams(allocator: mem.Allocator, str: []const u8) ![]Param(Help) {
+    var end: usize = undefined;
+    return parseParamsEx(allocator, str, &end);
+}
+
+/// Takes a string and parses it into many Param(Help). Returned is a newly allocated slice
+/// containing all the parsed params. The caller is responsible for freeing the slice.
+pub fn parseParamsEx(allocator: mem.Allocator, str: []const u8, end: *usize) ![]Param(Help) {
     var list = std.ArrayList(Param(Help)).init(allocator);
     errdefer list.deinit();
 
-    try parseParamsIntoArrayList(&list, str);
+    try parseParamsIntoArrayListEx(&list, str, end);
     return list.toOwnedSlice();
 }
 
@@ -92,8 +100,16 @@ pub fn parseParams(allocator: mem.Allocator, str: []const u8) ![]Param(Help) {
 /// exactly the number of params that was parsed from `str`. A parse error becomes a compiler
 /// error.
 pub fn parseParamsComptime(comptime str: []const u8) [countParams(str)]Param(Help) {
+    var end: usize = undefined;
     var res: [countParams(str)]Param(Help) = undefined;
-    _ = parseParamsIntoSlice(&res, str) catch unreachable;
+    _ = parseParamsIntoSliceEx(&res, str, &end) catch {
+        const loc = std.zig.findLineColumn(str, end);
+        @compileError(std.fmt.comptimePrint("error:{}:{}: Failed to parse parameter:\n{s}", .{
+            loc.line + 1,
+            loc.column + 1,
+            loc.source_line,
+        }));
+    };
     return res;
 }
 
@@ -131,14 +147,39 @@ pub fn parseParamsIntoSlice(slice: []Param(Help), str: []const u8) ![]Param(Help
     return list.items;
 }
 
+/// Takes a string and parses it into many Param(Help), which are written to `slice`. A subslice
+/// is returned, containing all the parameters parsed. This function will fail if the input slice
+/// is to small.
+pub fn parseParamsIntoSliceEx(slice: []Param(Help), str: []const u8, end: *usize) ![]Param(Help) {
+    var null_alloc = heap.FixedBufferAllocator.init("");
+    var list = std.ArrayList(Param(Help)){
+        .allocator = null_alloc.allocator(),
+        .items = slice[0..0],
+        .capacity = slice.len,
+    };
+
+    try parseParamsIntoArrayListEx(&list, str, end);
+    return list.items;
+}
+
 /// Takes a string and parses it into many Param(Help), which are appended onto `list`.
 pub fn parseParamsIntoArrayList(list: *std.ArrayList(Param(Help)), str: []const u8) !void {
+    var end: usize = undefined;
+    return parseParamsIntoArrayListEx(list, str, &end);
+}
+
+/// Takes a string and parses it into many Param(Help), which are appended onto `list`.
+pub fn parseParamsIntoArrayListEx(list: *std.ArrayList(Param(Help)), str: []const u8, end: *usize) !void {
     var i: usize = 0;
     while (i != str.len) {
-        var end: usize = undefined;
-        try list.append(try parseParamEx(str[i..], &end));
-        i += end;
+        var end_of_this: usize = undefined;
+        errdefer end.* = i + end_of_this;
+
+        try list.append(try parseParamEx(str[i..], &end_of_this));
+        i += end_of_this;
     }
+
+    end.* = str.len;
 }
 
 pub fn parseParam(str: []const u8) !Param(Help) {
@@ -182,8 +223,6 @@ pub fn parseParamEx(str: []const u8, end: *usize) !Param(Help) {
         third_dot_of_multi_value,
 
         before_description,
-        before_description_new_line,
-
         rest_of_description,
         rest_of_description_new_line,
     } = .start;
@@ -208,7 +247,11 @@ pub fn parseParamEx(str: []const u8, end: *usize) !Param(Help) {
             },
             .end_of_short_name => switch (c) {
                 ' ', '\t' => state = .before_long_name_or_value_or_description,
-                '\n' => state = .before_description_new_line,
+                '\n' => {
+                    start = i + 1;
+                    end.* = i + 1;
+                    state = .rest_of_description_new_line;
+                },
                 ',' => state = .before_long_name,
                 else => return error.InvalidParameter,
             },
@@ -237,7 +280,9 @@ pub fn parseParamEx(str: []const u8, end: *usize) !Param(Help) {
                 },
                 '\n' => {
                     res.names.long = str[start..i];
-                    state = .before_description_new_line;
+                    start = i + 1;
+                    end.* = i + 1;
+                    state = .rest_of_description_new_line;
                 },
                 else => return error.InvalidParameter,
             },
@@ -278,7 +323,11 @@ pub fn parseParamEx(str: []const u8, end: *usize) !Param(Help) {
             .end_of_one_value => switch (c) {
                 '.' => state = .second_dot_of_multi_value,
                 ' ', '\t' => state = .before_description,
-                '\n' => state = .before_description_new_line,
+                '\n' => {
+                    start = i + 1;
+                    end.* = i + 1;
+                    state = .rest_of_description_new_line;
+                },
                 else => {
                     start = i;
                     state = .rest_of_description;
@@ -298,17 +347,10 @@ pub fn parseParamEx(str: []const u8, end: *usize) !Param(Help) {
 
             .before_description => switch (c) {
                 ' ', '\t' => {},
-                '\n' => state = .before_description_new_line,
-                else => {
-                    start = i;
-                    state = .rest_of_description;
-                },
-            },
-            .before_description_new_line => switch (c) {
-                ' ', '\t', '\n' => {},
-                '-', '<' => {
-                    end.* = i;
-                    break;
+                '\n' => {
+                    start = i + 1;
+                    end.* = i + 1;
+                    state = .rest_of_description_new_line;
                 },
                 else => {
                     start = i;
@@ -316,13 +358,16 @@ pub fn parseParamEx(str: []const u8, end: *usize) !Param(Help) {
                 },
             },
             .rest_of_description => switch (c) {
-                '\n' => state = .rest_of_description_new_line,
+                '\n' => {
+                    end.* = i;
+                    state = .rest_of_description_new_line;
+                },
                 else => {},
             },
             .rest_of_description_new_line => switch (c) {
                 ' ', '\t', '\n' => {},
                 '-', '<' => {
-                    res.id.desc = mem.trimRight(u8, str[start..i], " \t\n\r");
+                    res.id.desc = str[start..end.*];
                     end.* = i;
                     break;
                 },
@@ -330,17 +375,15 @@ pub fn parseParamEx(str: []const u8, end: *usize) !Param(Help) {
             },
         }
     } else {
-        end.* = str.len;
+        defer end.* = str.len;
         switch (state) {
-            .rest_of_description, .rest_of_description_new_line => {
-                res.id.desc = mem.trimRight(u8, str[start..], " \t\n\r");
-            },
+            .rest_of_description => res.id.desc = str[start..],
+            .rest_of_description_new_line => res.id.desc = str[start..end.*],
             .rest_of_long_name => res.names.long = str[start..],
             .end_of_short_name,
             .end_of_one_value,
             .before_value_or_description,
             .before_description,
-            .before_description_new_line,
             => {},
             else => return error.InvalidParameter,
         }
@@ -350,7 +393,16 @@ pub fn parseParamEx(str: []const u8, end: *usize) !Param(Help) {
 }
 
 fn testParseParams(str: []const u8, expected_params: []const Param(Help)) !void {
-    const actual_params = try parseParams(testing.allocator, str);
+    var end: usize = undefined;
+    const actual_params = parseParamsEx(testing.allocator, str, &end) catch |err| {
+        const loc = std.zig.findLineColumn(str, end);
+        std.debug.print("error:{}:{}: Failed to parse parameter:\n{s}\n", .{
+            loc.line + 1,
+            loc.column + 1,
+            loc.source_line,
+        });
+        return err;
+    };
     defer testing.allocator.free(actual_params);
 
     try testing.expectEqual(expected_params.len, actual_params.len);
@@ -389,10 +441,10 @@ test "parseParams" {
         \\--long <A | B> Help text
         \\<A> Help text
         \\<A>... Help text
-        \\--aa This is
+        \\--aa
+        \\    This is
         \\    help spanning multiple
         \\    lines
-        \\
         \\--aa This msg should end and the newline cause of new param
         \\--bb This should be a new param
         \\
@@ -461,7 +513,7 @@ test "parseParams" {
         .{
             .id = .{
                 .desc = 
-                \\This is
+                \\    This is
                 \\    help spanning multiple
                 \\    lines
                 ,
@@ -969,13 +1021,71 @@ pub const Help = struct {
     }
 };
 
-/// Will print a help message in the following format:
-///     -s, --long <valueText> helpText
-///     -s,                    helpText
-///     -s <valueText>         helpText
-///         --long             helpText
-///         --long <valueText> helpText
-pub fn help(stream: anytype, comptime Id: type, params: []const Param(Id)) !void {
+pub const HelpOptions = struct {
+    /// Render the description of a parameter in a simular way to how markdown would render
+    /// such a string. This means that single newlines wont be respected unless followed by
+    /// bullet points or other markdown elements.
+    markdown_lite: bool = true,
+
+    /// Wether `help` should print the description of a parameter on a new line instead of after
+    /// the parameter names. This options works together with `description_indent` to change
+    /// where descriptions are printed.
+    ///
+    /// description_on_new_line=false, description_indent=4
+    ///
+    ///   -a, --aa <v>    This is a description
+    ///                   that is not placed on
+    ///                   a new line.
+    ///
+    /// description_on_new_line=true, description_indent=4
+    ///
+    ///   -a, --aa <v>
+    ///       This is a description
+    ///       that is placed on a
+    ///       new line.
+    description_on_new_line: bool = true,
+
+    /// How much to indent descriptions. See `description_on_new_line` for examples of how this
+    /// changes the output.
+    description_indent: usize = 8,
+
+    /// How much to indent each paramter.
+    ///
+    /// indent=0, description_on_new_line=false, description_indent=4
+    ///
+    /// -a, --aa <v>    This is a description
+    ///                 that is not placed on
+    ///                 a new line.
+    ///
+    /// indent=4, description_on_new_line=false, description_indent=4
+    ///
+    ///     -a, --aa <v>    This is a description
+    ///                     that is not placed on
+    ///                     a new line.
+    ///
+    indent: usize = 4,
+
+    /// The maximum width of the help message. `help` will try to break the description of
+    /// paramters into multiple lines if they exeed this maximum. Setting this to the width
+    /// of the terminal is a nice way of using this option.
+    max_width: usize = std.math.maxInt(usize),
+
+    /// The number of empty lines between each printed parameter.
+    spacing_between_parameters: usize = 1,
+};
+
+/// Print a slice of `Param` formatted as a help string to `writer`. This function expects
+/// `Id` to have the methods `description` and `value` which are used by `help` to describe
+/// each parameter. Using `Help` as `Id` is good choice.
+///
+/// The output can be constumized with the `opt` parameter. For default formatting `.{}` can
+/// be passed.
+pub fn help(
+    writer: anytype,
+    comptime Id: type,
+    params: []const Param(Id),
+    opt: HelpOptions,
+) !void {
     const max_spacing = blk: {
         var res: usize = 0;
         for (params) |param| {
@@ -988,28 +1098,171 @@ pub fn help(stream: anytype, comptime Id: type, params: []const Param(Id)) !void
         break :blk res;
     };
 
-    for (params) |param| {
-        if (param.names.short == null and param.names.long == null)
-            continue;
+    const description_indentation = opt.indent +
+        opt.description_indent +
+        max_spacing * @boolToInt(!opt.description_on_new_line);
 
-        var cs = io.countingWriter(stream);
-        try stream.writeAll("\t");
-        try printParam(cs.writer(), Id, param);
-        try stream.writeByteNTimes(' ', max_spacing - @intCast(usize, cs.bytes_written));
+    var first_paramter: bool = true;
+    for (params) |param| {
+        if (param.names.longest().kind == .positinal)
+            continue;
+        if (!first_paramter)
+            try writer.writeByteNTimes('\n', opt.spacing_between_parameters);
+
+        first_paramter = false;
+        try writer.writeByteNTimes(' ', opt.indent);
+
+        var cw = io.countingWriter(writer);
+        try printParam(cw.writer(), Id, param);
+
+        const Writer = DescriptionWriter(@TypeOf(writer));
+        var description_writer = Writer{
+            .underlying_writer = writer,
+            .indentation = description_indentation,
+            .printed_chars = @intCast(usize, cw.bytes_written),
+            .max_width = opt.max_width,
+        };
+
+        if (opt.description_on_new_line)
+            try description_writer.newline();
+
+        const min_description_indent = blk: {
+            const description = param.id.description();
+
+            var first_line = true;
+            var res: usize = std.math.maxInt(usize);
+            var it = mem.tokenize(u8, description, "\n");
+            while (it.next()) |line| : (first_line = false) {
+                const trimmed = mem.trimLeft(u8, line, " ");
+                const indent = line.len - trimmed.len;
+
+                // If the first line has no indentation, then we ignore the indentation of the
+                // first line. We do this as the parameter might have been parsed from:
+                //
+                // -a, --aa The first line
+                //          is not indented,
+                //          but the rest of
+                //          the lines are.
+                //
+                // In this case, we want to pretend that the first line has the same indentation
+                // as the min_description_indent, even though it is not so in the string we get.
+                if (first_line and indent == 0)
+                    continue;
+                if (indent < res)
+                    res = indent;
+            }
+
+            break :blk res;
+        };
 
         const description = param.id.description();
         var it = mem.split(u8, description, "\n");
-        var indent_line = false;
-        while (it.next()) |line| : (indent_line = true) {
-            if (indent_line) {
-                try stream.writeAll("\t");
-                try stream.writeByteNTimes(' ', max_spacing);
+        var first_line = true;
+        var non_emitted_newlines: usize = 0;
+        var last_line_indentation: usize = 0;
+        while (it.next()) |raw_line| : (first_line = false) {
+            // First line might be special. See comment above.
+            const indented_line = if (first_line and !mem.startsWith(u8, raw_line, " "))
+                raw_line
+            else
+                raw_line[math.min(min_description_indent, raw_line.len)..];
+
+            const line = mem.trimLeft(u8, indented_line, " ");
+            if (line.len == 0) {
+                non_emitted_newlines += 1;
+                continue;
             }
-            try stream.writeAll("\t");
-            try stream.writeAll(mem.trimLeft(u8, line, " \t"));
-            try stream.writeAll("\n");
+
+            const line_indentation = indented_line.len - line.len;
+            description_writer.indentation = description_indentation + line_indentation;
+
+            if (opt.markdown_lite) {
+                const new_paragraph = non_emitted_newlines > 1;
+
+                const does_not_have_same_indent_as_last_line =
+                    line_indentation != last_line_indentation;
+
+                const starts_with_control_char = mem.indexOfScalar(u8, "=*", line[0]) != null;
+
+                // Either the input contains 2 or more newlines, in which case we should start
+                // a new paragraph.
+                if (new_paragraph) {
+                    try description_writer.newline();
+                    try description_writer.newline();
+                }
+                // Or this line has a special control char or different indentation which means
+                // we should output it on a new line as well.
+                else if (starts_with_control_char or does_not_have_same_indent_as_last_line) {
+                    try description_writer.newline();
+                }
+            } else {
+                // For none markdown like format, we just respect the newlines in the input
+                // string and output them as is.
+                var i: usize = 0;
+                while (i < non_emitted_newlines) : (i += 1)
+                    try description_writer.newline();
+            }
+
+            var words = mem.tokenize(u8, line, " ");
+            while (words.next()) |word|
+                try description_writer.writeWord(word);
+
+            // We have not emitted the end of this line yet.
+            non_emitted_newlines = 1;
+            last_line_indentation = line_indentation;
         }
+
+        try writer.writeAll("\n");
     }
+}
+
+fn DescriptionWriter(comptime UnderlyingWriter: type) type {
+    return struct {
+        pub const WriteError = UnderlyingWriter.Error;
+
+        underlying_writer: UnderlyingWriter,
+
+        indentation: usize,
+        max_width: usize,
+        printed_chars: usize,
+
+        pub fn writeWord(writer: *@This(), word: []const u8) !void {
+            debug.assert(word.len != 0);
+
+            var first_word = writer.printed_chars <= writer.indentation;
+            const chars_to_write = word.len + @boolToInt(!first_word);
+            if (chars_to_write + writer.printed_chars > writer.max_width) {
+                // If the word does not fit on this line, then we insert a new line and print
+                // it on that line. The only exception to this is if this was the first word.
+                // If the first word does not fit on this line, then it will also not fit on the
+                // next one. In that case, all we can really do is just output the word.
+                if (!first_word)
+                    try writer.newline();
+
+                first_word = true;
+            }
+
+            if (!first_word)
+                try writer.underlying_writer.writeAll(" ");
+
+            try writer.ensureIndented();
+            try writer.underlying_writer.writeAll(word);
+            writer.printed_chars += chars_to_write;
+        }
+
+        pub fn newline(writer: *@This()) !void {
+            try writer.underlying_writer.writeAll("\n");
+            writer.printed_chars = 0;
+        }
+
+        fn ensureIndented(writer: *@This()) !void {
+            if (writer.printed_chars < writer.indentation) {
+                const to_indent = writer.indentation - writer.printed_chars;
+                try writer.underlying_writer.writeByteNTimes(' ', to_indent);
+                writer.printed_chars += to_indent;
+            }
+        }
+    };
 }
 
 fn printParam(
@@ -1017,19 +1270,14 @@ fn printParam(
     comptime Id: type,
     param: Param(Id),
 ) !void {
-    if (param.names.short) |s| {
-        try stream.writeAll(&[_]u8{ '-', s });
-    } else {
-        try stream.writeAll("  ");
-    }
-    if (param.names.long) |l| {
-        if (param.names.short) |_| {
-            try stream.writeAll(", ");
-        } else {
-            try stream.writeAll("  ");
-        }
+    try stream.writeAll(&[_]u8{
+        if (param.names.short) |_| '-' else ' ',
+        param.names.short orelse ' ',
+    });
 
-        try stream.writeAll("--");
+    if (param.names.long) |l| {
+        try stream.writeByte(if (param.names.short) |_| ',' else ' ');
+        try stream.writeAll(" --");
         try stream.writeAll(l);
     }
 
@@ -1043,39 +1291,386 @@ fn printParam(
         try stream.writeAll("...");
 }
 
-test "clap.help" {
-    var buf: [1024]u8 = undefined;
-    var slice_stream = io.fixedBufferStream(&buf);
+fn testHelp(opt: HelpOptions, str: []const u8) !void {
+    const params = try parseParams(testing.allocator, str);
+    defer testing.allocator.free(params);
 
-    const params = comptime parseParamsComptime(
-        \\-a                Short flag.
-        \\-b <V1>           Short option.
-        \\--aa              Long flag.
-        \\--bb <V2>         Long option.
-        \\-c, --cc          Both flag.
-        \\--complicate      Flag with a complicated and
-        \\    very long description that
-        \\    spans multiple lines.
-        \\-d, --dd <V3>     Both option.
-        \\-d, --dd <V3>...  Both repeated option.
-        \\<P>               Positional. This should not appear in the help message.
+    var buf: [2048]u8 = undefined;
+    var fbs = io.fixedBufferStream(&buf);
+    try help(fbs.writer(), Help, params, opt);
+    try testing.expectEqualStrings(str, fbs.getWritten());
+}
+
+test "clap.help" {
+    try testHelp(.{},
+        \\    -a
+        \\            Short flag.
+        \\
+        \\    -b <V1>
+        \\            Short option.
+        \\
+        \\        --aa
+        \\            Long flag.
+        \\
+        \\        --bb <V2>
+        \\            Long option.
+        \\
+        \\    -c, --cc
+        \\            Both flag.
+        \\
+        \\        --complicate
+        \\            Flag with a complicated and very long description that spans multiple lines.
+        \\
+        \\            Paragraph number 2:
+        \\            * Bullet point
+        \\            * Bullet point
+        \\
+        \\            Example:
+        \\                something something something
+        \\
+        \\    -d, --dd <V3>
+        \\            Both option.
+        \\
+        \\    -d, --dd <V3>...
+        \\            Both repeated option.
         \\
     );
 
-    try help(slice_stream.writer(), Help, &params);
-    const expected = "" ++
-        "\t-a              \tShort flag.\n" ++
-        "\t-b <V1>         \tShort option.\n" ++
-        "\t    --aa        \tLong flag.\n" ++
-        "\t    --bb <V2>   \tLong option.\n" ++
-        "\t-c, --cc        \tBoth flag.\n" ++
-        "\t    --complicate\tFlag with a complicated and\n" ++
-        "\t                \tvery long description that\n" ++
-        "\t                \tspans multiple lines.\n" ++
-        "\t-d, --dd <V3>   \tBoth option.\n" ++
-        "\t-d, --dd <V3>...\tBoth repeated option.\n";
+    try testHelp(.{ .markdown_lite = false },
+        \\    -a
+        \\            Short flag.
+        \\
+        \\    -b <V1>
+        \\            Short option.
+        \\
+        \\        --aa
+        \\            Long flag.
+        \\
+        \\        --bb <V2>
+        \\            Long option.
+        \\
+        \\    -c, --cc
+        \\            Both flag.
+        \\
+        \\        --complicate
+        \\            Flag with a complicated and
+        \\            very long description that
+        \\            spans multiple lines.
+        \\
+        \\            Paragraph number 2:
+        \\            * Bullet point
+        \\            * Bullet point
+        \\
+        \\
+        \\            Example:
+        \\                something something something
+        \\
+        \\    -d, --dd <V3>
+        \\            Both option.
+        \\
+        \\    -d, --dd <V3>...
+        \\            Both repeated option.
+        \\
+    );
 
-    try testing.expectEqualStrings(expected, slice_stream.getWritten());
+    try testHelp(.{ .indent = 0 },
+        \\-a
+        \\        Short flag.
+        \\
+        \\-b <V1>
+        \\        Short option.
+        \\
+        \\    --aa
+        \\        Long flag.
+        \\
+        \\    --bb <V2>
+        \\        Long option.
+        \\
+        \\-c, --cc
+        \\        Both flag.
+        \\
+        \\    --complicate
+        \\        Flag with a complicated and very long description that spans multiple lines.
+        \\
+        \\        Paragraph number 2:
+        \\        * Bullet point
+        \\        * Bullet point
+        \\
+        \\        Example:
+        \\            something something something
+        \\
+        \\-d, --dd <V3>
+        \\        Both option.
+        \\
+        \\-d, --dd <V3>...
+        \\        Both repeated option.
+        \\
+    );
+
+    try testHelp(.{ .indent = 0 },
+        \\-a
+        \\        Short flag.
+        \\
+        \\-b <V1>
+        \\        Short option.
+        \\
+        \\    --aa
+        \\        Long flag.
+        \\
+        \\    --bb <V2>
+        \\        Long option.
+        \\
+        \\-c, --cc
+        \\        Both flag.
+        \\
+        \\    --complicate
+        \\        Flag with a complicated and very long description that spans multiple lines.
+        \\
+        \\        Paragraph number 2:
+        \\        * Bullet point
+        \\        * Bullet point
+        \\
+        \\        Example:
+        \\            something something something
+        \\
+        \\-d, --dd <V3>
+        \\        Both option.
+        \\
+        \\-d, --dd <V3>...
+        \\        Both repeated option.
+        \\
+    );
+
+    try testHelp(.{ .indent = 0, .max_width = 26 },
+        \\-a
+        \\        Short flag.
+        \\
+        \\-b <V1>
+        \\        Short option.
+        \\
+        \\    --aa
+        \\        Long flag.
+        \\
+        \\    --bb <V2>
+        \\        Long option.
+        \\
+        \\-c, --cc
+        \\        Both flag.
+        \\
+        \\    --complicate
+        \\        Flag with a
+        \\        complicated and
+        \\        very long
+        \\        description that
+        \\        spans multiple
+        \\        lines.
+        \\
+        \\        Paragraph number
+        \\        2:
+        \\        * Bullet point
+        \\        * Bullet point
+        \\
+        \\        Example:
+        \\            something
+        \\            something
+        \\            something
+        \\
+        \\-d, --dd <V3>
+        \\        Both option.
+        \\
+        \\-d, --dd <V3>...
+        \\        Both repeated
+        \\        option.
+        \\
+    );
+
+    try testHelp(.{
+        .indent = 0,
+        .max_width = 26,
+        .description_indent = 6,
+    },
+        \\-a
+        \\      Short flag.
+        \\
+        \\-b <V1>
+        \\      Short option.
+        \\
+        \\    --aa
+        \\      Long flag.
+        \\
+        \\    --bb <V2>
+        \\      Long option.
+        \\
+        \\-c, --cc
+        \\      Both flag.
+        \\
+        \\    --complicate
+        \\      Flag with a
+        \\      complicated and
+        \\      very long
+        \\      description that
+        \\      spans multiple
+        \\      lines.
+        \\
+        \\      Paragraph number 2:
+        \\      * Bullet point
+        \\      * Bullet point
+        \\
+        \\      Example:
+        \\          something
+        \\          something
+        \\          something
+        \\
+        \\-d, --dd <V3>
+        \\      Both option.
+        \\
+        \\-d, --dd <V3>...
+        \\      Both repeated
+        \\      option.
+        \\
+    );
+
+    try testHelp(.{
+        .indent = 0,
+        .max_width = 46,
+        .description_on_new_line = false,
+    },
+        \\-a                      Short flag.
+        \\
+        \\-b <V1>                 Short option.
+        \\
+        \\    --aa                Long flag.
+        \\
+        \\    --bb <V2>           Long option.
+        \\
+        \\-c, --cc                Both flag.
+        \\
+        \\    --complicate        Flag with a
+        \\                        complicated and very
+        \\                        long description that
+        \\                        spans multiple lines.
+        \\
+        \\                        Paragraph number 2:
+        \\                        * Bullet point
+        \\                        * Bullet point
+        \\
+        \\                        Example:
+        \\                            something
+        \\                            something
+        \\                            something
+        \\
+        \\-d, --dd <V3>           Both option.
+        \\
+        \\-d, --dd <V3>...        Both repeated option.
+        \\
+    );
+
+    try testHelp(.{
+        .indent = 0,
+        .max_width = 46,
+        .description_on_new_line = false,
+        .description_indent = 4,
+    },
+        \\-a                  Short flag.
+        \\
+        \\-b <V1>             Short option.
+        \\
+        \\    --aa            Long flag.
+        \\
+        \\    --bb <V2>       Long option.
+        \\
+        \\-c, --cc            Both flag.
+        \\
+        \\    --complicate    Flag with a complicated
+        \\                    and very long description
+        \\                    that spans multiple
+        \\                    lines.
+        \\
+        \\                    Paragraph number 2:
+        \\                    * Bullet point
+        \\                    * Bullet point
+        \\
+        \\                    Example:
+        \\                        something something
+        \\                        something
+        \\
+        \\-d, --dd <V3>       Both option.
+        \\
+        \\-d, --dd <V3>...    Both repeated option.
+        \\
+    );
+
+    try testHelp(.{
+        .indent = 0,
+        .max_width = 46,
+        .description_on_new_line = false,
+        .description_indent = 4,
+        .spacing_between_parameters = 0,
+    },
+        \\-a                  Short flag.
+        \\-b <V1>             Short option.
+        \\    --aa            Long flag.
+        \\    --bb <V2>       Long option.
+        \\-c, --cc            Both flag.
+        \\    --complicate    Flag with a complicated
+        \\                    and very long description
+        \\                    that spans multiple
+        \\                    lines.
+        \\
+        \\                    Paragraph number 2:
+        \\                    * Bullet point
+        \\                    * Bullet point
+        \\
+        \\                    Example:
+        \\                        something something
+        \\                        something
+        \\-d, --dd <V3>       Both option.
+        \\-d, --dd <V3>...    Both repeated option.
+        \\
+    );
+
+    try testHelp(.{
+        .indent = 0,
+        .max_width = 46,
+        .description_on_new_line = false,
+        .description_indent = 4,
+        .spacing_between_parameters = 2,
+    },
+        \\-a                  Short flag.
+        \\
+        \\
+        \\-b <V1>             Short option.
+        \\
+        \\
+        \\    --aa            Long flag.
+        \\
+        \\
+        \\    --bb <V2>       Long option.
+        \\
+        \\
+        \\-c, --cc            Both flag.
+        \\
+        \\
+        \\    --complicate    Flag with a complicated
+        \\                    and very long description
+        \\                    that spans multiple
+        \\                    lines.
+        \\
+        \\                    Paragraph number 2:
+        \\                    * Bullet point
+        \\                    * Bullet point
+        \\
+        \\                    Example:
+        \\                        something something
+        \\                        something
+        \\
+        \\
+        \\-d, --dd <V3>       Both option.
+        \\
+        \\
+        \\-d, --dd <V3>...    Both repeated option.
+        \\
+    );
 }
 
 /// Will print a usage message in the following format:
@@ -1104,7 +1699,6 @@ pub fn usage(stream: anytype, comptime Id: type, params: []const Param(Id)) !voi
             continue;
 
         const prefix = if (param.names.short) |_| "-" else "--";
-
         const name = if (param.names.short) |*s|
             // Seems the zig compiler is being a little wierd. I doesn't allow me to write
             // @as(*const [1]u8, s)

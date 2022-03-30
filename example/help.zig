@@ -15,5 +15,5 @@ pub fn main() !void {
     // slice of Param(Help). There is also a helpEx, which can print a
     // help message for any Param, but it is more verbose to call.
     if (res.args.help)
-        return clap.help(std.io.getStdErr().writer(), clap.Help, &params);
+        return clap.help(std.io.getStdErr().writer(), clap.Help, &params, .{});
 }
