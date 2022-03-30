@@ -11,9 +11,10 @@ pub fn main() !void {
     var res = try clap.parse(clap.Help, &params, clap.parsers.default, .{});
     defer res.deinit();
 
-    // clap.help is a function that can print a simple help message, given a
-    // slice of Param(Help). There is also a helpEx, which can print a
-    // help message for any Param, but it is more verbose to call.
+    // `clap.help` is a function that can print a simple help message. It can print any `Param`
+    // where `Id` has a `describtion` and `value` method (`Param(Help)` is one such parameter).
+    // The last argument contains options as to how `help` should print those parameters. Using
+    // `.{}` means the default options.
     if (res.args.help)
         return clap.help(std.io.getStdErr().writer(), clap.Help, &params, .{});
 }

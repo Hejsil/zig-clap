@@ -12,9 +12,8 @@ pub fn main() !void {
     var res = try clap.parse(clap.Help, &params, clap.parsers.default, .{});
     defer res.deinit();
 
-    // clap.usage is a function that can print a simple usage message, given a
-    // slice of Param(Help). There is also a usageEx, which can print a
-    // usage message for any Param, but it is more verbose to call.
+    // `clap.usage` is a function that can print a simple help message. It can print any `Param`
+    // where `Id` has a `value` method (`Param(Help)` is one such parameter).
     if (res.args.help)
         return clap.usage(std.io.getStdErr().writer(), clap.Help, &params);
 }
