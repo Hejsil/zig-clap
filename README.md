@@ -200,7 +200,8 @@ is generated at runtime.
 
 The `help` prints a simple list of all parameters the program can take. It expects the
 `Id` to have a `description` method and an `value` method so that it can provide that
-in the output.
+in the output. `HelpOptions` is passed to `help` to control how the help message is
+printed.
 
 ```zig
 const clap = @import("clap");
@@ -220,15 +221,18 @@ pub fn main() !void {
     // slice of Param(Help). There is also a helpEx, which can print a
     // help message for any Param, but it is more verbose to call.
     if (res.args.help)
-        return clap.help(std.io.getStdErr().writer(), clap.Help, &params);
+        return clap.help(std.io.getStdErr().writer(), clap.Help, &params, .{});
 }
 
 ```
 
 ```
 $ zig-out/bin/help --help
-	-h, --help   	Display this help and exit.
-	-v, --version	Output version information and exit.
+    -h, --help
+            Display this help and exit.
+
+    -v, --version
+            Output version information and exit.
 ```
 
 ### `usage`
