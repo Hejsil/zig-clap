@@ -1733,6 +1733,8 @@ pub fn usage(stream: anytype, comptime Id: type, params: []const Param(Id)) !voi
         try cs.writeAll("<");
         try cs.writeAll(p.id.value());
         try cs.writeAll(">");
+        if (p.takes_value == .many)
+            try cs.writeAll("...");
     }
 }
 
@@ -1767,6 +1769,10 @@ test "usage" {
     ));
     try testUsage("<file>", &comptime parseParamsComptime(
         \\<file>
+        \\
+    ));
+    try testUsage("<file>...", &comptime parseParamsComptime(
+        \\<file>...
         \\
     ));
     try testUsage(
