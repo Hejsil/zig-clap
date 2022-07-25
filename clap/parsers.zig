@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const fmt = std.fmt;
+const testing = std.testing;
 
 pub const default = .{
     .string = string,
@@ -23,6 +24,10 @@ pub fn string(in: []const u8) error{}![]const u8 {
     return in;
 }
 
+test "string" {
+    try testing.expectEqualStrings("aa", try string("aa"));
+}
+
 pub fn int(comptime T: type, comptime radix: u8) fn ([]const u8) fmt.ParseIntError!T {
     return struct {
         fn parse(in: []const u8) fmt.ParseIntError!T {
@@ -31,12 +36,44 @@ pub fn int(comptime T: type, comptime radix: u8) fn ([]const u8) fmt.ParseIntErr
     }.parse;
 }
 
+test "int" {
+    try testing.expectEqual(@as(u8, 0), try int(u8, 10)("0"));
+    try testing.expectEqual(@as(u8, 1), try int(u8, 10)("1"));
+    try testing.expectEqual(@as(u8, 10), try int(u8, 10)("10"));
+    try testing.expectEqual(@as(u8, 0x10), try int(u8, 0)("0x10"));
+    try testing.expectEqual(@as(u8, 0b10), try int(u8, 0)("0b10"));
+}
+
 pub fn float(comptime T: type) fn ([]const u8) fmt.ParseFloatError!T {
     return struct {
         fn parse(in: []const u8) fmt.ParseFloatError!T {
             return fmt.parseFloat(T, in);
         }
     }.parse;
+}
+
+test "float" {
+    try testing.expectEqual(@as(f32, 0), try float(f32)("0"));
+}
+
+pub const EnumError = error{
+    NameNotPartOfEnum,
+};
+
+pub fn enumeration(comptime T: type) fn ([]const u8) EnumError!T {
+    return struct {
+        fn parse(in: []const u8) EnumError!T {
+            return std.meta.stringToEnum(T, in) orelse error.NameNotPartOfEnum;
+        }
+    }.parse;
+}
+
+test "enumeration" {
+    const E = enum { a, b, c };
+    try testing.expectEqual(E.a, try enumeration(E)("a"));
+    try testing.expectEqual(E.b, try enumeration(E)("b"));
+    try testing.expectEqual(E.c, try enumeration(E)("c"));
+    try testing.expectError(EnumError.NameNotPartOfEnum, enumeration(E)("d"));
 }
 
 fn ReturnType(comptime P: type) type {
