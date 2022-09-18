@@ -895,7 +895,7 @@ fn Arguments(
     comptime value_parsers: anytype,
     comptime multi_arg_kind: MultiArgKind,
 ) type {
-    var fields: [params.len]builtin.TypeInfo.StructField = undefined;
+    var fields: [params.len]builtin.Type.StructField = undefined;
 
     var i: usize = 0;
     for (params) |param| {
