@@ -40,8 +40,22 @@ pub const Names = struct {
     }
 
     pub const Longest = struct {
-        kind: enum { long, short, positinal },
+        kind: Kind,
         name: []const u8,
+    };
+
+    pub const Kind = enum {
+        long,
+        short,
+        positinal,
+
+        pub fn prefix(l: Longest) []const u8 {
+            return switch (l.kind) {
+                .long => "--",
+                .short => "-",
+                .positional => "",
+            };
+        }
     };
 };
 
@@ -550,29 +564,19 @@ pub const Diagnostic = struct {
     /// Default diagnostics reporter when all you want is English with no colors.
     /// Use this as a reference for implementing your own if needed.
     pub fn report(diag: Diagnostic, stream: anytype, err: anyerror) !void {
-        const Arg = struct {
-            prefix: []const u8,
-            name: []const u8,
-        };
-        const a = if (diag.name.short) |*c|
-            Arg{ .prefix = "-", .name = @as(*const [1]u8, c)[0..] }
-        else if (diag.name.long) |l|
-            Arg{ .prefix = "--", .name = l }
-        else
-            Arg{ .prefix = "", .name = diag.arg };
-
+        const longest = diag.name.longest();
         switch (err) {
             streaming.Error.DoesntTakeValue => try stream.print(
                 "The argument '{s}{s}' does not take a value\n",
-                .{ a.prefix, a.name },
+                .{ longest.kind.prefix(), longest.name },
             ),
             streaming.Error.MissingValue => try stream.print(
                 "The argument '{s}{s}' requires a value but none was supplied\n",
-                .{ a.prefix, a.name },
+                .{ longest.kind.prefix(), longest.name },
             ),
             streaming.Error.InvalidArgument => try stream.print(
                 "Invalid argument '{s}{s}'\n",
-                .{ a.prefix, a.name },
+                .{ longest.kind.prefix(), longest.name },
             ),
             else => try stream.print("Error while parsing arguments: {s}\n", .{@errorName(err)}),
         }
