@@ -36,7 +36,7 @@ pub const Names = struct {
             return .{ .kind = .short, .name = casted };
         }
 
-        return .{ .kind = .positinal, .name = "" };
+        return .{ .kind = .positional, .name = "" };
     }
 
     pub const Longest = struct {
@@ -47,10 +47,10 @@ pub const Names = struct {
     pub const Kind = enum {
         long,
         short,
-        positinal,
+        positional,
 
-        pub fn prefix(l: Longest) []const u8 {
-            return switch (l.kind) {
+        pub fn prefix(kind: Kind) []const u8 {
+            return switch (kind) {
                 .long => "--",
                 .short => "-",
                 .positional => "",
@@ -564,7 +564,10 @@ pub const Diagnostic = struct {
     /// Default diagnostics reporter when all you want is English with no colors.
     /// Use this as a reference for implementing your own if needed.
     pub fn report(diag: Diagnostic, stream: anytype, err: anyerror) !void {
-        const longest = diag.name.longest();
+        var longest = diag.name.longest();
+        if (longest.kind == .positional)
+            longest.name = diag.arg;
+
         switch (err) {
             streaming.Error.DoesntTakeValue => try stream.print(
                 "The argument '{s}{s}' does not take a value\n",
@@ -807,7 +810,7 @@ fn parseArg(
                 try @field(arguments, longest.name).append(allocator, value);
             },
         },
-        .positinal => try positionals.append(try parser(arg.value.?)),
+        .positional => try positionals.append(try parser(arg.value.?)),
     }
 }
 
@@ -841,7 +844,7 @@ fn FindPositionalType(
 fn findPositional(comptime Id: type, params: []const Param(Id)) ?Param(Id) {
     for (params) |param| {
         const longest = param.names.longest();
-        if (longest.kind == .positinal)
+        if (longest.kind == .positional)
             return param;
     }
 
@@ -872,7 +875,7 @@ fn deinitArgs(
 ) void {
     inline for (params) |param| {
         const longest = comptime param.names.longest();
-        if (longest.kind == .positinal)
+        if (longest.kind == .positional)
             continue;
         if (param.takes_value != .many)
             continue;
@@ -904,7 +907,7 @@ fn Arguments(
     var i: usize = 0;
     for (params) |param| {
         const longest = param.names.longest();
-        if (longest.kind == .positinal)
+        if (longest.kind == .positional)
             continue;
 
         const T = ParamType(Id, param, value_parsers);
@@ -1121,7 +1124,7 @@ pub fn help(
 
     var first_paramter: bool = true;
     for (params) |param| {
-        if (param.names.longest().kind == .positinal)
+        if (param.names.longest().kind == .positional)
             continue;
         if (!first_paramter)
             try writer.writeByteNTimes('\n', opt.spacing_between_parameters);
@@ -1694,7 +1697,7 @@ test "clap.help" {
 /// [-abc] [--longa] [-d <T>] [--longb <T>] <T>
 ///
 /// First all none value taking parameters, which have a short name are printed, then non
-/// positional parameters and finally the positinal.
+/// positional parameters and finally the positional.
 pub fn usage(stream: anytype, comptime Id: type, params: []const Param(Id)) !void {
     var cos = io.countingWriter(stream);
     const cs = cos.writer();
