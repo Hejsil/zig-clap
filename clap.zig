@@ -982,7 +982,9 @@ test "everything" {
 
 test "empty" {
     var iter = args.SliceIterator{ .args = &.{} };
-    var res = try parseEx(u8, &.{}, parsers.default, &iter, .{ .allocator = testing.allocator });
+    var res = try parseEx(u8, &[_]Param(u8){}, parsers.default, &iter, .{
+        .allocator = testing.allocator,
+    });
     defer res.deinit();
 }
 
