@@ -109,7 +109,7 @@ pub fn parseParamsEx(allocator: mem.Allocator, str: []const u8, end: *usize) ![]
     errdefer list.deinit();
 
     try parseParamsIntoArrayListEx(&list, str, end);
-    return list.toOwnedSlice();
+    return try list.toOwnedSlice();
 }
 
 /// Takes a string and parses it into many Param(Help) at comptime. Returned is an array of
@@ -772,7 +772,7 @@ pub fn parseEx(
         if (@typeInfo(field.field_type) == .Struct and
             @hasDecl(field.field_type, "toOwnedSlice"))
         {
-            const slice = @field(arguments, field.name).toOwnedSlice(allocator);
+            const slice = try @field(arguments, field.name).toOwnedSlice(allocator);
             @field(result_args, field.name) = slice;
         } else {
             @field(result_args, field.name) = @field(arguments, field.name);
@@ -781,7 +781,7 @@ pub fn parseEx(
 
     return ResultEx(Id, params, value_parsers){
         .args = result_args,
-        .positionals = positionals.toOwnedSlice(),
+        .positionals = try positionals.toOwnedSlice(),
         .allocator = allocator,
     };
 }
