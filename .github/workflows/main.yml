@@ -20,7 +20,7 @@ jobs:
       - uses: goto-bus-stop/setup-zig@v2.0.1
         with:
           version: master
-      - run: zig build ${{ matrix.step }} -D${{ matrix.compiler }} -D${{ matrix.release }}
+      - run: zig build ${{ matrix.step }} -D${{ matrix.release }}
   lint:
     runs-on: ubuntu-latest
     steps:
