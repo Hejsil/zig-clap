@@ -528,7 +528,7 @@ test "parseParams" {
         },
         .{
             .id = .{
-                .desc = 
+                .desc =
                 \\    This is
                 \\    help spanning multiple
                 \\    lines
@@ -769,8 +769,8 @@ pub fn parseEx(
     // fields to slices and return that.
     var result_args = Arguments(Id, params, value_parsers, .slice){};
     inline for (meta.fields(@TypeOf(arguments))) |field| {
-        if (@typeInfo(field.field_type) == .Struct and
-            @hasDecl(field.field_type, "toOwnedSlice"))
+        if (@typeInfo(field.type) == .Struct and
+            @hasDecl(field.type, "toOwnedSlice"))
         {
             const slice = try @field(arguments, field.name).toOwnedSlice(allocator);
             @field(result_args, field.name) = slice;
@@ -922,7 +922,7 @@ fn Arguments(
 
         fields[i] = .{
             .name = longest.name,
-            .field_type = @TypeOf(default_value),
+            .type = @TypeOf(default_value),
             .default_value = @ptrCast(*const anyopaque, &default_value),
             .is_comptime = false,
             .alignment = @alignOf(@TypeOf(default_value)),
