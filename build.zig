@@ -1,15 +1,15 @@
 const std = @import("std");
 
-const Builder = std.build.Builder;
-
-pub fn build(b: *Builder) void {
-    const mode = b.standardReleaseOptions();
+pub fn build(b: *std.Build) void {
+    const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
 
     const test_step = b.step("test", "Run all tests in all modes.");
-    const tests = b.addTest("clap.zig");
-    tests.setBuildMode(mode);
-    tests.setTarget(target);
+    const tests = b.addTest(.{
+        .root_source_file = .{ .path = "clap.zig" },
+        .target = target,
+        .optimize = optimize,
+    });
     test_step.dependOn(&tests.step);
 
     const example_step = b.step("examples", "Build examples");
@@ -20,10 +20,13 @@ pub fn build(b: *Builder) void {
         "help",
         "usage",
     }) |example_name| {
-        const example = b.addExecutable(example_name, "example/" ++ example_name ++ ".zig");
-        example.addPackagePath("clap", "clap.zig");
-        example.setBuildMode(mode);
-        example.setTarget(target);
+        const example = b.addExecutable(.{
+            .name = example_name,
+            .root_source_file = .{ .path = "example/" ++ example_name ++ ".zig" },
+            .target = target,
+            .optimize = optimize,
+        });
+        example.addAnonymousModule("clap", .{ .source_file = .{ .path = "clap.zig" } });
         example.install();
         example_step.dependOn(&example.step);
     }
@@ -41,7 +44,7 @@ pub fn build(b: *Builder) void {
     b.default_step.dependOn(all_step);
 }
 
-fn readMeStep(b: *Builder) *std.build.Step {
+fn readMeStep(b: *std.Build) *std.Build.Step {
     const s = b.allocator.create(std.build.Step) catch unreachable;
     s.* = std.build.Step.init(.custom, "ReadMeStep", b.allocator, struct {
         fn make(step: *std.build.Step) anyerror!void {
