@@ -242,7 +242,7 @@ pub fn parseParamEx(str: []const u8, end: *usize) !Param(Help) {
         rest_of_description,
         rest_of_description_new_line,
     } = .start;
-    for (str) |c, i| {
+    for (str, 0..) |c, i| {
         errdefer end.* = i;
 
         switch (state) {
@@ -422,7 +422,7 @@ fn testParseParams(str: []const u8, expected_params: []const Param(Help)) !void 
     defer testing.allocator.free(actual_params);
 
     try testing.expectEqual(expected_params.len, actual_params.len);
-    for (expected_params) |_, i|
+    for (expected_params, 0..) |_, i|
         try expectParam(expected_params[i], actual_params[i]);
 }
 
