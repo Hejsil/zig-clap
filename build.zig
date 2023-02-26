@@ -4,6 +4,9 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
 
+    const clap_mod = b.createModule(.{ .source_file = .{ .path = "clap.zig" } });
+    b.modules.put(b.dupe("clap"), clap_mod) catch @panic("OOM");
+
     const test_step = b.step("test", "Run all tests in all modes.");
     const tests = b.addTest(.{
         .root_source_file = .{ .path = "clap.zig" },
