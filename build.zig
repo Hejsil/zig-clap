@@ -4,7 +4,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
 
-    const clap_mod = b.addModule("clap", .{ .source_file = .{ .path = "clap.zig" } });
+    b.addModule(.{ .name = "clap", .source_file = .{ .path = "clap.zig" } });
 
     const test_step = b.step("test", "Run all tests in all modes.");
     const tests = b.addTest(.{
