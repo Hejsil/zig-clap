@@ -651,6 +651,21 @@ pub const ParseOptions = struct {
     ///       is fine, as it wraps it in an arena)
     allocator: mem.Allocator = heap.page_allocator,
     diagnostic: ?*Diagnostic = null,
+
+    // Start passing through arguments after the nth positional is encountered.
+    // For example, given the following arg contents:
+    //   node --node-arg1 test.js --app-arg1
+    //
+    // The default behavior (passthrough_after_nth_positional=0):
+    //   * --node-arg1 and --app-arg1 are both parsed by clap
+    //   * positionals = [ test.js ]
+    //   * passthroughs = []
+    //
+    // But with passthrough_after_nth_positional=1:
+    //   * --node-arg1 is parsed by clap
+    //   * positionals = [ test.js ]
+    //   * passthroughs = [ --app-arg ]
+    passthrough_after_nth_positional: usize = 0,
 };
 
 /// Same as `parseEx` but uses the `args.OsIterator` by default.
@@ -670,11 +685,13 @@ pub fn parse(
         // Let's reuse the arena from the `OSIterator` since we already have it.
         .allocator = arena.allocator(),
         .diagnostic = opt.diagnostic,
+        .passthrough_after_nth_positional = opt.passthrough_after_nth_positional,
     });
 
     return Result(Id, params, value_parsers){
         .args = result.args,
         .positionals = result.positionals,
+        .passthroughs = result.passthroughs,
         .exe_arg = exe_arg,
         .arena = arena,
     };
@@ -689,6 +706,9 @@ pub fn Result(
     return struct {
         args: Arguments(Id, params, value_parsers, .slice),
         positionals: []const FindPositionalType(Id, params, value_parsers),
+
+        // Arguments unparsed by clap (typically those following "--")
+        passthroughs: []const []const u8,
         exe_arg: ?[]const u8,
         arena: std.heap.ArenaAllocator,
 
@@ -743,6 +763,7 @@ pub fn parseEx(
         .diagnostic = opt.diagnostic,
     };
     while (try stream.next()) |arg| {
+
         // TODO: We cannot use `try` inside the inline for because of a compiler bug that
         //       generates an infinite loop. For now, use a variable to store the error
         //       and use `try` outside. The downside of this is that we have to use
@@ -763,6 +784,17 @@ pub fn parseEx(
         }
 
         try res;
+
+        if (opt.passthrough_after_nth_positional > 0 and
+            opt.passthrough_after_nth_positional == positionals.items.len) {
+            break;  // all remaining arguments should be passed through
+        }
+    }
+
+    // Any remaining arguments should be passed through unparsed
+    var passthroughs = std.ArrayList(Positional).init(allocator);
+    while (iter.next()) |arg| {
+        try passthroughs.append(arg);
     }
 
     // We are done parsing, but our arguments are stored in lists, and not slices. Map the list
@@ -782,6 +814,7 @@ pub fn parseEx(
     return ResultEx(Id, params, value_parsers){
         .args = result_args,
         .positionals = try positionals.toOwnedSlice(),
+        .passthroughs = try passthroughs.toOwnedSlice(),
         .allocator = allocator,
     };
 }
@@ -823,11 +856,15 @@ pub fn ResultEx(
     return struct {
         args: Arguments(Id, params, value_parsers, .slice),
         positionals: []const FindPositionalType(Id, params, value_parsers),
+
+        // Arguments unparsed by clap (typically those following "--")
+        passthroughs: []const []const u8,
         allocator: mem.Allocator,
 
         pub fn deinit(result: *@This()) void {
             deinitArgs(Id, params, result.allocator, &result.args);
             result.allocator.free(result.positionals);
+            result.allocator.free(result.passthroughs);
         }
     };
 }
@@ -986,6 +1023,72 @@ test "empty" {
         .allocator = testing.allocator,
     });
     defer res.deinit();
+}
+
+test "passthrough_after_nth_positional" {
+    const params = comptime parseParamsComptime(
+        \\-a, --aa
+        \\-b, --bb
+        \\-c, --cc <str>
+        \\-d, --dd <usize>...
+        \\<str>
+        \\
+    );
+
+    var iter = args.SliceIterator{
+        .args = &.{ "-a", "-c", "0", "-d", "1", "my_script.js", "--dd", "2" },
+    };
+    var res = try parseEx(Help, &params, parsers.default, &iter, .{
+        .allocator = testing.allocator,
+        .passthrough_after_nth_positional = 1,
+    });
+    defer res.deinit();
+
+    try testing.expect(res.args.aa);
+    try testing.expect(!res.args.bb);
+    try testing.expectEqualStrings("0", res.args.cc.?);
+    // dd should only be set to the first usage because the second usage is now
+    //  in passthrough positionals
+    try testing.expectEqualSlices(usize, &.{ 1 }, res.args.dd);
+    try testing.expectEqual(@as(usize, 1), res.positionals.len);
+    try testing.expectEqualStrings("my_script.js", res.positionals[0]);
+
+    // Second usage of --dd is now in passthroughs
+    try testing.expectEqual(@as(usize, 2), res.passthroughs.len);
+    try testing.expectEqualStrings("--dd", res.passthroughs[0]);
+    try testing.expectEqualStrings("2", res.passthroughs[1]);
+}
+test "passthrough after --" {
+    const params = comptime parseParamsComptime(
+        \\-a, --aa
+        \\-b, --bb
+        \\-c, --cc <str>
+        \\-d, --dd <usize>...
+        \\<str>
+        \\
+    );
+
+    var iter = args.SliceIterator{
+        .args = &.{ "-a", "-c", "0", "-d", "1", "--", "--dd", "2" },
+    };
+    var res = try parseEx(Help, &params, parsers.default, &iter, .{
+        .allocator = testing.allocator,
+        .passthrough_after_nth_positional = 1,
+    });
+    defer res.deinit();
+
+    try testing.expect(res.args.aa);
+    try testing.expect(!res.args.bb);
+    try testing.expectEqualStrings("0", res.args.cc.?);
+    // dd should only be set to the first usage because the second usage is now
+    //  in passthrough positionals
+    try testing.expectEqualSlices(usize, &.{ 1 }, res.args.dd);
+    try testing.expectEqual(@as(usize, 0), res.positionals.len);
+
+    // Second usage of --dd is now in passthroughs
+    try testing.expectEqual(@as(usize, 2), res.passthroughs.len);
+    try testing.expectEqualStrings("--dd", res.passthroughs[0]);
+    try testing.expectEqualStrings("2", res.passthroughs[1]);
 }
 
 fn testErr(

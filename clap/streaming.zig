@@ -36,7 +36,6 @@ pub fn Clap(comptime Id: type, comptime ArgIterator: type) type {
         const State = union(enum) {
             normal,
             chaining: Chaining,
-            rest_are_positional,
 
             const Chaining = struct {
                 arg: []const u8,
@@ -55,11 +54,6 @@ pub fn Clap(comptime Id: type, comptime ArgIterator: type) type {
             switch (parser.state) {
                 .normal => return try parser.normal(),
                 .chaining => |state| return try parser.chaining(state),
-                .rest_are_positional => {
-                    const param = parser.positionalParam() orelse unreachable;
-                    const value = parser.iter.next() orelse return null;
-                    return Arg(Id){ .param = param, .value = value };
-                },
             }
         }
 
@@ -103,12 +97,10 @@ pub fn Clap(comptime Id: type, comptime ArgIterator: type) type {
                 }),
                 .positional => if (parser.positionalParam()) |param| {
                     // If we find a positional with the value `--` then we
-                    // interpret the rest of the arguments as positional
-                    // arguments.
+                    //  stop parsing so that remaining arguments are passed
+                    //  through
                     if (mem.eql(u8, arg, "--")) {
-                        parser.state = .rest_are_positional;
-                        const value = parser.iter.next() orelse return null;
-                        return Arg(Id){ .param = param, .value = value };
+                        return null;
                     }
 
                     return Arg(Id){ .param = param, .value = arg };
@@ -390,7 +382,8 @@ test "all params" {
             "-c",   "0",     "-c=0",   "-ac",
             "0",    "-ac=0", "--aa",   "--bb",
             "--cc", "0",     "--cc=0", "something",
-            "-",    "--",    "--cc=0", "-a",
+            "-",    "--", // ignore everything after '--'
+            //    "--cc=0", "-a",
         },
         &.{
             .{ .param = aa },
@@ -411,8 +404,8 @@ test "all params" {
             .{ .param = cc, .value = "0" },
             .{ .param = positional, .value = "something" },
             .{ .param = positional, .value = "-" },
-            .{ .param = positional, .value = "--cc=0" },
-            .{ .param = positional, .value = "-a" },
+            //.{ .param = positional, .value = "--cc=0" },
+            //.{ .param = positional, .value = "-a" },
         },
     );
 }
