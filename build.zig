@@ -1,10 +1,10 @@
 const std = @import("std");
 
 pub fn build(b: *std.Build) void {
+    b.addModule(.{ .name = "clap", .source_file = .{ .path = "clap.zig" } });
+
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
-
-    b.addModule(.{ .name = "clap", .source_file = .{ .path = "clap.zig" } });
 
     const test_step = b.step("test", "Run all tests in all modes.");
     const tests = b.addTest(.{
