@@ -1731,7 +1731,7 @@ pub fn usage(stream: anytype, comptime Id: type, params: []const Param(Id)) !voi
     if (cos.bytes_written != 0)
         try cs.writeAll("]");
 
-    var positional: ?Param(Id) = null;
+    var has_positionals: bool = false;
     for (params) |param| {
         if (param.takes_value == .none and param.names.short != null)
             continue;
@@ -1743,7 +1743,7 @@ pub fn usage(stream: anytype, comptime Id: type, params: []const Param(Id)) !voi
             @ptrCast([*]const u8, s)[0..1]
         else
             param.names.long orelse {
-                positional = param;
+                has_positionals = true;
                 continue;
             };
 
@@ -1764,14 +1764,20 @@ pub fn usage(stream: anytype, comptime Id: type, params: []const Param(Id)) !voi
         try cs.writeByte(']');
     }
 
-    if (positional) |p| {
+    if (!has_positionals)
+        return;
+
+    for (params) |param| {
+        if (param.names.short != null or param.names.long != null)
+            continue;
+
         if (cos.bytes_written != 0)
             try cs.writeAll(" ");
 
         try cs.writeAll("<");
-        try cs.writeAll(p.id.value());
+        try cs.writeAll(param.id.value());
         try cs.writeAll(">");
-        if (p.takes_value == .many)
+        if (param.takes_value == .many)
             try cs.writeAll("...");
     }
 }
