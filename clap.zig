@@ -1142,8 +1142,6 @@ pub fn help(
 
     var first_paramter: bool = true;
     for (params) |param| {
-        if (param.names.longest().kind == .positional)
-            continue;
         if (!first_paramter)
             try writer.writeByteNTimes('\n', opt.spacing_between_parameters);
 
@@ -1308,21 +1306,26 @@ fn printParam(
     comptime Id: type,
     param: Param(Id),
 ) !void {
-    try stream.writeAll(&[_]u8{
-        if (param.names.short) |_| '-' else ' ',
-        param.names.short orelse ' ',
-    });
+    if (param.names.short != null or param.names.long != null) {
+        try stream.writeAll(&[_]u8{
+            if (param.names.short) |_| '-' else ' ',
+            param.names.short orelse ' ',
+        });
 
-    if (param.names.long) |l| {
-        try stream.writeByte(if (param.names.short) |_| ',' else ' ');
-        try stream.writeAll(" --");
-        try stream.writeAll(l);
+        if (param.names.long) |l| {
+            try stream.writeByte(if (param.names.short) |_| ',' else ' ');
+            try stream.writeAll(" --");
+            try stream.writeAll(l);
+        }
+
+        if (param.takes_value != .none)
+            try stream.writeAll(" ");
     }
 
     if (param.takes_value == .none)
         return;
 
-    try stream.writeAll(" <");
+    try stream.writeAll("<");
     try stream.writeAll(param.id.value());
     try stream.writeAll(">");
     if (param.takes_value == .many)
