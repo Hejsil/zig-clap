@@ -1829,4 +1829,16 @@ test "usage" {
             \\
         ),
     );
+    try testUsage("<number> <file> <file>", &comptime parseParamsComptime(
+        \\<number>
+        \\<file>
+        \\<file>
+        \\
+    ));
+    try testUsage("<number> <outfile> <infile>...", &comptime parseParamsComptime(
+        \\<number>
+        \\<outfile>
+        \\<infile>...
+        \\
+    ));
 }
