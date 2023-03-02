@@ -1372,6 +1372,12 @@ test "clap.help" {
         \\    -d, --dd <V3>...
         \\            Both repeated option.
         \\
+        \\    <A>
+        \\            Help text
+        \\
+        \\    <B>...
+        \\            Another help text
+        \\
     );
 
     try testHelp(.{ .markdown_lite = false },
