@@ -1,7 +1,7 @@
 const std = @import("std");
 
 pub fn build(b: *std.Build) void {
-    b.addModule(.{ .name = "clap", .source_file = .{ .path = "clap.zig" } });
+    const clap_mod = b.addModule("clap", .{ .source_file = .{ .path = "clap.zig" } });
 
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
@@ -28,7 +28,7 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
         });
-        example.addAnonymousModule("clap", .{ .source_file = .{ .path = "clap.zig" } });
+        example.addModule("clap", clap_mod);
         example.install();
         example_step.dependOn(&example.step);
     }
