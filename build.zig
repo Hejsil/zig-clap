@@ -12,7 +12,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    test_step.dependOn(&tests.step);
+    test_step.dependOn(&tests.run().step);
 
     const example_step = b.step("examples", "Build examples");
     inline for (.{
