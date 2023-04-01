@@ -28,7 +28,7 @@ pub fn main() !void {
     };
     defer res.deinit();
 
-    if (res.args.help)
+    if (res.args.help != 0)
         debug.print("--help\n", .{});
     if (res.args.number) |n|
         debug.print("--number = {}\n", .{n});

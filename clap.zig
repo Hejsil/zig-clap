@@ -803,7 +803,7 @@ fn parseArg(
     const longest = comptime param.names.longest();
     switch (longest.kind) {
         .short, .long => switch (param.takes_value) {
-            .none => @field(arguments, longest.name) = true,
+            .none => @field(arguments, longest.name) += 1,
             .one => @field(arguments, longest.name) = try parser(arg.value.?),
             .many => {
                 const value = try parser(arg.value.?);
@@ -912,7 +912,7 @@ fn Arguments(
 
         const T = ParamType(Id, param, value_parsers);
         const default_value = switch (param.takes_value) {
-            .none => false,
+            .none => @as(u8, 0),
             .one => @as(?T, null),
             .many => switch (multi_arg_kind) {
                 .slice => @as([]const T, &[_]T{}),
@@ -965,15 +965,15 @@ test "everything" {
     );
 
     var iter = args.SliceIterator{
-        .args = &.{ "-a", "-c", "0", "something", "-d", "1", "--dd", "2" },
+        .args = &.{ "-a", "--aa", "-c", "0", "something", "-d", "1", "--dd", "2" },
     };
     var res = try parseEx(Help, &params, parsers.default, &iter, .{
         .allocator = testing.allocator,
     });
     defer res.deinit();
 
-    try testing.expect(res.args.aa);
-    try testing.expect(!res.args.bb);
+    try testing.expect(res.args.aa == 2);
+    try testing.expect(res.args.bb == 0);
     try testing.expectEqualStrings("0", res.args.cc.?);
     try testing.expectEqual(@as(usize, 1), res.positionals.len);
     try testing.expectEqualStrings("something", res.positionals[0]);
