@@ -803,7 +803,7 @@ fn parseArg(
     const longest = comptime param.names.longest();
     switch (longest.kind) {
         .short, .long => switch (param.takes_value) {
-            .none => @field(arguments, longest.name) += 1,
+            .none => @field(arguments, longest.name) +|= 1,
             .one => @field(arguments, longest.name) = try parser(arg.value.?),
             .many => {
                 const value = try parser(arg.value.?);
@@ -978,6 +978,22 @@ test "everything" {
     try testing.expectEqual(@as(usize, 1), res.positionals.len);
     try testing.expectEqualStrings("something", res.positionals[0]);
     try testing.expectEqualSlices(usize, &.{ 1, 2 }, res.args.dd);
+}
+
+test "overflow-safe" {
+    const params = comptime parseParamsComptime(
+        \\-a, --aa
+    );
+
+    var iter = args.SliceIterator{
+        .args = &(.{ "-" ++ ("a" ** 300) }),
+    };
+
+    // This just needs to not crash
+    var res = try parseEx(Help, &params, parsers.default, &iter, .{
+        .allocator = testing.allocator,
+    });
+    defer res.deinit();
 }
 
 test "empty" {
