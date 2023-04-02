@@ -14,6 +14,7 @@ in the release notes.
 
 * Short arguments `-a`
   * Chaining `-abc` where `a` and `b` does not take values.
+  * Multiple specifications are tallied (e.g. `-v -v`).
 * Long arguments `--long`
 * Supports both passing values using spacing and `=` (`-a 100`, `-a=100`)
   * Short args also support passing values with no spacing or `=` (`-a100`)

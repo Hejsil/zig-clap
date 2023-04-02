@@ -14,6 +14,7 @@ in the release notes.
 
 * Short arguments `-a`
   * Chaining `-abc` where `a` and `b` does not take values.
+  * Multiple specifications are tallied (e.g. `-v -v`).
 * Long arguments `--long`
 * Supports both passing values using spacing and `=` (`-a 100`, `-a=100`)
   * Short args also support passing values with no spacing or `=` (`-a100`)
@@ -59,7 +60,7 @@ pub fn main() !void {
     };
     defer res.deinit();
 
-    if (res.args.help)
+    if (res.args.help != 0)
         debug.print("--help\n", .{});
     if (res.args.number) |n|
         debug.print("--number = {}\n", .{n});
@@ -121,7 +122,7 @@ pub fn main() !void {
     };
     defer res.deinit();
 
-    if (res.args.help)
+    if (res.args.help != 0)
         debug.print("--help\n", .{});
     if (res.args.number) |n|
         debug.print("--number = {}\n", .{n});
@@ -231,7 +232,7 @@ pub fn main() !void {
     // where `Id` has a `describtion` and `value` method (`Param(Help)` is one such parameter).
     // The last argument contains options as to how `help` should print those parameters. Using
     // `.{}` means the default options.
-    if (res.args.help)
+    if (res.args.help != 0)
         return clap.help(std.io.getStdErr().writer(), clap.Help, &params, .{});
 }
 
@@ -268,7 +269,7 @@ pub fn main() !void {
 
     // `clap.usage` is a function that can print a simple help message. It can print any `Param`
     // where `Id` has a `value` method (`Param(Help)` is one such parameter).
-    if (res.args.help)
+    if (res.args.help != 0)
         return clap.usage(std.io.getStdErr().writer(), clap.Help, &params);
 }
 

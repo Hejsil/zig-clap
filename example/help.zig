@@ -15,6 +15,6 @@ pub fn main() !void {
     // where `Id` has a `describtion` and `value` method (`Param(Help)` is one such parameter).
     // The last argument contains options as to how `help` should print those parameters. Using
     // `.{}` means the default options.
-    if (res.args.help)
+    if (res.args.help != 0)
         return clap.help(std.io.getStdErr().writer(), clap.Help, &params, .{});
 }

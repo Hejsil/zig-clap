@@ -14,6 +14,6 @@ pub fn main() !void {
 
     // `clap.usage` is a function that can print a simple help message. It can print any `Param`
     // where `Id` has a `value` method (`Param(Help)` is one such parameter).
-    if (res.args.help)
+    if (res.args.help != 0)
         return clap.usage(std.io.getStdErr().writer(), clap.Help, &params);
 }
