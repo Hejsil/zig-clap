@@ -12,10 +12,11 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    test_step.dependOn(&tests.run().step);
+    const run_tests = b.addRunArtifact(tests);
+    test_step.dependOn(&run_tests.step);
 
     const example_step = b.step("examples", "Build examples");
-    inline for (.{
+    for ([_][]const u8{
         "simple",
         "simple-ex",
         "streaming-clap",
@@ -24,13 +25,14 @@ pub fn build(b: *std.Build) void {
     }) |example_name| {
         const example = b.addExecutable(.{
             .name = example_name,
-            .root_source_file = .{ .path = "example/" ++ example_name ++ ".zig" },
+            .root_source_file = .{ .path = b.fmt("example/{s}.zig", .{example_name}) },
             .target = target,
             .optimize = optimize,
         });
+        const install_example = b.addInstallArtifact(example);
         example.addModule("clap", clap_mod);
-        example.install();
         example_step.dependOn(&example.step);
+        example_step.dependOn(&install_example.step);
     }
 
     const readme_step = b.step("readme", "Remake README.");
