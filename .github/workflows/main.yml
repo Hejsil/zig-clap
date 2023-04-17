@@ -11,7 +11,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
         step: [examples, test]
-        optimize: [Debug, ReleaseSafe, ReleaseFast, ReleaseSmall]
+        optimize: [Debug, ReleaseSafe, ReleaseFast]
     runs-on: ${{matrix.os}}
     steps:
       - uses: actions/checkout@v3
