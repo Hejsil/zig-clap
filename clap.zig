@@ -1201,7 +1201,7 @@ pub fn help(
             const indented_line = if (first_line and !mem.startsWith(u8, raw_line, " "))
                 raw_line
             else
-                raw_line[math.min(min_description_indent, raw_line.len)..];
+                raw_line[@min(min_description_indent, raw_line.len)..];
 
             const line = mem.trimLeft(u8, indented_line, " ");
             if (line.len == 0) {
