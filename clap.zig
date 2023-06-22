@@ -1138,7 +1138,7 @@ pub fn help(
 
     const description_indentation = opt.indent +
         opt.description_indent +
-        max_spacing * @boolToInt(!opt.description_on_new_line);
+        max_spacing * @intFromBool(!opt.description_on_new_line);
 
     var first_paramter: bool = true;
     for (params) |param| {
@@ -1266,7 +1266,7 @@ fn DescriptionWriter(comptime UnderlyingWriter: type) type {
             debug.assert(word.len != 0);
 
             var first_word = writer.printed_chars <= writer.indentation;
-            const chars_to_write = word.len + @boolToInt(!first_word);
+            const chars_to_write = word.len + @intFromBool(!first_word);
             if (chars_to_write + writer.printed_chars > writer.max_width) {
                 // If the word does not fit on this line, then we insert a new line and print
                 // it on that line. The only exception to this is if this was the first word.
