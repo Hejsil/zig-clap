@@ -923,7 +923,7 @@ fn Arguments(
         fields[i] = .{
             .name = longest.name,
             .type = @TypeOf(default_value),
-            .default_value = @ptrCast(*const anyopaque, &default_value),
+            .default_value = @ptrCast(&default_value),
             .is_comptime = false,
             .alignment = @alignOf(@TypeOf(default_value)),
         };
@@ -1130,7 +1130,7 @@ pub fn help(
             var cs = io.countingWriter(io.null_writer);
             try printParam(cs.writer(), Id, param);
             if (res < cs.bytes_written)
-                res = @intCast(usize, cs.bytes_written);
+                res = @intCast(cs.bytes_written);
         }
 
         break :blk res;
@@ -1155,7 +1155,7 @@ pub fn help(
         var description_writer = Writer{
             .underlying_writer = writer,
             .indentation = description_indentation,
-            .printed_chars = @intCast(usize, cw.bytes_written),
+            .printed_chars = @intCast(cw.bytes_written),
             .max_width = opt.max_width,
         };
 
@@ -1746,15 +1746,15 @@ pub fn usage(stream: anytype, comptime Id: type, params: []const Param(Id)) !voi
             continue;
 
         const prefix = if (param.names.short) |_| "-" else "--";
-        const name = if (param.names.short) |*s|
-            // Seems the zig compiler is being a little weird. I doesn't allow me to write
-            // @as(*const [1]u8, s)
-            @ptrCast([*]const u8, s)[0..1]
-        else
-            param.names.long orelse {
-                has_positionals = true;
-                continue;
-            };
+        const name = blk: {
+            if (param.names.short) |*s|
+                break :blk @as(*const [1]u8, s);
+            if (param.names.long) |l|
+                break :blk l;
+
+            has_positionals = true;
+            continue;
+        };
 
         if (cos.bytes_written != 0)
             try cs.writeAll(" ");
