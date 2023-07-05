@@ -23,6 +23,44 @@ in the release notes.
 * Print help message from parameter specification.
 * Parse help message to parameter specification.
 
+## Usage
+
+1. Add `clap` as a dependency in your `build.zig.zon`.
+
+    <details>
+
+    <summary><code>build.zig.zon</code> example</summary>
+
+    ```zig
+    .{
+        .name = "<name_of_your_program>",
+        .version = "<version_of_your_program>",
+        .dependencies = .{
+            .clap = .{
+                .url = "https://github.com/tensorush/zig-clap/archive/refs/tags/<git_tag>.tar.gz",
+                .hash = "<package_hash>",
+            },
+        },
+    }
+    ```
+
+    If unsure what to put for `<package_hash>`, set it to any value and Zig will provide the correct one in an error message.
+
+    </details>
+
+2. Add `clap` as a module in your `build.zig`.
+
+    <details>
+
+    <summary><code>build.zig</code> example</summary>
+
+    ```zig
+    const clap = b.dependency("clap", .{});
+    exe.addModule("clap", clap.module("clap"));
+    ```
+
+    </details>
+
 ## Examples
 
 ### `clap.parse`
@@ -279,4 +317,3 @@ pub fn main() !void {
 $ zig-out/bin/usage --help
 [-hv] [--value <str>]
 ```
-
