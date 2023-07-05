@@ -33,18 +33,18 @@ in the release notes.
 
     ```zig
     .{
-        .name = "<name_of_your_program>",
-        .version = "<version_of_your_program>",
+        .name = "<name_of_your_package>",
+        .version = "<version_of_your_package>",
         .dependencies = .{
-            .clap = .{
-                .url = "https://github.com/tensorush/zig-clap/archive/refs/tags/<git_tag>.tar.gz",
+            .typeid = .{
+                .url = "https://github.com/tensorush/zig-typeid/archive/<git_tag_commit_hash>.tar.gz",
                 .hash = "<package_hash>",
             },
         },
     }
     ```
 
-    If unsure what to put for `<package_hash>`, set it to any value and Zig will provide the correct one in an error message.
+    Set `<package_hash>` to any value and Zig will provide the correct one in an error message.
 
     </details>
 
