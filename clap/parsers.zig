@@ -20,6 +20,7 @@ pub const default = .{
     .f64 = float(f64),
 };
 
+/// A parser that does nothing.
 pub fn string(in: []const u8) error{}![]const u8 {
     return in;
 }
@@ -28,10 +29,12 @@ test "string" {
     try testing.expectEqualStrings("aa", try string("aa"));
 }
 
-pub fn int(comptime T: type, comptime radix: u8) fn ([]const u8) fmt.ParseIntError!T {
+/// A parser that uses `std.fmt.parseInt` to parse the string into an integer value.
+/// See `std.fmt.parseInt` documentation for more information.
+pub fn int(comptime T: type, comptime base: u8) fn ([]const u8) fmt.ParseIntError!T {
     return struct {
         fn parse(in: []const u8) fmt.ParseIntError!T {
-            return fmt.parseInt(T, in, radix);
+            return fmt.parseInt(T, in, base);
         }
     }.parse;
 }
@@ -44,6 +47,8 @@ test "int" {
     try testing.expectEqual(@as(u8, 0b10), try int(u8, 0)("0b10"));
 }
 
+/// A parser that uses `std.fmt.parseFloat` to parse the string into an float value.
+/// See `std.fmt.parseFloat` documentation for more information.
 pub fn float(comptime T: type) fn ([]const u8) fmt.ParseFloatError!T {
     return struct {
         fn parse(in: []const u8) fmt.ParseFloatError!T {
@@ -60,6 +65,9 @@ pub const EnumError = error{
     NameNotPartOfEnum,
 };
 
+/// A parser that uses `std.meta.stringToEnum` to parse the string into an enum value. On `null`,
+/// this function returns the error `NameNotPartOfEnum`.
+/// See `std.meta.stringToEnum` documentation for more information.
 pub fn enumeration(comptime T: type) fn ([]const u8) EnumError!T {
     return struct {
         fn parse(in: []const u8) EnumError!T {
