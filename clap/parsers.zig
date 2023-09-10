@@ -43,8 +43,15 @@ test "int" {
     try testing.expectEqual(@as(u8, 0), try int(u8, 10)("0"));
     try testing.expectEqual(@as(u8, 1), try int(u8, 10)("1"));
     try testing.expectEqual(@as(u8, 10), try int(u8, 10)("10"));
+    try testing.expectEqual(@as(u8, 0b10), try int(u8, 2)("10"));
     try testing.expectEqual(@as(u8, 0x10), try int(u8, 0)("0x10"));
     try testing.expectEqual(@as(u8, 0b10), try int(u8, 0)("0b10"));
+    try testing.expectEqual(@as(u16, 0), try int(u16, 10)("0"));
+    try testing.expectEqual(@as(u16, 1), try int(u16, 10)("1"));
+    try testing.expectEqual(@as(u16, 10), try int(u16, 10)("10"));
+    try testing.expectEqual(@as(u16, 0b10), try int(u16, 2)("10"));
+    try testing.expectEqual(@as(u16, 0x10), try int(u16, 0)("0x10"));
+    try testing.expectEqual(@as(u16, 0b10), try int(u16, 0)("0b10"));
 }
 
 /// A parser that uses `std.fmt.parseFloat` to parse the string into an float value.
