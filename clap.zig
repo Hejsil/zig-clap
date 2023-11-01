@@ -92,6 +92,7 @@ pub fn Param(comptime Id: type) type {
         id: Id,
         names: Names = Names{},
         takes_value: Values = .none,
+        required: bool = false,
     };
 }
 
@@ -138,6 +139,7 @@ fn countParams(str: []const u8) usize {
     var it = mem.split(u8, str, "\n");
     while (it.next()) |line| {
         const trimmed = mem.trimLeft(u8, line, " \t");
+        // A line starts with either `-` in case of an option or `<` for positional parameters
         if (mem.startsWith(u8, trimmed, "-") or
             mem.startsWith(u8, trimmed, "<"))
         {
@@ -150,7 +152,7 @@ fn countParams(str: []const u8) usize {
 
 /// Takes a string and parses it into many Param(Help), which are written to `slice`. A subslice
 /// is returned, containing all the parameters parsed. This function will fail if the input slice
-/// is to small.
+/// is too small.
 pub fn parseParamsIntoSlice(slice: []Param(Help), str: []const u8) ![]Param(Help) {
     var null_alloc = heap.FixedBufferAllocator.init("");
     var list = std.ArrayList(Param(Help)){
@@ -165,7 +167,7 @@ pub fn parseParamsIntoSlice(slice: []Param(Help), str: []const u8) ![]Param(Help
 
 /// Takes a string and parses it into many Param(Help), which are written to `slice`. A subslice
 /// is returned, containing all the parameters parsed. This function will fail if the input slice
-/// is to small.
+/// is too small.
 pub fn parseParamsIntoSliceEx(slice: []Param(Help), str: []const u8, end: *usize) ![]Param(Help) {
     var null_alloc = heap.FixedBufferAllocator.init("");
     var list = std.ArrayList(Param(Help)){
@@ -234,6 +236,8 @@ pub fn parseParamEx(str: []const u8, end: *usize) !Param(Help) {
 
         first_char_of_value,
         rest_of_value,
+        first_char_of_default_value,
+        rest_of_default_value,
         end_of_one_value,
         second_dot_of_multi_value,
         third_dot_of_multi_value,
@@ -249,7 +253,13 @@ pub fn parseParamEx(str: []const u8, end: *usize) !Param(Help) {
             .start => switch (c) {
                 ' ', '\t', '\n' => {},
                 '-' => state = .start_of_short_name,
-                '<' => state = .first_char_of_value,
+                '<', '[' => {
+                    state = .first_char_of_value;
+                    switch (c) {
+                        '<' => res.required = true,
+                        else => {},
+                    }
+                },
                 else => return error.InvalidParameter,
             },
 
@@ -306,7 +316,11 @@ pub fn parseParamEx(str: []const u8, end: *usize) !Param(Help) {
             .before_long_name_or_value_or_description => switch (c) {
                 ' ', '\t' => {},
                 ',' => state = .before_long_name,
-                '<' => state = .first_char_of_value,
+                '[' => state = .first_char_of_value,
+                '<' => {
+                    state = .first_char_of_value;
+                    res.required = true;
+                },
                 else => {
                     start = i;
                     state = .rest_of_description;
@@ -315,24 +329,47 @@ pub fn parseParamEx(str: []const u8, end: *usize) !Param(Help) {
 
             .before_value_or_description => switch (c) {
                 ' ', '\t' => {},
-                '<' => state = .first_char_of_value,
+                '[' => state = .first_char_of_value,
+                '<' => {
+                    state = .first_char_of_value;
+                    res.required = true;
+                },
                 else => {
                     start = i;
                     state = .rest_of_description;
                 },
             },
             .first_char_of_value => switch (c) {
-                '>' => return error.InvalidParameter,
+                '>', ']' => return error.InvalidParameter,
                 else => {
                     start = i;
                     state = .rest_of_value;
                 },
             },
             .rest_of_value => switch (c) {
-                '>' => {
+                '>', ']', '=' => {
                     res.takes_value = .one;
                     res.id.val = str[start..i];
-                    state = .end_of_one_value;
+                    switch (c) {
+                        '>', ']' => state = .end_of_one_value,
+                        '=' => state = .first_char_of_default_value,
+                        else => unreachable,
+                    }
+                },
+                else => {},
+            },
+            .first_char_of_default_value => switch (c) {
+                '>', ']', '=' => return error.InvalidParameter,
+                ' ', '\t' => {},
+                else => {
+                    start = i;
+                    state = .rest_of_default_value;
+                },
+            },
+            .rest_of_default_value => switch (c) {
+                '>', ']' => {
+                    res.id.default = str[start..i];
+                    state = .before_description;
                 },
                 else => {},
             },
@@ -429,6 +466,8 @@ fn testParseParams(str: []const u8, expected_params: []const Param(Help)) !void 
 fn expectParam(expect: Param(Help), actual: Param(Help)) !void {
     try testing.expectEqualStrings(expect.id.desc, actual.id.desc);
     try testing.expectEqualStrings(expect.id.val, actual.id.val);
+    try testing.expectEqualStrings(expect.id.default, actual.id.default);
+    try testing.expectEqual(expect.required, actual.required);
     try testing.expectEqual(expect.names.short, actual.names.short);
     try testing.expectEqual(expect.takes_value, actual.takes_value);
     if (expect.names.long) |long| {
@@ -446,6 +485,8 @@ test "parseParams" {
         \\--str_str
         \\-s, --str
         \\--str <str>
+        \\--str [str]
+        \\--str [str=foobar]
         \\-s, --str <str>
         \\-s, --long <val> Help text
         \\-s, --long <val>... Help text
@@ -474,31 +515,49 @@ test "parseParams" {
             .id = .{ .val = "str" },
             .names = .{ .long = "str" },
             .takes_value = .one,
+            .required = true,
+        },
+        .{
+            .id = .{ .val = "str" },
+            .names = .{ .long = "str" },
+            .takes_value = .one,
+            .required = false,
+        },
+        .{
+            .id = .{ .val = "str", .default = "foobar" },
+            .names = .{ .long = "str" },
+            .takes_value = .one,
+            .required = false,
         },
         .{
             .id = .{ .val = "str" },
             .names = .{ .short = 's', .long = "str" },
             .takes_value = .one,
+            .required = true,
         },
         .{
             .id = .{ .desc = "Help text", .val = "val" },
             .names = .{ .short = 's', .long = "long" },
             .takes_value = .one,
+            .required = true,
         },
         .{
             .id = .{ .desc = "Help text", .val = "val" },
             .names = .{ .short = 's', .long = "long" },
             .takes_value = .many,
+            .required = true,
         },
         .{
             .id = .{ .desc = "Help text", .val = "val" },
             .names = .{ .long = "long" },
             .takes_value = .one,
+            .required = true,
         },
         .{
             .id = .{ .desc = "Help text", .val = "val" },
             .names = .{ .short = 's' },
             .takes_value = .one,
+            .required = true,
         },
         .{
             .id = .{ .desc = "Help text" },
@@ -516,15 +575,18 @@ test "parseParams" {
             .id = .{ .desc = "Help text", .val = "A | B" },
             .names = .{ .long = "long" },
             .takes_value = .one,
+            .required = true,
         },
         .{
             .id = .{ .desc = "Help text", .val = "A" },
             .takes_value = .one,
+            .required = true,
         },
         .{
             .id = .{ .desc = "Help text", .val = "A" },
             .names = .{},
             .takes_value = .many,
+            .required = true,
         },
         .{
             .id = .{
@@ -1049,6 +1111,7 @@ test "errors" {
 pub const Help = struct {
     desc: []const u8 = "",
     val: []const u8 = "",
+    default: []const u8 = "",
 
     pub fn description(h: Help) []const u8 {
         return h.desc;
