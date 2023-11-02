@@ -4,6 +4,7 @@ const fmt = std.fmt;
 const testing = std.testing;
 
 pub const default = .{
+    .bool = boolean,
     .string = string,
     .str = string,
     .u8 = int(u8, 0),
@@ -27,6 +28,24 @@ pub fn string(in: []const u8) error{}![]const u8 {
 
 test "string" {
     try testing.expectEqualStrings("aa", try string("aa"));
+}
+
+/// Parse boolean value. False, off and 0 considered false, everything else is true.
+pub fn boolean(in: []const u8) error{ParameterTooLong}!bool {
+    // check if input is not too long
+    const MAX_LEN = 16;
+    if (in.len >= MAX_LEN) return error.ParameterTooLong;
+
+    // convert to lowercase
+    var lower: [MAX_LEN]u8 = undefined;
+    for (in, 0..) |c, i| {
+        lower[i] = std.ascii.toLower(c);
+    }
+
+    if (std.mem.eql(u8, "0", lower[0..in.len]) or
+        std.mem.eql(u8, "off", lower[0..in.len]) or
+        std.mem.eql(u8, "false", lower[0..in.len])) return false;
+    return true;
 }
 
 /// A parser that uses `std.fmt.parseInt` to parse the string into an integer value.

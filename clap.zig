@@ -487,6 +487,9 @@ test "parseParams" {
         \\--str <str>
         \\--str [str]
         \\--str [str=foobar]
+        \\-s, --switch [bool]
+        \\-s <bool>
+        \\-s [bool=on]
         \\-s, --str <str>
         \\-s, --long <val> Help text
         \\-s, --long <val>... Help text
@@ -526,6 +529,27 @@ test "parseParams" {
         .{
             .id = .{ .val = "str", .default = "foobar" },
             .names = .{ .long = "str" },
+            .takes_value = .one,
+            .required = false,
+        },
+        .{
+            //-s, --switch [bool]
+            .id = .{ .val = "bool" },
+            .names = .{ .short = 's', .long = "switch" },
+            .takes_value = .one,
+            .required = false,
+        },
+        .{
+            //-s <bool>
+            .id = .{ .val = "bool" },
+            .names = .{ .short = 's' },
+            .takes_value = .one,
+            .required = true,
+        },
+        .{
+            //-s [bool=on]
+            .id = .{ .val = "bool", .default = "on" },
+            .names = .{ .short = 's' },
             .takes_value = .one,
             .required = false,
         },
@@ -792,6 +816,7 @@ pub fn parseEx(
     iter: anytype,
     opt: ParseOptions,
 ) !ResultEx(Id, params, value_parsers) {
+    std.debug.print("parseEx called\n", .{});
     const allocator = opt.allocator;
     const Positional = FindPositionalType(Id, params, value_parsers);
 
@@ -804,6 +829,7 @@ pub fn parseEx(
         .iter = iter,
         .diagnostic = opt.diagnostic,
     };
+    std.debug.print("state reached\n", .{});
     while (try stream.next()) |arg| {
         // TODO: We cannot use `try` inside the inline for because of a compiler bug that
         //       generates an infinite loop. For now, use a variable to store the error
@@ -998,6 +1024,23 @@ fn Arguments(
         .decls = &.{},
         .is_tuple = false,
     } });
+}
+
+test "bool" {
+    const params = comptime parseParamsComptime(
+        \\--switch <bool>
+        \\--num <u64>
+        \\-s [bool=on]
+        \\[str]
+    );
+
+    var iter = args.SliceIterator{
+        .args = &.{ "--num", "10", "--switch", "1", "something" },
+    };
+    var res = try parseEx(Help, &params, parsers.default, &iter, .{
+        .allocator = testing.allocator,
+    });
+    defer res.deinit();
 }
 
 test "str and u64" {
