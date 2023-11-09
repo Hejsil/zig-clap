@@ -6,6 +6,14 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
 
+    const lib = b.addStaticLibrary(.{
+        .name = "clap",
+        .root_source_file = .{ .path = "clap.zig" },
+        .target = target,
+        .optimize = optimize,
+    });
+    b.installArtifact(lib);
+
     const test_step = b.step("test", "Run all tests in all modes.");
     const tests = b.addTest(.{
         .root_source_file = .{ .path = "clap.zig" },
