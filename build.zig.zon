@@ -1,1 +1,5 @@
-.{ .name = "clap", .version = "0.7.0", .paths = .{""} }
+.{
+    .name = "clap",
+    .version = "0.7.0",
+    .paths = .{"."},
+}
