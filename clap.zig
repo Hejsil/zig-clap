@@ -30,11 +30,8 @@ pub const Names = struct {
     pub fn longest(names: *const Names) Longest {
         if (names.long) |long|
             return .{ .kind = .long, .name = long };
-        if (names.short) |*short| {
-            // TODO: Zig cannot figure out @as(*const [1]u8, short) in the ano literal
-            const casted: *const [1]u8 = short;
-            return .{ .kind = .short, .name = casted };
-        }
+        if (names.short) |*short|
+            return .{ .kind = .short, .name = @as(*const [1]u8, short) };
 
         return .{ .kind = .positional, .name = "" };
     }
@@ -801,13 +798,14 @@ fn parseArg(
     };
 
     const longest = comptime param.names.longest();
+    const name = longest.name[0..longest.name.len].*;
     switch (longest.kind) {
         .short, .long => switch (param.takes_value) {
-            .none => @field(arguments, longest.name) +|= 1,
-            .one => @field(arguments, longest.name) = try parser(arg.value.?),
+            .none => @field(arguments, &name) +|= 1,
+            .one => @field(arguments, &name) = try parser(arg.value.?),
             .many => {
                 const value = try parser(arg.value.?);
-                try @field(arguments, longest.name).append(allocator, value);
+                try @field(arguments, &name).append(allocator, value);
             },
         },
         .positional => try positionals.append(try parser(arg.value.?)),
@@ -920,8 +918,9 @@ fn Arguments(
             },
         };
 
+        const name = longest.name[0..longest.name.len].*;
         fields[i] = .{
-            .name = longest.name,
+            .name = &name,
             .type = @TypeOf(default_value),
             .default_value = @ptrCast(&default_value),
             .is_comptime = false,
@@ -960,12 +959,13 @@ test "everything" {
         \\-b, --bb
         \\-c, --cc <str>
         \\-d, --dd <usize>...
+        \\-h
         \\<str>
         \\
     );
 
     var iter = args.SliceIterator{
-        .args = &.{ "-a", "--aa", "-c", "0", "something", "-d", "1", "--dd", "2" },
+        .args = &.{ "-a", "--aa", "-c", "0", "something", "-d", "1", "--dd", "2", "-h" },
     };
     var res = try parseEx(Help, &params, parsers.default, &iter, .{
         .allocator = testing.allocator,
@@ -974,6 +974,7 @@ test "everything" {
 
     try testing.expect(res.args.aa == 2);
     try testing.expect(res.args.bb == 0);
+    try testing.expect(res.args.h == 1);
     try testing.expectEqualStrings("0", res.args.cc.?);
     try testing.expectEqual(@as(usize, 1), res.positionals.len);
     try testing.expectEqualStrings("something", res.positionals[0]);
