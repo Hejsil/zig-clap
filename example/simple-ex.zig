@@ -6,6 +6,9 @@ const io = std.io;
 const process = std.process;
 
 pub fn main() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+
     // First we specify what parameters our program can take.
     // We can use `parseParamsComptime` to parse a string into an array of `Param(Help)`
     const params = comptime clap.parseParamsComptime(
@@ -30,6 +33,7 @@ pub fn main() !void {
     var diag = clap.Diagnostic{};
     var res = clap.parse(clap.Help, &params, parsers, .{
         .diagnostic = &diag,
+        .allocator = gpa.allocator(),
     }) catch |err| {
         diag.report(io.getStdErr().writer(), err) catch {};
         return err;
