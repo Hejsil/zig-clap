@@ -641,12 +641,7 @@ test "Diagnostic.report" {
 
 /// Options that can be set to customize the behavior of parsing.
 pub const ParseOptions = struct {
-    /// The allocator used for all memory allocations. Defaults to the `heap.page_allocator`.
-    /// Note: You should probably override this allocator if you are calling `parseEx`. Unlike
-    ///       `parse`, `parseEx` does not wrap the allocator so the heap allocator can be
-    ///       quite expensive. (TODO: Can we pick a better default? For `parse`, this allocator
-    ///       is fine, as it wraps it in an arena)
-    allocator: mem.Allocator = heap.page_allocator,
+    allocator: mem.Allocator,
     diagnostic: ?*Diagnostic = null,
 };
 

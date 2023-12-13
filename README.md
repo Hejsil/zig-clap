@@ -37,6 +37,9 @@ const debug = std.debug;
 const io = std.io;
 
 pub fn main() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+
     // First we specify what parameters our program can take.
     // We can use `parseParamsComptime` to parse a string into an array of `Param(Help)`
     const params = comptime clap.parseParamsComptime(
@@ -53,6 +56,7 @@ pub fn main() !void {
     var diag = clap.Diagnostic{};
     var res = clap.parse(clap.Help, &params, clap.parsers.default, .{
         .diagnostic = &diag,
+        .allocator = gpa.allocator(),
     }) catch |err| {
         // Report useful error and exit
         diag.report(io.getStdErr().writer(), err) catch {};
@@ -92,6 +96,9 @@ const io = std.io;
 const process = std.process;
 
 pub fn main() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+
     // First we specify what parameters our program can take.
     // We can use `parseParamsComptime` to parse a string into an array of `Param(Help)`
     const params = comptime clap.parseParamsComptime(
@@ -116,6 +123,7 @@ pub fn main() !void {
     var diag = clap.Diagnostic{};
     var res = clap.parse(clap.Help, &params, parsers, .{
         .diagnostic = &diag,
+        .allocator = gpa.allocator(),
     }) catch |err| {
         diag.report(io.getStdErr().writer(), err) catch {};
         return err;
@@ -219,13 +227,18 @@ const clap = @import("clap");
 const std = @import("std");
 
 pub fn main() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+
     const params = comptime clap.parseParamsComptime(
         \\-h, --help     Display this help and exit.
         \\-v, --version  Output version information and exit.
         \\
     );
 
-    var res = try clap.parse(clap.Help, &params, clap.parsers.default, .{});
+    var res = try clap.parse(clap.Help, &params, clap.parsers.default, .{
+        .allocator = gpa.allocator(),
+    });
     defer res.deinit();
 
     // `clap.help` is a function that can print a simple help message. It can print any `Param`
@@ -257,6 +270,9 @@ const clap = @import("clap");
 const std = @import("std");
 
 pub fn main() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+
     const params = comptime clap.parseParamsComptime(
         \\-h, --help         Display this help and exit.
         \\-v, --version      Output version information and exit.
@@ -264,7 +280,9 @@ pub fn main() !void {
         \\
     );
 
-    var res = try clap.parse(clap.Help, &params, clap.parsers.default, .{});
+    var res = try clap.parse(clap.Help, &params, clap.parsers.default, .{
+        .allocator = gpa.allocator(),
+    });
     defer res.deinit();
 
     // `clap.usage` is a function that can print a simple help message. It can print any `Param`
