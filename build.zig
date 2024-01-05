@@ -1,7 +1,7 @@
 const std = @import("std");
 
 pub fn build(b: *std.Build) void {
-    const clap_mod = b.addModule("clap", .{ .source_file = .{ .path = "clap.zig" } });
+    const clap_mod = b.addModule("clap", .{ .root_source_file = .{ .path = "clap.zig" } });
 
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
@@ -30,7 +30,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         });
         const install_example = b.addInstallArtifact(example, .{});
-        example.addModule("clap", clap_mod);
+        example.root_module.addImport("clap", clap_mod);
         example_step.dependOn(&example.step);
         example_step.dependOn(&install_example.step);
     }
@@ -57,13 +57,13 @@ pub fn build(b: *std.Build) void {
 }
 
 fn readMeStep(b: *std.Build) *std.Build.Step {
-    const s = b.allocator.create(std.build.Step) catch unreachable;
-    s.* = std.build.Step.init(.{
+    const s = b.allocator.create(std.Build.Step) catch unreachable;
+    s.* = std.Build.Step.init(.{
         .id = .custom,
         .name = "ReadMeStep",
         .owner = b,
         .makeFn = struct {
-            fn make(step: *std.build.Step, _: *std.Progress.Node) anyerror!void {
+            fn make(step: *std.Build.Step, _: *std.Progress.Node) anyerror!void {
                 @setEvalBranchQuota(10000);
                 _ = step;
                 const file = try std.fs.cwd().createFile("README.md", .{});
