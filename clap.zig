@@ -915,7 +915,7 @@ fn Arguments(
 
         const name = longest.name[0..longest.name.len].*;
         fields[i] = .{
-            .name = &name,
+            .name = &name ++ "",
             .type = @TypeOf(default_value),
             .default_value = @ptrCast(&default_value),
             .is_comptime = false,
