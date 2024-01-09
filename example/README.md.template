@@ -23,6 +23,12 @@ in the release notes.
 * Print help message from parameter specification.
 * Parse help message to parameter specification.
 
+## API Reference
+
+Automatically generated API Reference for the project
+can be found at https://Hejsil.github.io/zig-clap.
+Note that Zig autodoc is in beta; the website may be broken or incomplete.
+
 ## Examples
 
 ### `clap.parse`
