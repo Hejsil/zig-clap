@@ -895,8 +895,15 @@ fn Arguments(
     comptime value_parsers: anytype,
     comptime multi_arg_kind: MultiArgKind,
 ) type {
-    var fields: [params.len]builtin.Type.StructField = undefined;
+    var fields_len: usize = 0;
+    for (params) |param| {
+        const longest = param.names.longest();
+        if (longest.kind == .positional)
+            continue;
+        fields_len += 1;
+    }
 
+    var fields: [fields_len]builtin.Type.StructField = undefined;
     var i: usize = 0;
     for (params) |param| {
         const longest = param.names.longest();
@@ -926,7 +933,7 @@ fn Arguments(
 
     return @Type(.{ .Struct = .{
         .layout = .auto,
-        .fields = fields[0..i],
+        .fields = &fields,
         .decls = &.{},
         .is_tuple = false,
     } });
