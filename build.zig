@@ -1,14 +1,14 @@
 const std = @import("std");
 
 pub fn build(b: *std.Build) void {
-    const clap_mod = b.addModule("clap", .{ .root_source_file = .{ .src_path = .{ .owner = b, .sub_path = "clap.zig" } } });
+    const clap_mod = b.addModule("clap", .{ .root_source_file = b.path("clap.zig") });
 
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
 
     const test_step = b.step("test", "Run all tests in all modes.");
     const tests = b.addTest(.{
-        .root_source_file = .{ .src_path = .{ .owner = b, .sub_path = "clap.zig" } },
+        .root_source_file = b.path("clap.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -25,7 +25,7 @@ pub fn build(b: *std.Build) void {
     }) |example_name| {
         const example = b.addExecutable(.{
             .name = example_name,
-            .root_source_file = .{ .src_path = .{ .owner = b, .sub_path = b.fmt("example/{s}.zig", .{example_name}) } },
+            .root_source_file = b.path(b.fmt("example/{s}.zig", .{example_name})),
             .target = target,
             .optimize = optimize,
         });
