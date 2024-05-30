@@ -63,7 +63,7 @@ fn readMeStep(b: *std.Build) *std.Build.Step {
         .name = "ReadMeStep",
         .owner = b,
         .makeFn = struct {
-            fn make(step: *std.Build.Step, _: *std.Progress.Node) anyerror!void {
+            fn make(step: *std.Build.Step, _: std.Progress.Node) anyerror!void {
                 @setEvalBranchQuota(10000);
                 _ = step;
                 const file = try std.fs.cwd().createFile("README.md", .{});
