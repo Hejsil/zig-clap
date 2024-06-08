@@ -10,6 +10,21 @@ version of zig-clap that targets a specific Zig release, have a look
 at the releases. Each release specifies the Zig version it compiles with
 in the release notes.
 
+## Installation
+
+First, run the following:
+
+```
+zig fetch --save git+https://github.com/Hejsil/zig-clap
+```
+
+Then add the following to `build.zig`:
+
+```zig
+const clap = b.dependency("clap", .{{}});
+exe.root_module.addImport("clap", clap.module("clap"));
+```
+
 ## Features
 
 * Short arguments `-a`
