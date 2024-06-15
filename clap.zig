@@ -132,7 +132,7 @@ fn countParams(str: []const u8) usize {
     @setEvalBranchQuota(std.math.maxInt(u32));
 
     var res: usize = 0;
-    var it = mem.split(u8, str, "\n");
+    var it = mem.splitScalar(u8, str, '\n');
     while (it.next()) |line| {
         const trimmed = mem.trimLeft(u8, line, " \t");
         if (mem.startsWith(u8, trimmed, "-") or
@@ -1170,7 +1170,7 @@ pub fn help(
 
             var first_line = true;
             var res: usize = std.math.maxInt(usize);
-            var it = mem.tokenize(u8, description, "\n");
+            var it = mem.tokenizeScalar(u8, description, '\n');
             while (it.next()) |line| : (first_line = false) {
                 const trimmed = mem.trimLeft(u8, line, " ");
                 const indent = line.len - trimmed.len;
@@ -1195,7 +1195,7 @@ pub fn help(
         };
 
         const description = param.id.description();
-        var it = mem.split(u8, description, "\n");
+        var it = mem.splitScalar(u8, description, '\n');
         var first_line = true;
         var non_emitted_newlines: usize = 0;
         var last_line_indentation: usize = 0;
@@ -1242,7 +1242,7 @@ pub fn help(
                     try description_writer.newline();
             }
 
-            var words = mem.tokenize(u8, line, " ");
+            var words = mem.tokenizeScalar(u8, line, ' ');
             while (words.next()) |word|
                 try description_writer.writeWord(word);
 
