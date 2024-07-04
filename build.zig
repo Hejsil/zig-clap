@@ -1,4 +1,9 @@
 const std = @import("std");
+const builtin = @import("builtin");
+
+const current_zig = builtin.zig_version;
+// NOTE: this is just for 12 compatible, when 14 release, we can remove this!
+const ProgressNode = if (current_zig.minor == 12) *std.Progress.Node else std.Progress.Node;
 
 pub fn build(b: *std.Build) void {
     const clap_mod = b.addModule("clap", .{ .root_source_file = b.path("clap.zig") });
@@ -63,7 +68,7 @@ fn readMeStep(b: *std.Build) *std.Build.Step {
         .name = "ReadMeStep",
         .owner = b,
         .makeFn = struct {
-            fn make(step: *std.Build.Step, _: std.Progress.Node) anyerror!void {
+            fn make(step: *std.Build.Step, _: ProgressNode) anyerror!void {
                 @setEvalBranchQuota(10000);
                 _ = step;
                 const file = try std.fs.cwd().createFile("README.md", .{});
