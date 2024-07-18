@@ -18,6 +18,8 @@ test "clap" {
     testing.refAllDecls(@This());
 }
 
+pub const default_assignment_separators = "=";
+
 /// The names a `Param` can have.
 pub const Names = struct {
     /// '-' prefix
@@ -643,6 +645,7 @@ test "Diagnostic.report" {
 pub const ParseOptions = struct {
     allocator: mem.Allocator,
     diagnostic: ?*Diagnostic = null,
+    assignment_separators: []const u8 = default_assignment_separators,
 };
 
 /// Same as `parseEx` but uses the `args.OsIterator` by default.
@@ -662,6 +665,7 @@ pub fn parse(
         // Let's reuse the arena from the `OSIterator` since we already have it.
         .allocator = arena.allocator(),
         .diagnostic = opt.diagnostic,
+        .assignment_separators = opt.assignment_separators,
     });
 
     return Result(Id, params, value_parsers){
@@ -733,6 +737,7 @@ pub fn parseEx(
         .params = params,
         .iter = iter,
         .diagnostic = opt.diagnostic,
+        .assignment_separators = opt.assignment_separators,
     };
     while (try stream.next()) |arg| {
         // TODO: We cannot use `try` inside the inline for because of a compiler bug that
@@ -953,6 +958,24 @@ test "str and u64" {
         .allocator = testing.allocator,
     });
     defer res.deinit();
+}
+
+test "different assignment separators" {
+    const params = comptime parseParamsComptime(
+        \\-a, --aa <usize>...
+        \\
+    );
+
+    var iter = args.SliceIterator{
+        .args = &.{ "-a=0", "--aa=1", "-a:2", "--aa:3" },
+    };
+    var res = try parseEx(Help, &params, parsers.default, &iter, .{
+        .allocator = testing.allocator,
+        .assignment_separators = "=:",
+    });
+    defer res.deinit();
+
+    try testing.expectEqualSlices(usize, &.{ 0, 1, 2, 3 }, res.args.aa);
 }
 
 test "everything" {

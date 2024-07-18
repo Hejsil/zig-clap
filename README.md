@@ -145,6 +145,9 @@ pub fn main() !void {
     var res = clap.parse(clap.Help, &params, parsers, .{
         .diagnostic = &diag,
         .allocator = gpa.allocator(),
+        // The assignment separator can be configured. `--number=1` and `--number:1` is now
+        // allowed.
+        .assignment_separators = "=:",
     }) catch |err| {
         diag.report(io.getStdErr().writer(), err) catch {};
         return err;
