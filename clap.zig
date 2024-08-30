@@ -13,6 +13,7 @@ const testing = std.testing;
 pub const args = @import("clap/args.zig");
 pub const parsers = @import("clap/parsers.zig");
 pub const streaming = @import("clap/streaming.zig");
+pub const ccw = @import("clap/codepoint_counting_writer.zig");
 
 test "clap" {
     testing.refAllDecls(@This());
@@ -1153,10 +1154,10 @@ pub fn help(
     const max_spacing = blk: {
         var res: usize = 0;
         for (params) |param| {
-            var cs = io.countingWriter(io.null_writer);
+            var cs = ccw.codepointCountingWriter(io.null_writer);
             try printParam(cs.writer(), Id, param);
-            if (res < cs.bytes_written)
-                res = @intCast(cs.bytes_written);
+            if (res < cs.codepoints_written)
+                res = @intCast(cs.codepoints_written);
         }
 
         break :blk res;
@@ -1166,22 +1167,22 @@ pub fn help(
         opt.description_indent +
         max_spacing * @intFromBool(!opt.description_on_new_line);
 
-    var first_paramter: bool = true;
+    var first_parameter: bool = true;
     for (params) |param| {
-        if (!first_paramter)
+        if (!first_parameter)
             try writer.writeByteNTimes('\n', opt.spacing_between_parameters);
 
-        first_paramter = false;
+        first_parameter = false;
         try writer.writeByteNTimes(' ', opt.indent);
 
-        var cw = io.countingWriter(writer);
+        var cw = ccw.codepointCountingWriter(writer);
         try printParam(cw.writer(), Id, param);
 
         const Writer = DescriptionWriter(@TypeOf(writer));
         var description_writer = Writer{
             .underlying_writer = writer,
             .indentation = description_indentation,
-            .printed_chars = @intCast(cw.bytes_written),
+            .printed_chars = @intCast(cw.codepoints_written),
             .max_width = opt.max_width,
         };
 
@@ -1260,8 +1261,7 @@ pub fn help(
             } else {
                 // For none markdown like format, we just respect the newlines in the input
                 // string and output them as is.
-                var i: usize = 0;
-                while (i < non_emitted_newlines) : (i += 1)
+                for (0..non_emitted_newlines) |_|
                     try description_writer.newline();
             }
 
@@ -1292,7 +1292,7 @@ fn DescriptionWriter(comptime UnderlyingWriter: type) type {
             debug.assert(word.len != 0);
 
             var first_word = writer.printed_chars <= writer.indentation;
-            const chars_to_write = word.len + @intFromBool(!first_word);
+            const chars_to_write = try std.unicode.utf8CountCodepoints(word) + @intFromBool(!first_word);
             if (chars_to_write + writer.printed_chars > writer.max_width) {
                 // If the word does not fit on this line, then we insert a new line and print
                 // it on that line. The only exception to this is if this was the first word.
@@ -1744,6 +1744,50 @@ test "clap.help" {
         \\-d, --dd <V3>...    Both repeated option.
         \\
     );
+
+    // Test with multibyte characters.
+    try testHelp(.{
+        .indent = 0,
+        .max_width = 46,
+        .description_on_new_line = false,
+        .description_indent = 4,
+        .spacing_between_parameters = 2,
+    },
+        \\-a                  Shört flåg.
+        \\
+        \\
+        \\-b <V1>             Shört öptiön.
+        \\
+        \\
+        \\    --aa            Löng fläg.
+        \\
+        \\
+        \\    --bb <V2>       Löng öptiön.
+        \\
+        \\
+        \\-c, --cc            Bóth fläg.
+        \\
+        \\
+        \\    --complicate    Fläg wíth ä cömplǐcätéd
+        \\                    änd vërý löng dèscrıptıön
+        \\                    thät späns mültíplë
+        \\                    lınēs.
+        \\
+        \\                    Pärägräph number 2:
+        \\                    * Bullet pöint
+        \\                    * Bullet pöint
+        \\
+        \\                    Exämple:
+        \\                        sömething sömething
+        \\                        sömething
+        \\
+        \\
+        \\-d, --dd <V3>       Böth öptiön.
+        \\
+        \\
+        \\-d, --dd <V3>...    Böth repeäted öptiön.
+        \\
+    );
 }
 
 /// Will print a usage message in the following format:
@@ -1752,18 +1796,18 @@ test "clap.help" {
 /// First all none value taking parameters, which have a short name are printed, then non
 /// positional parameters and finally the positional.
 pub fn usage(stream: anytype, comptime Id: type, params: []const Param(Id)) !void {
-    var cos = io.countingWriter(stream);
+    var cos = ccw.codepointCountingWriter(stream);
     const cs = cos.writer();
     for (params) |param| {
         const name = param.names.short orelse continue;
         if (param.takes_value != .none)
             continue;
 
-        if (cos.bytes_written == 0)
+        if (cos.codepoints_written == 0)
             try stream.writeAll("[-");
         try cs.writeByte(name);
     }
-    if (cos.bytes_written != 0)
+    if (cos.codepoints_written != 0)
         try cs.writeAll("]");
 
     var has_positionals: bool = false;
@@ -1782,7 +1826,7 @@ pub fn usage(stream: anytype, comptime Id: type, params: []const Param(Id)) !voi
             continue;
         };
 
-        if (cos.bytes_written != 0)
+        if (cos.codepoints_written != 0)
             try cs.writeAll(" ");
 
         try cs.writeAll("[");
@@ -1806,7 +1850,7 @@ pub fn usage(stream: anytype, comptime Id: type, params: []const Param(Id)) !voi
         if (param.names.short != null or param.names.long != null)
             continue;
 
-        if (cos.bytes_written != 0)
+        if (cos.codepoints_written != 0)
             try cs.writeAll(" ");
 
         try cs.writeAll("<");
