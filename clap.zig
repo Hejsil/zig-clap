@@ -767,7 +767,7 @@ pub fn parseEx(
     // fields to slices and return that.
     var result_args = Arguments(Id, params, value_parsers, .slice){};
     inline for (meta.fields(@TypeOf(arguments))) |field| {
-        if (@typeInfo(field.type) == .Struct and
+        if (@typeInfo(field.type) == .@"struct" and
             @hasDecl(field.type, "toOwnedSlice"))
         {
             const slice = try @field(arguments, field.name).toOwnedSlice(allocator);
@@ -884,7 +884,7 @@ fn deinitArgs(
         // If the multi value field is a struct, we know it is a list and should be deinited.
         // Otherwise, it is a slice that should be freed.
         switch (@typeInfo(@TypeOf(field))) {
-            .Struct => @field(arguments, longest.name).deinit(allocator),
+            .@"struct" => @field(arguments, longest.name).deinit(allocator),
             else => allocator.free(@field(arguments, longest.name)),
         }
     }
@@ -937,7 +937,7 @@ fn Arguments(
         i += 1;
     }
 
-    return @Type(.{ .Struct = .{
+    return @Type(.{ .@"struct" = .{
         .layout = .auto,
         .fields = &fields,
         .decls = &.{},

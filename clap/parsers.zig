@@ -92,9 +92,9 @@ test "enumeration" {
 }
 
 fn ReturnType(comptime P: type) type {
-    return @typeInfo(P).Fn.return_type.?;
+    return @typeInfo(P).@"fn".return_type.?;
 }
 
 pub fn Result(comptime P: type) type {
-    return @typeInfo(ReturnType(P)).ErrorUnion.payload;
+    return @typeInfo(ReturnType(P)).error_union.payload;
 }
