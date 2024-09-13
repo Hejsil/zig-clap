@@ -20,9 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - uses: goto-bus-stop/setup-zig@v2
-      with:
-        version: master
+    - uses: mlugg/setup-zig@v1
     - name: Build
       run: zig build docs
     - name: Upload
