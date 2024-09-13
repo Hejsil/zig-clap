@@ -15,13 +15,15 @@ jobs:
     runs-on: ${{matrix.os}}
     steps:
       - uses: actions/checkout@v3
-        with:
-          submodules: recursive
       - uses: mlugg/setup-zig@v1
+        with:
+          version: master
       - run: zig build ${{ matrix.step }} -Doptimize=${{ matrix.optimize }}
   lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - uses: mlugg/setup-zig@v1
+        with:
+          version: master
       - run: zig fmt --check .

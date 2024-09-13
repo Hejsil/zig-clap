@@ -21,6 +21,8 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - uses: mlugg/setup-zig@v1
+      with:
+        version: master
     - name: Build
       run: zig build docs
     - name: Upload
