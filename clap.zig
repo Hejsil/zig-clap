@@ -741,26 +741,30 @@ pub fn parseEx(
         .assignment_separators = opt.assignment_separators,
     };
     while (try stream.next()) |arg| {
-        // TODO: We cannot use `try` inside the inline for because of a compiler bug that
-        //       generates an infinite loop. For now, use a variable to store the error
-        //       and use `try` outside. The downside of this is that we have to use
-        //       `anyerror` :(
-        var res: anyerror!void = {};
-        inline for (params) |*param| {
-            if (param == arg.param) {
-                res = parseArg(
-                    Id,
-                    param.*,
-                    value_parsers,
-                    allocator,
-                    &arguments,
-                    &positionals,
-                    arg,
-                );
+        inline for (params) |*param| continue_params_loop: {
+            if (param != arg.param)
+                // This is a trick to emulate a runtime `continue` in an `inline for`.
+                break :continue_params_loop;
+
+            const parser = comptime switch (param.takes_value) {
+                .none => null,
+                .one, .many => @field(value_parsers, param.id.value()),
+            };
+
+            const longest = comptime param.names.longest();
+            const name = longest.name[0..longest.name.len].*;
+            switch (longest.kind) {
+                .short, .long => switch (param.takes_value) {
+                    .none => @field(arguments, &name) +|= 1,
+                    .one => @field(arguments, &name) = try parser(arg.value.?),
+                    .many => {
+                        const value = try parser(arg.value.?);
+                        try @field(arguments, &name).append(allocator, value);
+                    },
+                },
+                .positional => try positionals.append(try parser(arg.value.?)),
             }
         }
-
-        try res;
     }
 
     // We are done parsing, but our arguments are stored in lists, and not slices. Map the list
@@ -782,35 +786,6 @@ pub fn parseEx(
         .positionals = try positionals.toOwnedSlice(),
         .allocator = allocator,
     };
-}
-
-fn parseArg(
-    comptime Id: type,
-    comptime param: Param(Id),
-    comptime value_parsers: anytype,
-    allocator: mem.Allocator,
-    arguments: anytype,
-    positionals: anytype,
-    arg: streaming.Arg(Id),
-) !void {
-    const parser = comptime switch (param.takes_value) {
-        .none => undefined,
-        .one, .many => @field(value_parsers, param.id.value()),
-    };
-
-    const longest = comptime param.names.longest();
-    const name = longest.name[0..longest.name.len].*;
-    switch (longest.kind) {
-        .short, .long => switch (param.takes_value) {
-            .none => @field(arguments, &name) +|= 1,
-            .one => @field(arguments, &name) = try parser(arg.value.?),
-            .many => {
-                const value = try parser(arg.value.?);
-                try @field(arguments, &name).append(allocator, value);
-            },
-        },
-        .positional => try positionals.append(try parser(arg.value.?)),
-    }
 }
 
 /// The result of `parseEx`. Is owned by the caller and should be freed with `deinit`.
