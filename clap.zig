@@ -646,7 +646,17 @@ test "Diagnostic.report" {
 pub const ParseOptions = struct {
     allocator: mem.Allocator,
     diagnostic: ?*Diagnostic = null,
+
+    /// The assignment separators, which by default is `=`. This is the separator between the name
+    /// of an argument and its value. For `--arg=value`, `arg` is the name and `value` is the value
+    /// if `=` is one of the assignment separators.
     assignment_separators: []const u8 = default_assignment_separators,
+
+    /// This option makes `clap.parse` and `clap.parseEx` stop parsing after encountering a
+    /// certain positional index. Setting `terminating_positional` to 0 will make them stop
+    /// parsing after the 0th positional has been added to `positionals` (aka after parsing 1
+    /// positional)
+    terminating_positional: usize = std.math.maxInt(usize),
 };
 
 /// Same as `parseEx` but uses the `args.OsIterator` by default.
@@ -663,10 +673,11 @@ pub fn parse(
     const exe_arg = iter.next();
 
     const result = try parseEx(Id, params, value_parsers, &iter, .{
-        // Let's reuse the arena from the `OSIterator` since we already have it.
+        // Let's reuse the arena from the `ArgIterator` since we already have it.
         .allocator = arena.allocator(),
         .diagnostic = opt.diagnostic,
         .assignment_separators = opt.assignment_separators,
+        .terminating_positional = opt.terminating_positional,
     });
 
     return Result(Id, params, value_parsers){
@@ -740,7 +751,7 @@ pub fn parseEx(
         .diagnostic = opt.diagnostic,
         .assignment_separators = opt.assignment_separators,
     };
-    while (try stream.next()) |arg| {
+    arg_loop: while (try stream.next()) |arg| {
         inline for (params) |*param| continue_params_loop: {
             if (param != arg.param)
                 // This is a trick to emulate a runtime `continue` in an `inline for`.
@@ -762,7 +773,11 @@ pub fn parseEx(
                         try @field(arguments, &name).append(allocator, value);
                     },
                 },
-                .positional => try positionals.append(try parser(arg.value.?)),
+                .positional => {
+                    try positionals.append(try parser(arg.value.?));
+                    if (opt.terminating_positional <= positionals.items.len - 1)
+                        break :arg_loop;
+                },
             }
         }
     }
@@ -980,6 +995,37 @@ test "everything" {
     try testing.expectEqual(@as(usize, 1), res.positionals.len);
     try testing.expectEqualStrings("something", res.positionals[0]);
     try testing.expectEqualSlices(usize, &.{ 1, 2 }, res.args.dd);
+    try testing.expectEqual(@as(usize, 10), iter.index);
+}
+
+test "terminating positional" {
+    const params = comptime parseParamsComptime(
+        \\-a, --aa
+        \\-b, --bb
+        \\-c, --cc <str>
+        \\-d, --dd <usize>...
+        \\-h
+        \\<str>
+        \\
+    );
+
+    var iter = args.SliceIterator{
+        .args = &.{ "-a", "--aa", "-c", "0", "something", "-d", "1", "--dd", "2", "-h" },
+    };
+    var res = try parseEx(Help, &params, parsers.default, &iter, .{
+        .allocator = testing.allocator,
+        .terminating_positional = 0,
+    });
+    defer res.deinit();
+
+    try testing.expect(res.args.aa == 2);
+    try testing.expect(res.args.bb == 0);
+    try testing.expect(res.args.h == 0);
+    try testing.expectEqualStrings("0", res.args.cc.?);
+    try testing.expectEqual(@as(usize, 1), res.positionals.len);
+    try testing.expectEqualStrings("something", res.positionals[0]);
+    try testing.expectEqualSlices(usize, &.{}, res.args.dd);
+    try testing.expectEqual(@as(usize, 5), iter.index);
 }
 
 test "overflow-safe" {
