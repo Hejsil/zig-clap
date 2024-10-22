@@ -130,8 +130,8 @@ pub fn parseParamsComptime(comptime str: []const u8) [countParams(str)]Param(Hel
 }
 
 fn countParams(str: []const u8) usize {
-    // See parseParam for reasoning. I would like to remove it from parseParam, but people depend
-    // on that function to still work conveniently at comptime, so leaving it for now.
+    // See parseParamEx for reasoning. I would like to remove it from parseParam, but people
+    // depend on that function to still work conveniently at comptime, so leaving it for now.
     @setEvalBranchQuota(std.math.maxInt(u32));
 
     var res: usize = 0;
