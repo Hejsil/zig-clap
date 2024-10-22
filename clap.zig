@@ -675,7 +675,7 @@ pub fn Result(
 ) type {
     return struct {
         args: Arguments(Id, params, value_parsers, .slice),
-        positionals: []const FindPositionalType(Id, params, value_parsers),
+        positionals: Positionals(Id, params, value_parsers, .slice),
         exe_arg: ?[]const u8,
         arena: std.heap.ArenaAllocator,
 
@@ -718,11 +718,13 @@ pub fn parseEx(
     opt: ParseOptions,
 ) !ResultEx(Id, params, value_parsers) {
     const allocator = opt.allocator;
-    const Positional = FindPositionalType(Id, params, value_parsers);
 
-    var positionals = std.ArrayList(Positional).init(allocator);
+    var positional_count: usize = 0;
+    var positionals = initPositionals(Positionals(Id, params, value_parsers, .list));
+    errdefer deinitPositionals(&positionals, allocator);
+
     var arguments = Arguments(Id, params, value_parsers, .list){};
-    errdefer deinitArgs(Id, params, allocator, &arguments);
+    errdefer deinitArgs(&arguments, allocator);
 
     var stream = streaming.Clap(Id, std.meta.Child(@TypeOf(iter))){
         .params = params,
@@ -753,9 +755,14 @@ pub fn parseEx(
                     },
                 },
                 .positional => {
-                    try positionals.append(try parser(arg.value.?));
-                    if (opt.terminating_positional <= positionals.items.len - 1)
+                    switch (@typeInfo(@TypeOf(positionals))) {
+                        .optional => positionals = try parser(arg.value.?),
+                        else => try positionals.append(allocator, try parser(arg.value.?)),
+                    }
+                    if (opt.terminating_positional <= positional_count)
                         break :arg_loop;
+
+                    positional_count += 1;
                 },
             }
         }
@@ -775,9 +782,15 @@ pub fn parseEx(
         }
     }
 
+    // We are done parsing, but our positionals are stored in lists, and not slices.
+    const result_positionals = switch (@typeInfo(@TypeOf(positionals))) {
+        .optional => positionals,
+        else => try positionals.toOwnedSlice(allocator),
+    };
+
     return ResultEx(Id, params, value_parsers){
         .args = result_args,
-        .positionals = try positionals.toOwnedSlice(),
+        .positionals = result_positionals,
         .allocator = allocator,
     };
 }
@@ -790,23 +803,46 @@ pub fn ResultEx(
 ) type {
     return struct {
         args: Arguments(Id, params, value_parsers, .slice),
-        positionals: []const FindPositionalType(Id, params, value_parsers),
+        positionals: Positionals(Id, params, value_parsers, .slice),
         allocator: std.mem.Allocator,
 
         pub fn deinit(result: *@This()) void {
-            deinitArgs(Id, params, result.allocator, &result.args);
-            result.allocator.free(result.positionals);
+            deinitArgs(&result.args, result.allocator);
+            deinitPositionals(&result.positionals, result.allocator);
         }
     };
 }
 
-fn FindPositionalType(
+fn Positionals(
     comptime Id: type,
     comptime params: []const Param(Id),
     comptime value_parsers: anytype,
+    comptime multi_arg_kind: MultiArgKind,
 ) type {
-    const pos = findPositional(Id, params) orelse return []const u8;
-    return ParamType(Id, pos, value_parsers);
+    const pos = findPositional(Id, params) orelse return ?void;
+    const T = ParamType(Id, pos, value_parsers);
+    if (pos.takes_value == .many)
+        return switch (multi_arg_kind) {
+            .slice => []const T,
+            .list => std.ArrayListUnmanaged(T),
+        };
+
+    return ?T;
+}
+
+fn initPositionals(comptime T: type) T {
+    return switch (@typeInfo(T)) {
+        .optional => null,
+        else => .{},
+    };
+}
+
+fn deinitPositionals(positionals: anytype, allocator: std.mem.Allocator) void {
+    switch (@typeInfo(@TypeOf(positionals.*))) {
+        .optional => {},
+        .@"struct" => positionals.deinit(allocator),
+        else => allocator.free(positionals.*),
+    }
 }
 
 fn findPositional(comptime Id: type, params: []const Param(Id)) ?Param(Id) {
@@ -835,26 +871,12 @@ fn ParamType(
 
 /// Deinitializes a struct of type `Argument`. Since the `Argument` type is generated, and we
 /// cannot add the deinit declaration to it, we declare it here instead.
-fn deinitArgs(
-    comptime Id: type,
-    comptime params: []const Param(Id),
-    allocator: std.mem.Allocator,
-    arguments: anytype,
-) void {
-    inline for (params) |param| {
-        const longest = comptime param.names.longest();
-        if (longest.kind == .positional)
-            continue;
-        if (param.takes_value != .many)
-            continue;
-
-        const field = @field(arguments, longest.name);
-
-        // If the multi value field is a struct, we know it is a list and should be deinited.
-        // Otherwise, it is a slice that should be freed.
-        switch (@typeInfo(@TypeOf(field))) {
-            .@"struct" => @field(arguments, longest.name).deinit(allocator),
-            else => allocator.free(@field(arguments, longest.name)),
+fn deinitArgs(arguments: anytype, allocator: std.mem.Allocator) void {
+    inline for (@typeInfo(@TypeOf(arguments.*)).@"struct".fields) |field| {
+        switch (@typeInfo(field.type)) {
+            .int, .optional => {},
+            .@"struct" => @field(arguments, field.name).deinit(allocator),
+            else => allocator.free(@field(arguments, field.name)),
         }
     }
 }
@@ -948,6 +970,43 @@ test "different assignment separators" {
     try std.testing.expectEqualSlices(usize, &.{ 0, 1, 2, 3 }, res.args.aa);
 }
 
+test "single positional" {
+    const params = comptime parseParamsComptime(
+        \\<str>
+        \\
+    );
+
+    {
+        var iter = args.SliceIterator{ .args = &.{} };
+        var res = try parseEx(Help, &params, parsers.default, &iter, .{
+            .allocator = std.testing.allocator,
+        });
+        defer res.deinit();
+
+        try std.testing.expect(res.positionals == null);
+    }
+
+    {
+        var iter = args.SliceIterator{ .args = &.{"a"} };
+        var res = try parseEx(Help, &params, parsers.default, &iter, .{
+            .allocator = std.testing.allocator,
+        });
+        defer res.deinit();
+
+        try std.testing.expectEqualStrings("a", res.positionals.?);
+    }
+
+    {
+        var iter = args.SliceIterator{ .args = &.{ "a", "b" } };
+        var res = try parseEx(Help, &params, parsers.default, &iter, .{
+            .allocator = std.testing.allocator,
+        });
+        defer res.deinit();
+
+        try std.testing.expectEqualStrings("b", res.positionals.?);
+    }
+}
+
 test "everything" {
     const params = comptime parseParamsComptime(
         \\-a, --aa
@@ -955,7 +1014,7 @@ test "everything" {
         \\-c, --cc <str>
         \\-d, --dd <usize>...
         \\-h
-        \\<str>
+        \\<str>...
         \\
     );
 
@@ -984,7 +1043,7 @@ test "terminating positional" {
         \\-c, --cc <str>
         \\-d, --dd <usize>...
         \\-h
-        \\<str>
+        \\<str>...
         \\
     );
 
