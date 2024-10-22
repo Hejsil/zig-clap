@@ -1,5 +1,3 @@
-const std = @import("std");
-
 pub fn build(b: *std.Build) void {
     const clap_mod = b.addModule("clap", .{ .root_source_file = b.path("clap.zig") });
 
@@ -80,3 +78,5 @@ fn readMeStep(b: *std.Build) *std.Build.Step {
     });
     return s;
 }
+
+const std = @import("std");

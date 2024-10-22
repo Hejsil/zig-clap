@@ -56,12 +56,6 @@ Note that Zig autodoc is in beta; the website may be broken or incomplete.
 The simplest way to use this library is to just call the `clap.parse` function.
 
 ```zig
-const clap = @import("clap");
-const std = @import("std");
-
-const debug = std.debug;
-const io = std.io;
-
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
@@ -85,20 +79,23 @@ pub fn main() !void {
         .allocator = gpa.allocator(),
     }) catch |err| {
         // Report useful error and exit
-        diag.report(io.getStdErr().writer(), err) catch {};
+        diag.report(std.io.getStdErr().writer(), err) catch {};
         return err;
     };
     defer res.deinit();
 
     if (res.args.help != 0)
-        debug.print("--help\n", .{});
+        std.debug.print("--help\n", .{});
     if (res.args.number) |n|
-        debug.print("--number = {}\n", .{n});
+        std.debug.print("--number = {}\n", .{n});
     for (res.args.string) |s|
-        debug.print("--string = {s}\n", .{s});
+        std.debug.print("--string = {s}\n", .{s});
     for (res.positionals) |pos|
-        debug.print("{s}\n", .{pos});
+        std.debug.print("{s}\n", .{pos});
 }
+
+const clap = @import("clap");
+const std = @import("std");
 
 ```
 
@@ -114,13 +111,6 @@ contains a parser that returns `usize`. You can pass in something other than
 `clap.parsers.default` if you want some other mapping.
 
 ```zig
-const clap = @import("clap");
-const std = @import("std");
-
-const debug = std.debug;
-const io = std.io;
-const process = std.process;
-
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
@@ -154,22 +144,25 @@ pub fn main() !void {
         // allowed.
         .assignment_separators = "=:",
     }) catch |err| {
-        diag.report(io.getStdErr().writer(), err) catch {};
+        diag.report(std.io.getStdErr().writer(), err) catch {};
         return err;
     };
     defer res.deinit();
 
     if (res.args.help != 0)
-        debug.print("--help\n", .{});
+        std.debug.print("--help\n", .{});
     if (res.args.number) |n|
-        debug.print("--number = {}\n", .{n});
+        std.debug.print("--number = {}\n", .{n});
     if (res.args.answer) |a|
-        debug.print("--answer = {s}\n", .{@tagName(a)});
+        std.debug.print("--answer = {s}\n", .{@tagName(a)});
     for (res.args.string) |s|
-        debug.print("--string = {s}\n", .{s});
+        std.debug.print("--string = {s}\n", .{s});
     for (res.positionals) |pos|
-        debug.print("{s}\n", .{pos});
+        std.debug.print("{s}\n", .{pos});
 }
+
+const clap = @import("clap");
+const std = @import("std");
 
 ```
 
@@ -179,13 +172,6 @@ The `streaming.Clap` is the base of all the other parsers. It's a streaming pars
 `args.Iterator` to provide it with arguments lazily.
 
 ```zig
-const clap = @import("clap");
-const std = @import("std");
-
-const debug = std.debug;
-const io = std.io;
-const process = std.process;
-
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
 
@@ -203,7 +189,7 @@ pub fn main() !void {
         .{ .id = 'f', .takes_value = .one },
     };
 
-    var iter = try process.ArgIterator.initWithAllocator(allocator);
+    var iter = try std.process.ArgIterator.initWithAllocator(allocator);
     defer iter.deinit();
 
     // Skip exe argument
@@ -213,7 +199,7 @@ pub fn main() !void {
     // This is optional. You can also leave the `diagnostic` field unset if you
     // don't care about the extra information `Diagnostic` provides.
     var diag = clap.Diagnostic{};
-    var parser = clap.streaming.Clap(u8, process.ArgIterator){
+    var parser = clap.streaming.Clap(u8, std.process.ArgIterator){
         .params = &params,
         .iter = &iter,
         .diagnostic = &diag,
@@ -222,22 +208,25 @@ pub fn main() !void {
     // Because we use a streaming parser, we have to consume each argument parsed individually.
     while (parser.next() catch |err| {
         // Report useful error and exit
-        diag.report(io.getStdErr().writer(), err) catch {};
+        diag.report(std.io.getStdErr().writer(), err) catch {};
         return err;
     }) |arg| {
         // arg.param will point to the parameter which matched the argument.
         switch (arg.param.id) {
-            'h' => debug.print("Help!\n", .{}),
-            'n' => debug.print("--number = {s}\n", .{arg.value.?}),
+            'h' => std.debug.print("Help!\n", .{}),
+            'n' => std.debug.print("--number = {s}\n", .{arg.value.?}),
 
             // arg.value == null, if arg.param.takes_value == .none.
             // Otherwise, arg.value is the value passed with the argument, such as "-a=10"
             // or "-a 10".
-            'f' => debug.print("{s}\n", .{arg.value.?}),
+            'f' => std.debug.print("{s}\n", .{arg.value.?}),
             else => unreachable,
         }
     }
 }
+
+const clap = @import("clap");
+const std = @import("std");
 
 ```
 
@@ -252,9 +241,6 @@ in the output. `HelpOptions` is passed to `help` to control how the help message
 printed.
 
 ```zig
-const clap = @import("clap");
-const std = @import("std");
-
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
@@ -271,12 +257,15 @@ pub fn main() !void {
     defer res.deinit();
 
     // `clap.help` is a function that can print a simple help message. It can print any `Param`
-    // where `Id` has a `describtion` and `value` method (`Param(Help)` is one such parameter).
+    // where `Id` has a `description` and `value` method (`Param(Help)` is one such parameter).
     // The last argument contains options as to how `help` should print those parameters. Using
     // `.{}` means the default options.
     if (res.args.help != 0)
         return clap.help(std.io.getStdErr().writer(), clap.Help, &params, .{});
 }
+
+const clap = @import("clap");
+const std = @import("std");
 
 ```
 
@@ -295,9 +284,6 @@ The `usage` prints a small abbreviated version of the help message. It expects t
 to have a `value` method so it can provide that in the output.
 
 ```zig
-const clap = @import("clap");
-const std = @import("std");
-
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
@@ -319,6 +305,9 @@ pub fn main() !void {
     if (res.args.help != 0)
         return clap.usage(std.io.getStdErr().writer(), clap.Help, &params);
 }
+
+const clap = @import("clap");
+const std = @import("std");
 
 ```
 

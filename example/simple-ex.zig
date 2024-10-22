@@ -1,10 +1,3 @@
-const clap = @import("clap");
-const std = @import("std");
-
-const debug = std.debug;
-const io = std.io;
-const process = std.process;
-
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
@@ -38,19 +31,22 @@ pub fn main() !void {
         // allowed.
         .assignment_separators = "=:",
     }) catch |err| {
-        diag.report(io.getStdErr().writer(), err) catch {};
+        diag.report(std.io.getStdErr().writer(), err) catch {};
         return err;
     };
     defer res.deinit();
 
     if (res.args.help != 0)
-        debug.print("--help\n", .{});
+        std.debug.print("--help\n", .{});
     if (res.args.number) |n|
-        debug.print("--number = {}\n", .{n});
+        std.debug.print("--number = {}\n", .{n});
     if (res.args.answer) |a|
-        debug.print("--answer = {s}\n", .{@tagName(a)});
+        std.debug.print("--answer = {s}\n", .{@tagName(a)});
     for (res.args.string) |s|
-        debug.print("--string = {s}\n", .{s});
+        std.debug.print("--string = {s}\n", .{s});
     for (res.positionals) |pos|
-        debug.print("{s}\n", .{pos});
+        std.debug.print("{s}\n", .{pos});
 }
+
+const clap = @import("clap");
+const std = @import("std");

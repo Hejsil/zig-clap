@@ -1,24 +1,3 @@
-const std = @import("std");
-
-const builtin = std.builtin;
-const debug = std.debug;
-const heap = std.heap;
-const io = std.io;
-const math = std.math;
-const mem = std.mem;
-const meta = std.meta;
-const process = std.process;
-const testing = std.testing;
-
-pub const args = @import("clap/args.zig");
-pub const parsers = @import("clap/parsers.zig");
-pub const streaming = @import("clap/streaming.zig");
-pub const ccw = @import("clap/codepoint_counting_writer.zig");
-
-test "clap" {
-    testing.refAllDecls(@This());
-}
-
 pub const default_assignment_separators = "=";
 
 /// The names a `Param` can have.
@@ -97,14 +76,14 @@ pub fn Param(comptime Id: type) type {
 
 /// Takes a string and parses it into many Param(Help). Returned is a newly allocated slice
 /// containing all the parsed params. The caller is responsible for freeing the slice.
-pub fn parseParams(allocator: mem.Allocator, str: []const u8) ![]Param(Help) {
+pub fn parseParams(allocator: std.mem.Allocator, str: []const u8) ![]Param(Help) {
     var end: usize = undefined;
     return parseParamsEx(allocator, str, &end);
 }
 
 /// Takes a string and parses it into many Param(Help). Returned is a newly allocated slice
 /// containing all the parsed params. The caller is responsible for freeing the slice.
-pub fn parseParamsEx(allocator: mem.Allocator, str: []const u8, end: *usize) ![]Param(Help) {
+pub fn parseParamsEx(allocator: std.mem.Allocator, str: []const u8, end: *usize) ![]Param(Help) {
     var list = std.ArrayList(Param(Help)).init(allocator);
     errdefer list.deinit();
 
@@ -135,11 +114,11 @@ fn countParams(str: []const u8) usize {
     @setEvalBranchQuota(std.math.maxInt(u32));
 
     var res: usize = 0;
-    var it = mem.splitScalar(u8, str, '\n');
+    var it = std.mem.splitScalar(u8, str, '\n');
     while (it.next()) |line| {
-        const trimmed = mem.trimLeft(u8, line, " \t");
-        if (mem.startsWith(u8, trimmed, "-") or
-            mem.startsWith(u8, trimmed, "<"))
+        const trimmed = std.mem.trimLeft(u8, line, " \t");
+        if (std.mem.startsWith(u8, trimmed, "-") or
+            std.mem.startsWith(u8, trimmed, "<"))
         {
             res += 1;
         }
@@ -152,7 +131,7 @@ fn countParams(str: []const u8) usize {
 /// is returned, containing all the parameters parsed. This function will fail if the input slice
 /// is to small.
 pub fn parseParamsIntoSlice(slice: []Param(Help), str: []const u8) ![]Param(Help) {
-    var null_alloc = heap.FixedBufferAllocator.init("");
+    var null_alloc = std.heap.FixedBufferAllocator.init("");
     var list = std.ArrayList(Param(Help)){
         .allocator = null_alloc.allocator(),
         .items = slice[0..0],
@@ -167,7 +146,7 @@ pub fn parseParamsIntoSlice(slice: []Param(Help), str: []const u8) ![]Param(Help
 /// is returned, containing all the parameters parsed. This function will fail if the input slice
 /// is to small.
 pub fn parseParamsIntoSliceEx(slice: []Param(Help), str: []const u8, end: *usize) ![]Param(Help) {
-    var null_alloc = heap.FixedBufferAllocator.init("");
+    var null_alloc = std.heap.FixedBufferAllocator.init("");
     var list = std.ArrayList(Param(Help)){
         .allocator = null_alloc.allocator(),
         .items = slice[0..0],
@@ -410,7 +389,7 @@ pub fn parseParamEx(str: []const u8, end: *usize) !Param(Help) {
 
 fn testParseParams(str: []const u8, expected_params: []const Param(Help)) !void {
     var end: usize = undefined;
-    const actual_params = parseParamsEx(testing.allocator, str, &end) catch |err| {
+    const actual_params = parseParamsEx(std.testing.allocator, str, &end) catch |err| {
         const loc = std.zig.findLineColumn(str, end);
         std.debug.print("error:{}:{}: Failed to parse parameter:\n{s}\n", .{
             loc.line + 1,
@@ -419,22 +398,22 @@ fn testParseParams(str: []const u8, expected_params: []const Param(Help)) !void 
         });
         return err;
     };
-    defer testing.allocator.free(actual_params);
+    defer std.testing.allocator.free(actual_params);
 
-    try testing.expectEqual(expected_params.len, actual_params.len);
+    try std.testing.expectEqual(expected_params.len, actual_params.len);
     for (expected_params, 0..) |_, i|
         try expectParam(expected_params[i], actual_params[i]);
 }
 
 fn expectParam(expect: Param(Help), actual: Param(Help)) !void {
-    try testing.expectEqualStrings(expect.id.desc, actual.id.desc);
-    try testing.expectEqualStrings(expect.id.val, actual.id.val);
-    try testing.expectEqual(expect.names.short, actual.names.short);
-    try testing.expectEqual(expect.takes_value, actual.takes_value);
+    try std.testing.expectEqualStrings(expect.id.desc, actual.id.desc);
+    try std.testing.expectEqualStrings(expect.id.val, actual.id.val);
+    try std.testing.expectEqual(expect.names.short, actual.names.short);
+    try std.testing.expectEqual(expect.takes_value, actual.takes_value);
     if (expect.names.long) |long| {
-        try testing.expectEqualStrings(long, actual.names.long.?);
+        try std.testing.expectEqualStrings(long, actual.names.long.?);
     } else {
-        try testing.expectEqual(@as(?[]const u8, null), actual.names.long);
+        try std.testing.expectEqual(@as(?[]const u8, null), actual.names.long);
     }
 }
 
@@ -549,11 +528,11 @@ test "parseParams" {
         },
     });
 
-    try testing.expectError(error.InvalidParameter, parseParam("--long, Help"));
-    try testing.expectError(error.InvalidParameter, parseParam("-s, Help"));
-    try testing.expectError(error.InvalidParameter, parseParam("-ss Help"));
-    try testing.expectError(error.InvalidParameter, parseParam("-ss <val> Help"));
-    try testing.expectError(error.InvalidParameter, parseParam("- Help"));
+    try std.testing.expectError(error.InvalidParameter, parseParam("--long, Help"));
+    try std.testing.expectError(error.InvalidParameter, parseParam("-s, Help"));
+    try std.testing.expectError(error.InvalidParameter, parseParam("-ss Help"));
+    try std.testing.expectError(error.InvalidParameter, parseParam("-ss <val> Help"));
+    try std.testing.expectError(error.InvalidParameter, parseParam("- Help"));
 }
 
 /// Optional diagnostics used for reporting useful errors
@@ -588,9 +567,9 @@ pub const Diagnostic = struct {
 
 fn testDiag(diag: Diagnostic, err: anyerror, expected: []const u8) !void {
     var buf: [1024]u8 = undefined;
-    var slice_stream = io.fixedBufferStream(&buf);
+    var slice_stream = std.io.fixedBufferStream(&buf);
     diag.report(slice_stream.writer(), err) catch unreachable;
-    try testing.expectEqualStrings(expected, slice_stream.getWritten());
+    try std.testing.expectEqualStrings(expected, slice_stream.getWritten());
 }
 
 test "Diagnostic.report" {
@@ -644,7 +623,7 @@ test "Diagnostic.report" {
 
 /// Options that can be set to customize the behavior of parsing.
 pub const ParseOptions = struct {
-    allocator: mem.Allocator,
+    allocator: std.mem.Allocator,
     diagnostic: ?*Diagnostic = null,
 
     /// The assignment separators, which by default is `=`. This is the separator between the name
@@ -666,10 +645,10 @@ pub fn parse(
     comptime value_parsers: anytype,
     opt: ParseOptions,
 ) !Result(Id, params, value_parsers) {
-    var arena = heap.ArenaAllocator.init(opt.allocator);
+    var arena = std.heap.ArenaAllocator.init(opt.allocator);
     errdefer arena.deinit();
 
-    var iter = try process.ArgIterator.initWithAllocator(arena.allocator());
+    var iter = try std.process.ArgIterator.initWithAllocator(arena.allocator());
     const exe_arg = iter.next();
 
     const result = try parseEx(Id, params, value_parsers, &iter, .{
@@ -745,7 +724,7 @@ pub fn parseEx(
     var arguments = Arguments(Id, params, value_parsers, .list){};
     errdefer deinitArgs(Id, params, allocator, &arguments);
 
-    var stream = streaming.Clap(Id, meta.Child(@TypeOf(iter))){
+    var stream = streaming.Clap(Id, std.meta.Child(@TypeOf(iter))){
         .params = params,
         .iter = iter,
         .diagnostic = opt.diagnostic,
@@ -785,7 +764,7 @@ pub fn parseEx(
     // We are done parsing, but our arguments are stored in lists, and not slices. Map the list
     // fields to slices and return that.
     var result_args = Arguments(Id, params, value_parsers, .slice){};
-    inline for (meta.fields(@TypeOf(arguments))) |field| {
+    inline for (std.meta.fields(@TypeOf(arguments))) |field| {
         if (@typeInfo(field.type) == .@"struct" and
             @hasDecl(field.type, "toOwnedSlice"))
         {
@@ -812,7 +791,7 @@ pub fn ResultEx(
     return struct {
         args: Arguments(Id, params, value_parsers, .slice),
         positionals: []const FindPositionalType(Id, params, value_parsers),
-        allocator: mem.Allocator,
+        allocator: std.mem.Allocator,
 
         pub fn deinit(result: *@This()) void {
             deinitArgs(Id, params, result.allocator, &result.args);
@@ -859,7 +838,7 @@ fn ParamType(
 fn deinitArgs(
     comptime Id: type,
     comptime params: []const Param(Id),
-    allocator: mem.Allocator,
+    allocator: std.mem.Allocator,
     arguments: anytype,
 ) void {
     inline for (params) |param| {
@@ -899,7 +878,7 @@ fn Arguments(
         fields_len += 1;
     }
 
-    var fields: [fields_len]builtin.Type.StructField = undefined;
+    var fields: [fields_len]std.builtin.Type.StructField = undefined;
     var i: usize = 0;
     for (params) |param| {
         const longest = param.names.longest();
@@ -946,7 +925,7 @@ test "str and u64" {
         .args = &.{ "--num", "10", "--str", "cooley_rec_inp_ptr" },
     };
     var res = try parseEx(Help, &params, parsers.default, &iter, .{
-        .allocator = testing.allocator,
+        .allocator = std.testing.allocator,
     });
     defer res.deinit();
 }
@@ -961,12 +940,12 @@ test "different assignment separators" {
         .args = &.{ "-a=0", "--aa=1", "-a:2", "--aa:3" },
     };
     var res = try parseEx(Help, &params, parsers.default, &iter, .{
-        .allocator = testing.allocator,
+        .allocator = std.testing.allocator,
         .assignment_separators = "=:",
     });
     defer res.deinit();
 
-    try testing.expectEqualSlices(usize, &.{ 0, 1, 2, 3 }, res.args.aa);
+    try std.testing.expectEqualSlices(usize, &.{ 0, 1, 2, 3 }, res.args.aa);
 }
 
 test "everything" {
@@ -984,18 +963,18 @@ test "everything" {
         .args = &.{ "-a", "--aa", "-c", "0", "something", "-d", "1", "--dd", "2", "-h" },
     };
     var res = try parseEx(Help, &params, parsers.default, &iter, .{
-        .allocator = testing.allocator,
+        .allocator = std.testing.allocator,
     });
     defer res.deinit();
 
-    try testing.expect(res.args.aa == 2);
-    try testing.expect(res.args.bb == 0);
-    try testing.expect(res.args.h == 1);
-    try testing.expectEqualStrings("0", res.args.cc.?);
-    try testing.expectEqual(@as(usize, 1), res.positionals.len);
-    try testing.expectEqualStrings("something", res.positionals[0]);
-    try testing.expectEqualSlices(usize, &.{ 1, 2 }, res.args.dd);
-    try testing.expectEqual(@as(usize, 10), iter.index);
+    try std.testing.expect(res.args.aa == 2);
+    try std.testing.expect(res.args.bb == 0);
+    try std.testing.expect(res.args.h == 1);
+    try std.testing.expectEqualStrings("0", res.args.cc.?);
+    try std.testing.expectEqual(@as(usize, 1), res.positionals.len);
+    try std.testing.expectEqualStrings("something", res.positionals[0]);
+    try std.testing.expectEqualSlices(usize, &.{ 1, 2 }, res.args.dd);
+    try std.testing.expectEqual(@as(usize, 10), iter.index);
 }
 
 test "terminating positional" {
@@ -1013,19 +992,19 @@ test "terminating positional" {
         .args = &.{ "-a", "--aa", "-c", "0", "something", "-d", "1", "--dd", "2", "-h" },
     };
     var res = try parseEx(Help, &params, parsers.default, &iter, .{
-        .allocator = testing.allocator,
+        .allocator = std.testing.allocator,
         .terminating_positional = 0,
     });
     defer res.deinit();
 
-    try testing.expect(res.args.aa == 2);
-    try testing.expect(res.args.bb == 0);
-    try testing.expect(res.args.h == 0);
-    try testing.expectEqualStrings("0", res.args.cc.?);
-    try testing.expectEqual(@as(usize, 1), res.positionals.len);
-    try testing.expectEqualStrings("something", res.positionals[0]);
-    try testing.expectEqualSlices(usize, &.{}, res.args.dd);
-    try testing.expectEqual(@as(usize, 5), iter.index);
+    try std.testing.expect(res.args.aa == 2);
+    try std.testing.expect(res.args.bb == 0);
+    try std.testing.expect(res.args.h == 0);
+    try std.testing.expectEqualStrings("0", res.args.cc.?);
+    try std.testing.expectEqual(@as(usize, 1), res.positionals.len);
+    try std.testing.expectEqualStrings("something", res.positionals[0]);
+    try std.testing.expectEqualSlices(usize, &.{}, res.args.dd);
+    try std.testing.expectEqual(@as(usize, 5), iter.index);
 }
 
 test "overflow-safe" {
@@ -1039,7 +1018,7 @@ test "overflow-safe" {
 
     // This just needs to not crash
     var res = try parseEx(Help, &params, parsers.default, &iter, .{
-        .allocator = testing.allocator,
+        .allocator = std.testing.allocator,
     });
     defer res.deinit();
 }
@@ -1047,7 +1026,7 @@ test "overflow-safe" {
 test "empty" {
     var iter = args.SliceIterator{ .args = &.{} };
     var res = try parseEx(u8, &[_]Param(u8){}, parsers.default, &iter, .{
-        .allocator = testing.allocator,
+        .allocator = std.testing.allocator,
     });
     defer res.deinit();
 }
@@ -1060,17 +1039,17 @@ fn testErr(
     var diag = Diagnostic{};
     var iter = args.SliceIterator{ .args = args_strings };
     _ = parseEx(Help, params, parsers.default, &iter, .{
-        .allocator = testing.allocator,
+        .allocator = std.testing.allocator,
         .diagnostic = &diag,
     }) catch |err| {
         var buf: [1024]u8 = undefined;
-        var fbs = io.fixedBufferStream(&buf);
+        var fbs = std.io.fixedBufferStream(&buf);
         diag.report(fbs.writer(), err) catch return error.TestFailed;
-        try testing.expectEqualStrings(expected, fbs.getWritten());
+        try std.testing.expectEqualStrings(expected, fbs.getWritten());
         return;
     };
 
-    try testing.expect(false);
+    try std.testing.expect(false);
 }
 
 test "errors" {
@@ -1175,7 +1154,7 @@ pub fn help(
     const max_spacing = blk: {
         var res: usize = 0;
         for (params) |param| {
-            var cs = ccw.codepointCountingWriter(io.null_writer);
+            var cs = ccw.codepointCountingWriter(std.io.null_writer);
             try printParam(cs.writer(), Id, param);
             if (res < cs.codepoints_written)
                 res = @intCast(cs.codepoints_written);
@@ -1215,9 +1194,9 @@ pub fn help(
 
             var first_line = true;
             var res: usize = std.math.maxInt(usize);
-            var it = mem.tokenizeScalar(u8, description, '\n');
+            var it = std.mem.tokenizeScalar(u8, description, '\n');
             while (it.next()) |line| : (first_line = false) {
-                const trimmed = mem.trimLeft(u8, line, " ");
+                const trimmed = std.mem.trimLeft(u8, line, " ");
                 const indent = line.len - trimmed.len;
 
                 // If the first line has no indentation, then we ignore the indentation of the
@@ -1240,18 +1219,18 @@ pub fn help(
         };
 
         const description = param.id.description();
-        var it = mem.splitScalar(u8, description, '\n');
+        var it = std.mem.splitScalar(u8, description, '\n');
         var first_line = true;
         var non_emitted_newlines: usize = 0;
         var last_line_indentation: usize = 0;
         while (it.next()) |raw_line| : (first_line = false) {
             // First line might be special. See comment above.
-            const indented_line = if (first_line and !mem.startsWith(u8, raw_line, " "))
+            const indented_line = if (first_line and !std.mem.startsWith(u8, raw_line, " "))
                 raw_line
             else
                 raw_line[@min(min_description_indent, raw_line.len)..];
 
-            const line = mem.trimLeft(u8, indented_line, " ");
+            const line = std.mem.trimLeft(u8, indented_line, " ");
             if (line.len == 0) {
                 non_emitted_newlines += 1;
                 continue;
@@ -1266,7 +1245,7 @@ pub fn help(
                 const does_not_have_same_indent_as_last_line =
                     line_indentation != last_line_indentation;
 
-                const starts_with_control_char = mem.indexOfScalar(u8, "=*", line[0]) != null;
+                const starts_with_control_char = std.mem.indexOfScalar(u8, "=*", line[0]) != null;
 
                 // Either the input contains 2 or more newlines, in which case we should start
                 // a new paragraph.
@@ -1286,7 +1265,7 @@ pub fn help(
                     try description_writer.newline();
             }
 
-            var words = mem.tokenizeScalar(u8, line, ' ');
+            var words = std.mem.tokenizeScalar(u8, line, ' ');
             while (words.next()) |word|
                 try description_writer.writeWord(word);
 
@@ -1310,7 +1289,7 @@ fn DescriptionWriter(comptime UnderlyingWriter: type) type {
         printed_chars: usize,
 
         pub fn writeWord(writer: *@This(), word: []const u8) !void {
-            debug.assert(word.len != 0);
+            std.debug.assert(word.len != 0);
 
             var first_word = writer.printed_chars <= writer.indentation;
             const chars_to_write = try std.unicode.utf8CountCodepoints(word) + @intFromBool(!first_word);
@@ -1380,13 +1359,13 @@ fn printParam(
 }
 
 fn testHelp(opt: HelpOptions, str: []const u8) !void {
-    const params = try parseParams(testing.allocator, str);
-    defer testing.allocator.free(params);
+    const params = try parseParams(std.testing.allocator, str);
+    defer std.testing.allocator.free(params);
 
     var buf: [2048]u8 = undefined;
-    var fbs = io.fixedBufferStream(&buf);
+    var fbs = std.io.fixedBufferStream(&buf);
     try help(fbs.writer(), Help, params, opt);
-    try testing.expectEqualStrings(str, fbs.getWritten());
+    try std.testing.expectEqualStrings(str, fbs.getWritten());
 }
 
 test "clap.help" {
@@ -1884,9 +1863,9 @@ pub fn usage(stream: anytype, comptime Id: type, params: []const Param(Id)) !voi
 
 fn testUsage(expected: []const u8, params: []const Param(Help)) !void {
     var buf: [1024]u8 = undefined;
-    var fbs = io.fixedBufferStream(&buf);
+    var fbs = std.io.fixedBufferStream(&buf);
     try usage(fbs.writer(), Help, params);
-    try testing.expectEqualStrings(expected, fbs.getWritten());
+    try std.testing.expectEqualStrings(expected, fbs.getWritten());
 }
 
 test "usage" {
@@ -1948,3 +1927,17 @@ test "usage" {
         \\
     ));
 }
+
+test {
+    _ = args;
+    _ = parsers;
+    _ = streaming;
+    _ = ccw;
+}
+
+pub const args = @import("clap/args.zig");
+pub const parsers = @import("clap/parsers.zig");
+pub const streaming = @import("clap/streaming.zig");
+pub const ccw = @import("clap/codepoint_counting_writer.zig");
+
+const std = @import("std");

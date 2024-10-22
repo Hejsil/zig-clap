@@ -1,7 +1,3 @@
-const std = @import("std");
-const builtin = @import("builtin");
-const native_endian = builtin.cpu.arch.endian();
-
 /// A Writer that counts how many codepoints has been written to it.
 /// Expects valid UTF-8 input, and does not validate the input.
 pub fn CodepointCountingWriter(comptime WriterType: type) type {
@@ -34,6 +30,7 @@ pub fn CodepointCountingWriter(comptime WriterType: type) type {
 // the number of codepoints up to that point.
 // Does not validate UTF-8 beyond checking the start byte.
 fn utf8CountCodepointsAllowTruncate(s: []const u8) !struct { bytes: usize, codepoints: usize } {
+    const native_endian = @import("builtin").cpu.arch.endian();
     var len: usize = 0;
 
     const N = @sizeOf(usize);
@@ -100,3 +97,5 @@ test "handles partial UTF-8 writes" {
 
     try testing.expectEqualSlices(u8, utf8_text, fbs.getWritten());
 }
+
+const std = @import("std");

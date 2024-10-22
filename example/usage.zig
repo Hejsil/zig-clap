@@ -1,6 +1,3 @@
-const clap = @import("clap");
-const std = @import("std");
-
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
@@ -22,3 +19,6 @@ pub fn main() !void {
     if (res.args.help != 0)
         return clap.usage(std.io.getStdErr().writer(), clap.Help, &params);
 }
+
+const clap = @import("clap");
+const std = @import("std");

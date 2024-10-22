@@ -1,12 +1,3 @@
-const builtin = @import("builtin");
-const std = @import("std");
-
-const debug = std.debug;
-const heap = std.heap;
-const mem = std.mem;
-const process = std.process;
-const testing = std.testing;
-
 /// An example of what methods should be implemented on an arg iterator.
 pub const ExampleArgIterator = struct {
     pub fn next(iter: *ExampleArgIterator) ?[]const u8 {
@@ -35,7 +26,9 @@ test "SliceIterator" {
     var iter = SliceIterator{ .args = &args };
 
     for (args) |a|
-        try testing.expectEqualStrings(a, iter.next().?);
+        try std.testing.expectEqualStrings(a, iter.next().?);
 
-    try testing.expectEqual(@as(?[]const u8, null), iter.next());
+    try std.testing.expectEqual(@as(?[]const u8, null), iter.next());
 }
+
+const std = @import("std");
