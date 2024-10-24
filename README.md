@@ -90,7 +90,7 @@ pub fn main() !void {
         std.debug.print("--number = {}\n", .{n});
     for (res.args.string) |s|
         std.debug.print("--string = {s}\n", .{s});
-    for (res.positionals) |pos|
+    for (res.positionals[0]) |pos|
         std.debug.print("{s}\n", .{pos});
 }
 
@@ -101,10 +101,10 @@ const std = @import("std");
 
 The result will contain an `args` field and a `positionals` field. `args` will have one field
 for each none positional parameter of your program. The name of the field will be the longest
-name of the parameter.
+name of the parameter. `positionals` be a tuple with one field for each positional parameter.
 
-The fields in `args` are typed. The type is based on the name of the value the parameter takes.
-Since `--number` takes a `usize` the field `res.args.number` has the type `usize`.
+The fields in `args` and `psotionals` are typed. The type is based on the name of the value the
+parameter takes. Since `--number` takes a `usize` the field `res.args.number` has the type `usize`.
 
 Note that this is only the case because `clap.parsers.default` has a field called `usize` which
 contains a parser that returns `usize`. You can pass in something other than
@@ -157,7 +157,7 @@ pub fn main() !void {
         std.debug.print("--answer = {s}\n", .{@tagName(a)});
     for (res.args.string) |s|
         std.debug.print("--string = {s}\n", .{s});
-    for (res.positionals) |pos|
+    for (res.positionals[0]) |pos|
         std.debug.print("{s}\n", .{pos});
 }
 
