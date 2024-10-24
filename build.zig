@@ -15,10 +15,11 @@ pub fn build(b: *std.Build) void {
 
     const example_step = b.step("examples", "Build examples");
     for ([_][]const u8{
+        "help",
         "simple",
         "simple-ex",
         "streaming-clap",
-        "help",
+        "subcommands",
         "usage",
     }) |example_name| {
         const example = b.addExecutable(.{
@@ -69,6 +70,7 @@ fn readMeStep(b: *std.Build) *std.Build.Step {
                 try stream.print(@embedFile("example/README.md.template"), .{
                     @embedFile("example/simple.zig"),
                     @embedFile("example/simple-ex.zig"),
+                    @embedFile("example/subcommands.zig"),
                     @embedFile("example/streaming-clap.zig"),
                     @embedFile("example/help.zig"),
                     @embedFile("example/usage.zig"),
