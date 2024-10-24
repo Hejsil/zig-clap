@@ -709,6 +709,30 @@ pub fn Result(
 /// `T` can be any type and `Error` can be any error. You can pass `clap.parsers.default` if you
 /// just wonna get something up and running.
 ///
+/// The result will also contain a `positionals` field which contains all positional arguments
+/// passed. This field will be a tuple with one field for each positional parameter.
+///
+/// Example:
+///   -h, --help
+///   -s, --str  <str>
+///   -i, --int  <usize>
+///   -m, --many <usize>...
+///   <u8>
+///   <str>...
+///
+///   struct {
+///       args: struct {
+///           help: u8,
+///           str: ?[]const u8,
+///           int: ?usize,
+///           many: []const usize,
+///       },
+///       positionals: struct {
+///           ?u8,
+///           []const []const u8,
+///       },
+///   }
+///
 /// Caller owns the result and should free it by calling `result.deinit()`
 pub fn parseEx(
     comptime Id: type,
@@ -720,7 +744,7 @@ pub fn parseEx(
     const allocator = opt.allocator;
 
     var positional_count: usize = 0;
-    var positionals = initPositionals(Positionals(Id, params, value_parsers, .list));
+    var positionals = Positionals(Id, params, value_parsers, .list){};
     errdefer deinitPositionals(&positionals, allocator);
 
     var arguments = Arguments(Id, params, value_parsers, .list){};
@@ -733,7 +757,13 @@ pub fn parseEx(
         .assignment_separators = opt.assignment_separators,
     };
     arg_loop: while (try stream.next()) |arg| {
+        // This loop checks if we got a short or long parameter. If so, the value is parsed and
+        // stored in `arguments`
         inline for (params) |*param| continue_params_loop: {
+            const longest = comptime param.names.longest();
+            if (longest.kind == .positional)
+                continue;
+
             if (param != arg.param)
                 // This is a trick to emulate a runtime `continue` in an `inline for`.
                 break :continue_params_loop;
@@ -743,28 +773,51 @@ pub fn parseEx(
                 .one, .many => @field(value_parsers, param.id.value()),
             };
 
-            const longest = comptime param.names.longest();
             const name = longest.name[0..longest.name.len].*;
-            switch (longest.kind) {
-                .short, .long => switch (param.takes_value) {
-                    .none => @field(arguments, &name) +|= 1,
-                    .one => @field(arguments, &name) = try parser(arg.value.?),
-                    .many => {
-                        const value = try parser(arg.value.?);
-                        try @field(arguments, &name).append(allocator, value);
-                    },
-                },
-                .positional => {
-                    switch (@typeInfo(@TypeOf(positionals))) {
-                        .optional => positionals = try parser(arg.value.?),
-                        else => try positionals.append(allocator, try parser(arg.value.?)),
-                    }
-                    if (opt.terminating_positional <= positional_count)
-                        break :arg_loop;
-
-                    positional_count += 1;
+            switch (param.takes_value) {
+                .none => @field(arguments, &name) +|= 1,
+                .one => @field(arguments, &name) = try parser(arg.value.?),
+                .many => {
+                    const value = try parser(arg.value.?);
+                    try @field(arguments, &name).append(allocator, value);
                 },
             }
+        }
+
+        // This loop checks if we got a positional parameter. If so, the value is parsed and
+        // stored in `positionals`
+        comptime var positionals_index = 0;
+        inline for (params) |*param| continue_params_loop: {
+            const longest = comptime param.names.longest();
+            if (longest.kind != .positional)
+                continue;
+
+            const i = positionals_index;
+            positionals_index += 1;
+
+            if (stream.positional != arg.param)
+                // This is a trick to emulate a runtime `continue` in an `inline for`.
+                break :continue_params_loop;
+
+            const parser = comptime switch (param.takes_value) {
+                .none => null,
+                .one, .many => @field(value_parsers, param.id.value()),
+            };
+
+            // We keep track of how many positionals we have received. This is used to pick which
+            // `positional` field to store to. Once `positional_count` exceeds the number of
+            // positional parameters, the rest are stored in the last `positional` field.
+            const pos = &positionals[i];
+            const last = positionals.len == i + 1;
+            if ((last and positional_count >= i) or positional_count == i)
+                switch (@typeInfo(@TypeOf(pos.*))) {
+                    .optional => pos.* = try parser(arg.value.?),
+                    else => try pos.append(allocator, try parser(arg.value.?)),
+                };
+
+            if (opt.terminating_positional <= positional_count)
+                break :arg_loop;
+            positional_count += 1;
         }
     }
 
@@ -772,21 +825,23 @@ pub fn parseEx(
     // fields to slices and return that.
     var result_args = Arguments(Id, params, value_parsers, .slice){};
     inline for (std.meta.fields(@TypeOf(arguments))) |field| {
-        if (@typeInfo(field.type) == .@"struct" and
-            @hasDecl(field.type, "toOwnedSlice"))
-        {
-            const slice = try @field(arguments, field.name).toOwnedSlice(allocator);
-            @field(result_args, field.name) = slice;
-        } else {
-            @field(result_args, field.name) = @field(arguments, field.name);
+        switch (@typeInfo(field.type)) {
+            .@"struct" => {
+                const slice = try @field(arguments, field.name).toOwnedSlice(allocator);
+                @field(result_args, field.name) = slice;
+            },
+            else => @field(result_args, field.name) = @field(arguments, field.name),
         }
     }
 
     // We are done parsing, but our positionals are stored in lists, and not slices.
-    const result_positionals = switch (@typeInfo(@TypeOf(positionals))) {
-        .optional => positionals,
-        else => try positionals.toOwnedSlice(allocator),
-    };
+    var result_positionals = Positionals(Id, params, value_parsers, .slice){};
+    inline for (&result_positionals, &positionals) |*res_pos, *pos| {
+        switch (@typeInfo(@TypeOf(pos.*))) {
+            .@"struct" => res_pos.* = try pos.toOwnedSlice(allocator),
+            else => res_pos.* = pos.*,
+        }
+    }
 
     return ResultEx(Id, params, value_parsers){
         .args = result_args,
@@ -813,55 +868,72 @@ pub fn ResultEx(
     };
 }
 
+/// Turn a list of parameters into a tuple with one field for each positional parameter.
+/// The type of each parameter field is determined by `ParamType`.
 fn Positionals(
     comptime Id: type,
     comptime params: []const Param(Id),
     comptime value_parsers: anytype,
     comptime multi_arg_kind: MultiArgKind,
 ) type {
-    const pos = findPositional(Id, params) orelse return ?void;
-    const T = ParamType(Id, pos, value_parsers);
-    if (pos.takes_value == .many)
-        return switch (multi_arg_kind) {
-            .slice => []const T,
-            .list => std.ArrayListUnmanaged(T),
-        };
-
-    return ?T;
-}
-
-fn initPositionals(comptime T: type) T {
-    return switch (@typeInfo(T)) {
-        .optional => null,
-        else => .{},
-    };
-}
-
-fn deinitPositionals(positionals: anytype, allocator: std.mem.Allocator) void {
-    switch (@typeInfo(@TypeOf(positionals.*))) {
-        .optional => {},
-        .@"struct" => positionals.deinit(allocator),
-        else => allocator.free(positionals.*),
-    }
-}
-
-fn findPositional(comptime Id: type, params: []const Param(Id)) ?Param(Id) {
+    var fields_len: usize = 0;
     for (params) |param| {
         const longest = param.names.longest();
-        if (longest.kind == .positional)
-            return param;
+        if (longest.kind != .positional)
+            continue;
+        fields_len += 1;
     }
 
-    return null;
+    var fields: [fields_len]std.builtin.Type.StructField = undefined;
+    var i: usize = 0;
+    for (params) |param| {
+        const longest = param.names.longest();
+        if (longest.kind != .positional)
+            continue;
+
+        const T = ParamType(Id, param, value_parsers);
+        const default_value = switch (param.takes_value) {
+            .none => continue,
+            .one => @as(?T, null),
+            .many => switch (multi_arg_kind) {
+                .slice => @as([]const T, &[_]T{}),
+                .list => std.ArrayListUnmanaged(T){},
+            },
+        };
+
+        fields[i] = .{
+            .name = std.fmt.comptimePrint("{}", .{i}),
+            .type = @TypeOf(default_value),
+            .default_value = @ptrCast(&default_value),
+            .is_comptime = false,
+            .alignment = @alignOf(@TypeOf(default_value)),
+        };
+        i += 1;
+    }
+
+    return @Type(.{ .@"struct" = .{
+        .layout = .auto,
+        .fields = &fields,
+        .decls = &.{},
+        .is_tuple = true,
+    } });
+}
+
+/// Deinitializes a tuple of type `Positionals`. Since the `Positionals` type is generated, and we
+/// cannot add the deinit declaration to it, we declare it here instead.
+fn deinitPositionals(positionals: anytype, allocator: std.mem.Allocator) void {
+    inline for (positionals) |*pos| {
+        switch (@typeInfo(@TypeOf(pos.*))) {
+            .optional => {},
+            .@"struct" => pos.deinit(allocator),
+            else => allocator.free(pos.*),
+        }
+    }
 }
 
 /// Given a parameter figure out which type that parameter is parsed into when using the correct
 /// parser from `value_parsers`.
-fn ParamType(
-    comptime Id: type,
-    comptime param: Param(Id),
-    comptime value_parsers: anytype,
-) type {
+fn ParamType(comptime Id: type, comptime param: Param(Id), comptime value_parsers: anytype) type {
     const parser = switch (param.takes_value) {
         .none => parsers.string,
         .one, .many => @field(value_parsers, param.id.value()),
@@ -983,7 +1055,7 @@ test "single positional" {
         });
         defer res.deinit();
 
-        try std.testing.expect(res.positionals == null);
+        try std.testing.expect(res.positionals[0] == null);
     }
 
     {
@@ -993,7 +1065,7 @@ test "single positional" {
         });
         defer res.deinit();
 
-        try std.testing.expectEqualStrings("a", res.positionals.?);
+        try std.testing.expectEqualStrings("a", res.positionals[0].?);
     }
 
     {
@@ -1003,7 +1075,48 @@ test "single positional" {
         });
         defer res.deinit();
 
-        try std.testing.expectEqualStrings("b", res.positionals.?);
+        try std.testing.expectEqualStrings("b", res.positionals[0].?);
+    }
+}
+
+test "multiple positionals" {
+    const params = comptime parseParamsComptime(
+        \\<u8>
+        \\<str>
+        \\
+    );
+
+    // {
+    //     var iter = args.SliceIterator{ .args = &.{} };
+    //     var res = try parseEx(Help, &params, parsers.default, &iter, .{
+    //         .allocator = std.testing.allocator,
+    //     });
+    //     defer res.deinit();
+
+    //     try std.testing.expect(res.positionals[0] == null);
+    //     try std.testing.expect(res.positionals[1] == null);
+    // }
+
+    // {
+    //     var iter = args.SliceIterator{ .args = &.{"1"} };
+    //     var res = try parseEx(Help, &params, parsers.default, &iter, .{
+    //         .allocator = std.testing.allocator,
+    //     });
+    //     defer res.deinit();
+
+    //     try std.testing.expectEqual(@as(u8, 1), res.positionals[0].?);
+    //     try std.testing.expect(res.positionals[1] == null);
+    // }
+
+    {
+        var iter = args.SliceIterator{ .args = &.{ "1", "b" } };
+        var res = try parseEx(Help, &params, parsers.default, &iter, .{
+            .allocator = std.testing.allocator,
+        });
+        defer res.deinit();
+
+        try std.testing.expectEqual(@as(u8, 1), res.positionals[0].?);
+        try std.testing.expectEqualStrings("b", res.positionals[1].?);
     }
 }
 
@@ -1031,7 +1144,7 @@ test "everything" {
     try std.testing.expect(res.args.h == 1);
     try std.testing.expectEqualStrings("0", res.args.cc.?);
     try std.testing.expectEqual(@as(usize, 1), res.positionals.len);
-    try std.testing.expectEqualStrings("something", res.positionals[0]);
+    try std.testing.expectEqualStrings("something", res.positionals[0][0]);
     try std.testing.expectEqualSlices(usize, &.{ 1, 2 }, res.args.dd);
     try std.testing.expectEqual(@as(usize, 10), iter.index);
 }
@@ -1061,7 +1174,8 @@ test "terminating positional" {
     try std.testing.expect(res.args.h == 0);
     try std.testing.expectEqualStrings("0", res.args.cc.?);
     try std.testing.expectEqual(@as(usize, 1), res.positionals.len);
-    try std.testing.expectEqualStrings("something", res.positionals[0]);
+    try std.testing.expectEqual(@as(usize, 1), res.positionals[0].len);
+    try std.testing.expectEqualStrings("something", res.positionals[0][0]);
     try std.testing.expectEqualSlices(usize, &.{}, res.args.dd);
     try std.testing.expectEqual(@as(usize, 5), iter.index);
 }
