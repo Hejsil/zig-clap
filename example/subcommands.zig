@@ -34,11 +34,11 @@ pub fn main() !void {
         .diagnostic = &diag,
         .allocator = gpa,
 
-        // Terminate the parsing of arguments after parsing the first positional (0 is passed here
-        // because parsed positionals are, like slices and arrays, indexed starting at 0).
+        // Terminate the parsing of arguments after parsing the first positional (0 is passed
+        // here because parsed positionals are, like slices and arrays, indexed starting at 0).
         //
-        // This will terminate the parsing after parsing the subcommand enum and leave `iter` not
-        // fully consumed. It can then be reused to parse the arguments for subcommands
+        // This will terminate the parsing after parsing the subcommand enum and leave `iter`
+        // not fully consumed. It can then be reused to parse the arguments for subcommands
         .terminating_positional = 0,
     }) catch |err| {
         diag.report(std.io.getStdErr().writer(), err) catch {};
@@ -57,8 +57,8 @@ pub fn main() !void {
 }
 
 fn mathMain(gpa: std.mem.Allocator, iter: *std.process.ArgIterator, main_args: MainArgs) !void {
-    // The parent arguments are not used it, but there are cases where it might be useful, so the
-    // example shows how to pass the arguments around.
+    // The parent arguments are not used it, but there are cases where it might be useful, so
+    // the example shows how to pass the arguments around.
     _ = main_args;
 
     // The parameters for the subcommand
