@@ -744,7 +744,7 @@ pub fn parseEx(
     const allocator = opt.allocator;
 
     var positional_count: usize = 0;
-    var positionals = Positionals(Id, params, value_parsers, .list){};
+    var positionals = initPositionals(Id, params, value_parsers, .list);
     errdefer deinitPositionals(&positionals, allocator);
 
     var arguments = Arguments(Id, params, value_parsers, .list){};
@@ -835,7 +835,7 @@ pub fn parseEx(
     }
 
     // We are done parsing, but our positionals are stored in lists, and not slices.
-    var result_positionals = Positionals(Id, params, value_parsers, .slice){};
+    var result_positionals: Positionals(Id, params, value_parsers, .slice) = undefined;
     inline for (&result_positionals, &positionals) |*res_pos, *pos| {
         switch (@typeInfo(@TypeOf(pos.*))) {
             .@"struct" => res_pos.* = try pos.toOwnedSlice(allocator),
@@ -892,21 +892,21 @@ fn Positionals(
             continue;
 
         const T = ParamType(Id, param, value_parsers);
-        const default_value = switch (param.takes_value) {
+        const FieldT = switch (param.takes_value) {
             .none => continue,
-            .one => @as(?T, null),
+            .one => ?T,
             .many => switch (multi_arg_kind) {
-                .slice => @as([]const T, &[_]T{}),
-                .list => std.ArrayListUnmanaged(T){},
+                .slice => []const T,
+                .list => std.ArrayListUnmanaged(T),
             },
         };
 
         fields[i] = .{
             .name = std.fmt.comptimePrint("{}", .{i}),
-            .type = @TypeOf(default_value),
-            .default_value = @ptrCast(&default_value),
+            .type = FieldT,
+            .default_value = null,
             .is_comptime = false,
-            .alignment = @alignOf(@TypeOf(default_value)),
+            .alignment = @alignOf(FieldT),
         };
         i += 1;
     }
@@ -917,6 +917,35 @@ fn Positionals(
         .decls = &.{},
         .is_tuple = true,
     } });
+}
+
+fn initPositionals(
+    comptime Id: type,
+    comptime params: []const Param(Id),
+    comptime value_parsers: anytype,
+    comptime multi_arg_kind: MultiArgKind,
+) Positionals(Id, params, value_parsers, multi_arg_kind) {
+    var res: Positionals(Id, params, value_parsers, multi_arg_kind) = undefined;
+
+    comptime var i: usize = 0;
+    inline for (params) |param| {
+        const longest = comptime param.names.longest();
+        if (longest.kind != .positional)
+            continue;
+
+        const T = ParamType(Id, param, value_parsers);
+        res[i] = switch (param.takes_value) {
+            .none => continue,
+            .one => @as(?T, null),
+            .many => switch (multi_arg_kind) {
+                .slice => @as([]const T, &[_]T{}),
+                .list => std.ArrayListUnmanaged(T){},
+            },
+        };
+        i += 1;
+    }
+
+    return res;
 }
 
 /// Deinitializes a tuple of type `Positionals`. Since the `Positionals` type is generated, and we
