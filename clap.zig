@@ -2132,14 +2132,18 @@ test "usage" {
 
 test {
     _ = args;
+    _ = ccw;
     _ = parsers;
     _ = streaming;
-    _ = ccw;
+    _ = v1;
+    _ = v2;
 }
 
 pub const args = @import("clap/args.zig");
+pub const ccw = @import("clap/codepoint_counting_writer.zig");
 pub const parsers = @import("clap/parsers.zig");
 pub const streaming = @import("clap/streaming.zig");
-pub const ccw = @import("clap/codepoint_counting_writer.zig");
+pub const v1 = @This();
+pub const v2 = @import("clap/v2.zig");
 
 const std = @import("std");
