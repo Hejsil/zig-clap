@@ -1,11 +1,11 @@
 pub const default = .{
     .string = string,
     .str = string,
-    .u8 = uint(u8, 0),
-    .u16 = uint(u16, 0),
-    .u32 = uint(u32, 0),
-    .u64 = uint(u64, 0),
-    .usize = uint(usize, 0),
+    .u8 = int(u8, 0),
+    .u16 = int(u16, 0),
+    .u32 = int(u32, 0),
+    .u64 = int(u64, 0),
+    .usize = int(usize, 0),
     .i8 = int(i8, 0),
     .i16 = int(i16, 0),
     .i32 = int(i32, 0),
@@ -24,39 +24,17 @@ test "string" {
     try std.testing.expectEqualStrings("aa", try string("aa"));
 }
 
-/// A parser that uses `std.fmt.parseInt` to parse the string into an integer value.
-/// See `std.fmt.parseInt` documentation for more information.
+/// A parser that uses `std.fmt.parseInt` or `std.fmt.parseUnsigned` to parse the string into an integer value.
+/// See `std.fmt.parseInt` and `std.fmt.parseUnsigned` documentation for more information.
 pub fn int(comptime T: type, comptime base: u8) fn ([]const u8) std.fmt.ParseIntError!T {
     return struct {
         fn parse(in: []const u8) std.fmt.ParseIntError!T {
-            return std.fmt.parseInt(T, in, base);
+            return switch (@typeInfo(T).int.signedness) {
+                .signed => std.fmt.parseInt(T, in, base),
+                .unsigned => std.fmt.parseUnsigned(T, in, base),
+            };
         }
     }.parse;
-}
-
-pub fn uint(comptime T: type, comptime base: u8) fn ([]const u8) std.fmt.ParseIntError!T {
-    return struct {
-        fn parse(in: []const u8) std.fmt.ParseIntError!T {
-            return std.fmt.parseUnsigned(T, in, base);
-        }
-    }.parse;
-}
-
-test "uint" {
-    try std.testing.expectEqual(@as(u8, 0), try uint(u8, 10)("0"));
-    try std.testing.expectEqual(@as(u8, 1), try uint(u8, 10)("1"));
-    try std.testing.expectEqual(@as(u8, 10), try uint(u8, 10)("10"));
-    try std.testing.expectEqual(@as(u8, 0b10), try uint(u8, 2)("10"));
-    try std.testing.expectEqual(@as(u8, 0x10), try uint(u8, 0)("0x10"));
-    try std.testing.expectEqual(@as(u8, 0b10), try uint(u8, 0)("0b10"));
-    try std.testing.expectEqual(@as(u16, 0), try uint(u16, 10)("0"));
-    try std.testing.expectEqual(@as(u16, 1), try uint(u16, 10)("1"));
-    try std.testing.expectEqual(@as(u16, 10), try uint(u16, 10)("10"));
-    try std.testing.expectEqual(@as(u16, 0b10), try uint(u16, 2)("10"));
-    try std.testing.expectEqual(@as(u16, 0x10), try uint(u16, 0)("0x10"));
-    try std.testing.expectEqual(@as(u16, 0b10), try uint(u16, 0)("0b10"));
-
-    try std.testing.expectEqual(std.fmt.ParseIntError.InvalidCharacter, uint(u8, 10)("-10"));
 }
 
 test "int" {
@@ -72,6 +50,7 @@ test "int" {
     try std.testing.expectEqual(@as(i16, 0b10), try int(i16, 2)("10"));
     try std.testing.expectEqual(@as(i16, 0x10), try int(i16, 0)("0x10"));
     try std.testing.expectEqual(@as(i16, 0b10), try int(i16, 0)("0b10"));
+
     try std.testing.expectEqual(@as(i8, 0), try int(i8, 10)("-0"));
     try std.testing.expectEqual(@as(i8, -1), try int(i8, 10)("-1"));
     try std.testing.expectEqual(@as(i8, -10), try int(i8, 10)("-10"));
@@ -84,6 +63,21 @@ test "int" {
     try std.testing.expectEqual(@as(i16, -0b10), try int(i16, 2)("-10"));
     try std.testing.expectEqual(@as(i16, -0x10), try int(i16, 0)("-0x10"));
     try std.testing.expectEqual(@as(i16, -0b10), try int(i16, 0)("-0b10"));
+
+    try std.testing.expectEqual(@as(u8, 0), try int(u8, 10)("0"));
+    try std.testing.expectEqual(@as(u8, 1), try int(u8, 10)("1"));
+    try std.testing.expectEqual(@as(u8, 10), try int(u8, 10)("10"));
+    try std.testing.expectEqual(@as(u8, 0b10), try int(u8, 2)("10"));
+    try std.testing.expectEqual(@as(u8, 0x10), try int(u8, 0)("0x10"));
+    try std.testing.expectEqual(@as(u8, 0b10), try int(u8, 0)("0b10"));
+    try std.testing.expectEqual(@as(u16, 0), try int(u16, 10)("0"));
+    try std.testing.expectEqual(@as(u16, 1), try int(u16, 10)("1"));
+    try std.testing.expectEqual(@as(u16, 10), try int(u16, 10)("10"));
+    try std.testing.expectEqual(@as(u16, 0b10), try int(u16, 2)("10"));
+    try std.testing.expectEqual(@as(u16, 0x10), try int(u16, 0)("0x10"));
+    try std.testing.expectEqual(@as(u16, 0b10), try int(u16, 0)("0b10"));
+
+    try std.testing.expectEqual(std.fmt.ParseIntError.InvalidCharacter, int(u8, 10)("-10"));
 }
 
 /// A parser that uses `std.fmt.parseFloat` to parse the string into an float value.
