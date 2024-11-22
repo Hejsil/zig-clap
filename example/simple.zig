@@ -3,7 +3,7 @@ pub fn main() !void {
     defer _ = gpa.deinit();
 
     // First we specify what parameters our program can take.
-    // We can use `parseParamsComptime` to parse a string into an array of `Param(Help)`
+    // We can use `parseParamsComptime` to parse a string into an array of `Param(Help)`.
     const params = comptime clap.parseParamsComptime(
         \\-h, --help             Display this help and exit.
         \\-n, --number <usize>   An option parameter, which takes a value.
@@ -20,7 +20,7 @@ pub fn main() !void {
         .diagnostic = &diag,
         .allocator = gpa.allocator(),
     }) catch |err| {
-        // Report useful error and exit
+        // Report useful error and exit.
         diag.report(std.io.getStdErr().writer(), err) catch {};
         return err;
     };

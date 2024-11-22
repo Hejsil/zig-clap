@@ -1,4 +1,4 @@
-// These are our subcommands
+// These are our subcommands.
 const SubCommands = enum {
     help,
     math,
@@ -8,7 +8,7 @@ const main_parsers = .{
     .command = clap.parsers.enumeration(SubCommands),
 };
 
-// The parameters for main. Parameters for the subcommands are specified further down
+// The parameters for `main`. Parameters for the subcommands are specified further down.
 const main_params = clap.parseParamsComptime(
     \\-h, --help  Display this help and exit.
     \\<command>
@@ -16,7 +16,7 @@ const main_params = clap.parseParamsComptime(
 );
 
 // To pass around arguments returned by clap, `clap.Result` and `clap.ResultEx` can be used to
-// get the return type of `clap.parse` and `clap.parseEx`
+// get the return type of `clap.parse` and `clap.parseEx`.
 const MainArgs = clap.ResultEx(clap.Help, &main_params, main_parsers);
 
 pub fn main() !void {
@@ -38,7 +38,7 @@ pub fn main() !void {
         // here because parsed positionals are, like slices and arrays, indexed starting at 0).
         //
         // This will terminate the parsing after parsing the subcommand enum and leave `iter`
-        // not fully consumed. It can then be reused to parse the arguments for subcommands
+        // not fully consumed. It can then be reused to parse the arguments for subcommands.
         .terminating_positional = 0,
     }) catch |err| {
         diag.report(std.io.getStdErr().writer(), err) catch {};
@@ -57,11 +57,11 @@ pub fn main() !void {
 }
 
 fn mathMain(gpa: std.mem.Allocator, iter: *std.process.ArgIterator, main_args: MainArgs) !void {
-    // The parent arguments are not used it, but there are cases where it might be useful, so
-    // the example shows how to pass the arguments around.
+    // The parent arguments are not used here, but there are cases where it might be useful, so
+    // this example shows how to pass the arguments around.
     _ = main_args;
 
-    // The parameters for the subcommand
+    // The parameters for the subcommand.
     const params = comptime clap.parseParamsComptime(
         \\-h, --help  Display this help and exit.
         \\-a, --add   Add the two numbers
@@ -71,7 +71,7 @@ fn mathMain(gpa: std.mem.Allocator, iter: *std.process.ArgIterator, main_args: M
         \\
     );
 
-    // Here we pass the partially parsed argument iterator
+    // Here we pass the partially parsed argument iterator.
     var diag = clap.Diagnostic{};
     var res = clap.parseEx(clap.Help, &params, clap.parsers.default, iter, .{
         .diagnostic = &diag,

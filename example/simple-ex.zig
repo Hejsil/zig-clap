@@ -3,7 +3,7 @@ pub fn main() !void {
     defer _ = gpa.deinit();
 
     // First we specify what parameters our program can take.
-    // We can use `parseParamsComptime` to parse a string into an array of `Param(Help)`
+    // We can use `parseParamsComptime` to parse a string into an array of `Param(Help)`.
     const params = comptime clap.parseParamsComptime(
         \\-h, --help             Display this help and exit.
         \\-n, --number <INT>     An option parameter, which takes a value.
