@@ -45,8 +45,8 @@ exe.root_module.addImport("clap", clap.module("clap"));
 
 ## API Reference
 
-Automatically generated API Reference for the project
-can be found at https://Hejsil.github.io/zig-clap.
+Automatically generated API Reference for the project can be found at https://Hejsil.github.io/
+zig-clap.
 Note that Zig autodoc is in beta; the website may be broken or incomplete.
 
 ## Examples
@@ -61,7 +61,7 @@ pub fn main() !void {
     defer _ = gpa.deinit();
 
     // First we specify what parameters our program can take.
-    // We can use `parseParamsComptime` to parse a string into an array of `Param(Help)`
+    // We can use `parseParamsComptime` to parse a string into an array of `Param(Help)`.
     const params = comptime clap.parseParamsComptime(
         \\-h, --help             Display this help and exit.
         \\-n, --number <usize>   An option parameter, which takes a value.
@@ -78,7 +78,7 @@ pub fn main() !void {
         .diagnostic = &diag,
         .allocator = gpa.allocator(),
     }) catch |err| {
-        // Report useful error and exit
+        // Report useful error and exit.
         diag.report(std.io.getStdErr().writer(), err) catch {};
         return err;
     };
@@ -99,16 +99,16 @@ const std = @import("std");
 
 ```
 
-The result will contain an `args` field and a `positionals` field. `args` will have one field
-for each none positional parameter of your program. The name of the field will be the longest
-name of the parameter. `positionals` be a tuple with one field for each positional parameter.
+The result will contain an `args` field and a `positionals` field. `args` will have one field for
+each non-positional parameter of your program. The name of the field will be the longest name of the
+parameter. `positionals` will be a tuple with one field for each positional parameter.
 
 The fields in `args` and `postionals` are typed. The type is based on the name of the value the
 parameter takes. Since `--number` takes a `usize` the field `res.args.number` has the type `usize`.
 
 Note that this is only the case because `clap.parsers.default` has a field called `usize` which
-contains a parser that returns `usize`. You can pass in something other than
-`clap.parsers.default` if you want some other mapping.
+contains a parser that returns `usize`. You can pass in something other than `clap.parsers.default`
+if you want some other mapping.
 
 ```zig
 pub fn main() !void {
@@ -116,7 +116,7 @@ pub fn main() !void {
     defer _ = gpa.deinit();
 
     // First we specify what parameters our program can take.
-    // We can use `parseParamsComptime` to parse a string into an array of `Param(Help)`
+    // We can use `parseParamsComptime` to parse a string into an array of `Param(Help)`.
     const params = comptime clap.parseParamsComptime(
         \\-h, --help             Display this help and exit.
         \\-n, --number <INT>     An option parameter, which takes a value.
@@ -172,7 +172,7 @@ There is an option for `clap.parse` and `clap.parseEx` called `terminating_posit
 for users of `clap` to implement subcommands in their cli application:
 
 ```zig
-// These are our subcommands
+// These are our subcommands.
 const SubCommands = enum {
     help,
     math,
@@ -182,7 +182,7 @@ const main_parsers = .{
     .command = clap.parsers.enumeration(SubCommands),
 };
 
-// The parameters for main. Parameters for the subcommands are specified further down
+// The parameters for `main`. Parameters for the subcommands are specified further down.
 const main_params = clap.parseParamsComptime(
     \\-h, --help  Display this help and exit.
     \\<command>
@@ -190,7 +190,7 @@ const main_params = clap.parseParamsComptime(
 );
 
 // To pass around arguments returned by clap, `clap.Result` and `clap.ResultEx` can be used to
-// get the return type of `clap.parse` and `clap.parseEx`
+// get the return type of `clap.parse` and `clap.parseEx`.
 const MainArgs = clap.ResultEx(clap.Help, &main_params, main_parsers);
 
 pub fn main() !void {
@@ -212,7 +212,7 @@ pub fn main() !void {
         // here because parsed positionals are, like slices and arrays, indexed starting at 0).
         //
         // This will terminate the parsing after parsing the subcommand enum and leave `iter`
-        // not fully consumed. It can then be reused to parse the arguments for subcommands
+        // not fully consumed. It can then be reused to parse the arguments for subcommands.
         .terminating_positional = 0,
     }) catch |err| {
         diag.report(std.io.getStdErr().writer(), err) catch {};
@@ -231,11 +231,11 @@ pub fn main() !void {
 }
 
 fn mathMain(gpa: std.mem.Allocator, iter: *std.process.ArgIterator, main_args: MainArgs) !void {
-    // The parent arguments are not used it, but there are cases where it might be useful, so
-    // the example shows how to pass the arguments around.
+    // The parent arguments are not used here, but there are cases where it might be useful, so
+    // this example shows how to pass the arguments around.
     _ = main_args;
 
-    // The parameters for the subcommand
+    // The parameters for the subcommand.
     const params = comptime clap.parseParamsComptime(
         \\-h, --help  Display this help and exit.
         \\-a, --add   Add the two numbers
@@ -245,7 +245,7 @@ fn mathMain(gpa: std.mem.Allocator, iter: *std.process.ArgIterator, main_args: M
         \\
     );
 
-    // Here we pass the partially parsed argument iterator
+    // Here we pass the partially parsed argument iterator.
     var diag = clap.Diagnostic{};
     var res = clap.parseEx(clap.Help, &params, clap.parsers.default, iter, .{
         .diagnostic = &diag,
@@ -297,7 +297,7 @@ pub fn main() !void {
     var iter = try std.process.ArgIterator.initWithAllocator(allocator);
     defer iter.deinit();
 
-    // Skip exe argument
+    // Skip exe argument.
     _ = iter.next();
 
     // Initialize our diagnostics, which can be used for reporting useful errors.
@@ -312,7 +312,7 @@ pub fn main() !void {
 
     // Because we use a streaming parser, we have to consume each argument parsed individually.
     while (parser.next() catch |err| {
-        // Report useful error and exit
+        // Report useful error and exit.
         diag.report(std.io.getStdErr().writer(), err) catch {};
         return err;
     }) |arg| {
@@ -335,15 +335,13 @@ const std = @import("std");
 
 ```
 
-Currently, this parser is the only parser that allows an array of `Param` that
-is generated at runtime.
+Currently, this parser is the only parser that allows an array of `Param` that is generated at runtime.
 
 ### `help`
 
-The `help` prints a simple list of all parameters the program can take. It expects the
-`Id` to have a `description` method and an `value` method so that it can provide that
-in the output. `HelpOptions` is passed to `help` to control how the help message is
-printed.
+`help` prints a simple list of all parameters the program can take. It expects the `Id` to have a
+`description` method and an `value` method so that it can provide that in the output. `HelpOptions`
+is passed to `help` to control how the help message is printed.
 
 ```zig
 pub fn main() !void {
@@ -385,8 +383,8 @@ $ zig-out/bin/help --help
 
 ### `usage`
 
-The `usage` prints a small abbreviated version of the help message. It expects the `Id`
-to have a `value` method so it can provide that in the output.
+`usage` prints a small abbreviated version of the help message. It expects the `Id` to have a
+`value` method so it can provide that in the output.
 
 ```zig
 pub fn main() !void {
