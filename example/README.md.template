@@ -45,8 +45,8 @@ exe.root_module.addImport("clap", clap.module("clap"));
 
 ## API Reference
 
-Automatically generated API Reference for the project
-can be found at https://Hejsil.github.io/zig-clap.
+Automatically generated API Reference for the project can be found at https://Hejsil.github.io/
+zig-clap.
 Note that Zig autodoc is in beta; the website may be broken or incomplete.
 
 ## Examples
@@ -59,16 +59,16 @@ The simplest way to use this library is to just call the `clap.parse` function.
 {s}
 ```
 
-The result will contain an `args` field and a `positionals` field. `args` will have one field
-for each none positional parameter of your program. The name of the field will be the longest
-name of the parameter. `positionals` be a tuple with one field for each positional parameter.
+The result will contain an `args` field and a `positionals` field. `args` will have one field for
+each non-positional parameter of your program. The name of the field will be the longest name of the
+parameter. `positionals` will be a tuple with one field for each positional parameter.
 
 The fields in `args` and `postionals` are typed. The type is based on the name of the value the
 parameter takes. Since `--number` takes a `usize` the field `res.args.number` has the type `usize`.
 
 Note that this is only the case because `clap.parsers.default` has a field called `usize` which
-contains a parser that returns `usize`. You can pass in something other than
-`clap.parsers.default` if you want some other mapping.
+contains a parser that returns `usize`. You can pass in something other than `clap.parsers.default`
+if you want some other mapping.
 
 ```zig
 {s}
@@ -92,15 +92,13 @@ The `streaming.Clap` is the base of all the other parsers. It's a streaming pars
 {s}
 ```
 
-Currently, this parser is the only parser that allows an array of `Param` that
-is generated at runtime.
+Currently, this parser is the only parser that allows an array of `Param` that is generated at runtime.
 
 ### `help`
 
-The `help` prints a simple list of all parameters the program can take. It expects the
-`Id` to have a `description` method and an `value` method so that it can provide that
-in the output. `HelpOptions` is passed to `help` to control how the help message is
-printed.
+`help` prints a simple list of all parameters the program can take. It expects the `Id` to have a
+`description` method and an `value` method so that it can provide that in the output. `HelpOptions`
+is passed to `help` to control how the help message is printed.
 
 ```zig
 {s}
@@ -117,8 +115,8 @@ $ zig-out/bin/help --help
 
 ### `usage`
 
-The `usage` prints a small abbreviated version of the help message. It expects the `Id`
-to have a `value` method so it can provide that in the output.
+`usage` prints a small abbreviated version of the help message. It expects the `Id` to have a
+`value` method so it can provide that in the output.
 
 ```zig
 {s}

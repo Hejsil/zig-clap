@@ -18,7 +18,7 @@ pub fn main() !void {
     var iter = try std.process.ArgIterator.initWithAllocator(allocator);
     defer iter.deinit();
 
-    // Skip exe argument
+    // Skip exe argument.
     _ = iter.next();
 
     // Initialize our diagnostics, which can be used for reporting useful errors.
@@ -33,7 +33,7 @@ pub fn main() !void {
 
     // Because we use a streaming parser, we have to consume each argument parsed individually.
     while (parser.next() catch |err| {
-        // Report useful error and exit
+        // Report useful error and exit.
         diag.report(std.io.getStdErr().writer(), err) catch {};
         return err;
     }) |arg| {
