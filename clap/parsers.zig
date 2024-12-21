@@ -29,7 +29,7 @@ test "string" {
 pub fn int(comptime T: type, comptime base: u8) fn ([]const u8) std.fmt.ParseIntError!T {
     return struct {
         fn parse(in: []const u8) std.fmt.ParseIntError!T {
-            return switch (@typeInfo(T).int.signedness) {
+            return switch (@typeInfo(T).Int.signedness) {
                 .signed => std.fmt.parseInt(T, in, base),
                 .unsigned => std.fmt.parseUnsigned(T, in, base),
             };
@@ -118,11 +118,11 @@ test "enumeration" {
 }
 
 fn ReturnType(comptime P: type) type {
-    return @typeInfo(P).@"fn".return_type.?;
+    return @typeInfo(P).Fn.return_type.?;
 }
 
 pub fn Result(comptime P: type) type {
-    return @typeInfo(ReturnType(P)).error_union.payload;
+    return @typeInfo(ReturnType(P)).ErrorUnion.payload;
 }
 
 const std = @import("std");

@@ -811,7 +811,7 @@ pub fn parseEx(
             const last = positionals.len == i + 1;
             if ((last and positional_count >= i) or positional_count == i)
                 switch (@typeInfo(@TypeOf(pos.*))) {
-                    .optional => pos.* = try parser(arg.value.?),
+                    .Optional => pos.* = try parser(arg.value.?),
                     else => try pos.append(allocator, try parser(arg.value.?)),
                 };
 
@@ -826,7 +826,7 @@ pub fn parseEx(
     var result_args = Arguments(Id, params, value_parsers, .slice){};
     inline for (std.meta.fields(@TypeOf(arguments))) |field| {
         switch (@typeInfo(field.type)) {
-            .@"struct" => {
+            .Struct => {
                 const slice = try @field(arguments, field.name).toOwnedSlice(allocator);
                 @field(result_args, field.name) = slice;
             },
@@ -838,7 +838,7 @@ pub fn parseEx(
     var result_positionals: Positionals(Id, params, value_parsers, .slice) = undefined;
     inline for (&result_positionals, &positionals) |*res_pos, *pos| {
         switch (@typeInfo(@TypeOf(pos.*))) {
-            .@"struct" => res_pos.* = try pos.toOwnedSlice(allocator),
+            .Struct => res_pos.* = try pos.toOwnedSlice(allocator),
             else => res_pos.* = pos.*,
         }
     }
@@ -911,7 +911,7 @@ fn Positionals(
         i += 1;
     }
 
-    return @Type(.{ .@"struct" = .{
+    return @Type(.{ .Struct = .{
         .layout = .auto,
         .fields = &fields,
         .decls = &.{},
@@ -953,8 +953,8 @@ fn initPositionals(
 fn deinitPositionals(positionals: anytype, allocator: std.mem.Allocator) void {
     inline for (positionals) |*pos| {
         switch (@typeInfo(@TypeOf(pos.*))) {
-            .optional => {},
-            .@"struct" => pos.deinit(allocator),
+            .Optional => {},
+            .Struct => pos.deinit(allocator),
             else => allocator.free(pos.*),
         }
     }
@@ -973,10 +973,10 @@ fn ParamType(comptime Id: type, comptime param: Param(Id), comptime value_parser
 /// Deinitializes a struct of type `Argument`. Since the `Argument` type is generated, and we
 /// cannot add the deinit declaration to it, we declare it here instead.
 fn deinitArgs(arguments: anytype, allocator: std.mem.Allocator) void {
-    inline for (@typeInfo(@TypeOf(arguments.*)).@"struct".fields) |field| {
+    inline for (@typeInfo(@TypeOf(arguments.*)).Struct.fields) |field| {
         switch (@typeInfo(field.type)) {
-            .int, .optional => {},
-            .@"struct" => @field(arguments, field.name).deinit(allocator),
+            .Int, .Optional => {},
+            .Struct => @field(arguments, field.name).deinit(allocator),
             else => allocator.free(@field(arguments, field.name)),
         }
     }
@@ -1029,7 +1029,7 @@ fn Arguments(
         i += 1;
     }
 
-    return @Type(.{ .@"struct" = .{
+    return @Type(.{ .Struct = .{
         .layout = .auto,
         .fields = &fields,
         .decls = &.{},
