@@ -1,4 +1,4 @@
-pub fn Params(comptime T: type) type {
+pub fn Parameters(comptime T: type) type {
     const info = @typeInfo(T).@"struct";
 
     var params: [info.fields.len + 2]std.builtin.Type.StructField = undefined;
@@ -34,7 +34,7 @@ pub fn Params(comptime T: type) type {
             .@"union" => |un| blk: {
                 var cmd_fields: [un.fields.len]std.builtin.Type.StructField = undefined;
                 for (un.fields, &cmd_fields) |un_field, *cmd_field| {
-                    const CmdParam = Params(un_field.type);
+                    const CmdParam = Parameters(un_field.type);
                     const cmd_default_value = CmdParam{};
                     cmd_field.* = .{
                         .name = un_field.name,
@@ -275,48 +275,51 @@ fn defaultParseInto(comptime T: type) ParseInto(T) {
     }
 }
 
-fn validateParams(comptime T: type, name: []const u8, opt: ParseOptions(T)) !void {
-    const stderr_writer = std.io.getStdErr().writer();
-    const stderr = opt.stderr orelse stderr_writer.any();
-
+fn validateParameters(
+    writer: anytype,
+    gpa: std.mem.Allocator,
+    name: []const u8,
+    comptime T: type,
+    params: Parameters(T),
+) !void {
     var res: anyerror!void = {};
     var first_command: ?[]const u8 = null;
     var first_positionals: ?[]const u8 = null;
     const fields = @typeInfo(T).@"struct".fields;
-    inline for (fields) |field| switch (@field(opt.params, field.name).kind) {
+    inline for (fields) |field| switch (@field(params, field.name).kind) {
         .flag, .option, .positional, .positionals => {
-            const param = @field(opt.params, field.name);
+            const param = @field(params, field.name);
             if (param.init == null) {
-                try stderr.print("error: '{s}.{s}.init' is null\n", .{ name, field.name });
-                try stderr.print("note: could not infer 'init' for type '{s}'\n", .{@typeName(field.type)});
-                try stderr.print("note: or it was set to null by the caller (don't do that)\n\n", .{});
+                try writer.print("error: '{s}.{s}.init' is null\n", .{ name, field.name });
+                try writer.print("note: could not infer 'init' for type '{s}'\n", .{@typeName(field.type)});
+                try writer.print("note: or it was set to null by the caller (don't do that)\n\n", .{});
                 res = error.InvalidParameter;
             }
             if (param.kind == .flag and param.next == null) {
-                try stderr.print("error: '{s}.{s}.next' is null\n", .{ name, field.name });
-                try stderr.print("note: could not infer 'next' for type '{s}'\n", .{@typeName(field.type)});
-                try stderr.print("note: or it was set to null by the caller (don't do that)\n\n", .{});
+                try writer.print("error: '{s}.{s}.next' is null\n", .{ name, field.name });
+                try writer.print("note: could not infer 'next' for type '{s}'\n", .{@typeName(field.type)});
+                try writer.print("note: or it was set to null by the caller (don't do that)\n\n", .{});
                 res = error.InvalidParameter;
             }
             if (param.kind != .flag and param.parse == null) {
-                try stderr.print("error: '{s}.{s}.parse' is null\n", .{ name, field.name });
-                try stderr.print("note: could not infer 'parse' for type '{s}'\n", .{@typeName(field.type)});
-                try stderr.print("note: or it was set to null by the caller (don't do that)\n\n", .{});
+                try writer.print("error: '{s}.{s}.parse' is null\n", .{ name, field.name });
+                try writer.print("note: could not infer 'parse' for type '{s}'\n", .{@typeName(field.type)});
+                try writer.print("note: or it was set to null by the caller (don't do that)\n\n", .{});
                 res = error.InvalidParameter;
             }
             if (first_command) |command| {
                 if (param.kind == .positional or param.kind == .positionals) {
-                    try stderr.print("error: cannot have positionals after a command\n", .{});
-                    try stderr.print("note: '{s}.{s}' is the command\n", .{ name, command });
-                    try stderr.print("note: '{s}.{s}' is the positional\n\n", .{ name, field.name });
+                    try writer.print("error: cannot have positionals after a command\n", .{});
+                    try writer.print("note: '{s}.{s}' is the command\n", .{ name, command });
+                    try writer.print("note: '{s}.{s}' is the positional\n\n", .{ name, field.name });
                     res = error.InvalidParameter;
                 }
             }
             if (first_positionals) |positional| {
                 if (param.kind == .positional or param.kind == .positionals) {
-                    try stderr.print("error: cannot have positionals after a positional taking many values\n", .{});
-                    try stderr.print("note: '{s}.{s}' is the positional taking many values\n", .{ name, positional });
-                    try stderr.print("note: '{s}.{s}' is the positional after it\n\n", .{ name, field.name });
+                    try writer.print("error: cannot have positionals after a positional taking many values\n", .{});
+                    try writer.print("note: '{s}.{s}' is the positional taking many values\n", .{ name, positional });
+                    try writer.print("note: '{s}.{s}' is the positional after it\n\n", .{ name, field.name });
                     res = error.InvalidParameter;
                 }
             }
@@ -326,16 +329,16 @@ fn validateParams(comptime T: type, name: []const u8, opt: ParseOptions(T)) !voi
         },
         .command => case: {
             if (first_positionals) |positional| {
-                try stderr.print("error: cannot have command after a positional taking many values\n", .{});
-                try stderr.print("note: '{s}.{s}' is the positional\n", .{ name, positional });
-                try stderr.print("note: '{s}.{s}' is the command\n\n", .{ name, field.name });
+                try writer.print("error: cannot have command after a positional taking many values\n", .{});
+                try writer.print("note: '{s}.{s}' is the positional\n", .{ name, positional });
+                try writer.print("note: '{s}.{s}' is the command\n\n", .{ name, field.name });
                 res = error.InvalidParameter;
             }
 
-            const param = @field(opt.params, field.name);
+            const param = @field(params, field.name);
             const union_info = @typeInfo(field.type);
             if (union_info != .@"union" or union_info.@"union".tag_type == null) {
-                try stderr.print(
+                try writer.print(
                     "error: expected command '{s}.{s}' to be a tagged union, but found '{s}'\n\n",
                     .{ name, field.name, @typeName(field.type) },
                 );
@@ -344,8 +347,8 @@ fn validateParams(comptime T: type, name: []const u8, opt: ParseOptions(T)) !voi
             }
 
             if (first_command) |command| {
-                try stderr.print("error: only one field can be a command\n", .{});
-                try stderr.print("note: both '{s}.{s}' and '{s}.{s}' are commands\n\n", .{ name, command, name, field.name });
+                try writer.print("error: only one field can be a command\n", .{});
+                try writer.print("note: both '{s}.{s}' and '{s}.{s}' are commands\n\n", .{ name, command, name, field.name });
                 res = error.InvalidParameter;
                 break :case;
             } else {
@@ -355,15 +358,13 @@ fn validateParams(comptime T: type, name: []const u8, opt: ParseOptions(T)) !voi
             const union_field = union_info.@"union".fields;
             inline for (union_field) |cmd_field| {
                 const cmd_params = @field(param.command, cmd_field.name);
-                const cmd_opt = opt.withNewParams(cmd_field.type, cmd_params);
-
-                const new_name = try std.fmt.allocPrint(opt.gpa, "{s}.{s}", .{
+                const new_name = try std.fmt.allocPrint(gpa, "{s}.{s}", .{
                     name,
                     cmd_field.name,
                 });
-                defer opt.gpa.free(new_name);
+                defer gpa.free(new_name);
 
-                validateParams(cmd_field.type, new_name, cmd_opt) catch |err| {
+                validateParameters(writer, gpa, new_name, cmd_field.type, cmd_params) catch |err| {
                     res = err;
                 };
             }
@@ -373,8 +374,20 @@ fn validateParams(comptime T: type, name: []const u8, opt: ParseOptions(T)) !voi
     return res;
 }
 
-fn testValidateParams(comptime T: type, opt: struct {
-    params: Params(T),
+fn validateParametersComptime(comptime T: type, comptime params: Parameters(T)) void {
+    comptime {
+        var error_buf: [1024 * 4]u8 = undefined;
+        var alloc_buf: [1024 * 4]u8 = undefined;
+
+        var error_fbs = std.io.fixedBufferStream(&error_buf);
+        var fba = std.heap.FixedBufferAllocator.init(&alloc_buf);
+        validateParameters(error_fbs.writer(), fba.allocator(), "", T, params) catch
+            @compileError(error_fbs.getWritten());
+    }
+}
+
+fn testValidateParameters(comptime T: type, opt: struct {
+    params: Parameters(T),
     expected: anyerror!void,
     expected_err: []const u8,
 }) !void {
@@ -384,18 +397,13 @@ fn testValidateParams(comptime T: type, opt: struct {
     const err_writer = err.writer();
     defer err.deinit();
 
-    const actual = validateParams(T, "", .{
-        .gpa = gpa,
-        .params = opt.params,
-        .stderr = err_writer.any(),
-    });
-
+    const actual = validateParameters(err_writer, gpa, "", T, opt.params);
     try std.testing.expectEqualStrings(opt.expected_err, err.items);
     try std.testing.expectEqualDeep(opt.expected, actual);
 }
 
-test validateParams {
-    try testValidateParams(struct { a: *const void }, .{
+test validateParameters {
+    try testValidateParameters(struct { a: *const void }, .{
         .params = .{ .a = .{ .kind = .flag } },
         .expected = error.InvalidParameter,
         .expected_err =
@@ -410,7 +418,7 @@ test validateParams {
         \\
         ,
     });
-    try testValidateParams(struct { a: *const void }, .{
+    try testValidateParameters(struct { a: *const void }, .{
         .params = .{ .a = .{ .kind = .option } },
         .expected = error.InvalidParameter,
         .expected_err =
@@ -425,7 +433,7 @@ test validateParams {
         \\
         ,
     });
-    try testValidateParams(struct { a: *const void }, .{
+    try testValidateParameters(struct { a: *const void }, .{
         .params = .{ .a = .{ .kind = .positional } },
         .expected = error.InvalidParameter,
         .expected_err =
@@ -440,7 +448,7 @@ test validateParams {
         \\
         ,
     });
-    try testValidateParams(struct { a: *const void }, .{
+    try testValidateParameters(struct { a: *const void }, .{
         .params = .{ .a = .{ .kind = .positionals } },
         .expected = error.InvalidParameter,
         .expected_err =
@@ -455,7 +463,7 @@ test validateParams {
         \\
         ,
     });
-    try testValidateParams(struct { a: *const void }, .{
+    try testValidateParameters(struct { a: *const void }, .{
         .params = .{ .a = .{ .kind = .command } },
         .expected = error.InvalidParameter,
         .expected_err =
@@ -464,7 +472,7 @@ test validateParams {
         \\
         ,
     });
-    try testValidateParams(struct { a: union(enum) {}, b: union(enum) {} }, .{
+    try testValidateParameters(struct { a: union(enum) {}, b: union(enum) {} }, .{
         .params = .{
             .a = .{ .kind = .command },
             .b = .{ .kind = .command },
@@ -477,7 +485,7 @@ test validateParams {
         \\
         ,
     });
-    try testValidateParams(struct { a: union(enum) {}, b: u8 }, .{
+    try testValidateParameters(struct { a: union(enum) {}, b: u8 }, .{
         .params = .{
             .a = .{ .kind = .command },
             .b = .{ .kind = .positional },
@@ -491,7 +499,7 @@ test validateParams {
         \\
         ,
     });
-    try testValidateParams(struct { a: union(enum) {}, b: u8 }, .{
+    try testValidateParameters(struct { a: union(enum) {}, b: u8 }, .{
         .params = .{
             .a = .{ .kind = .command },
             .b = .{ .kind = .positionals },
@@ -505,7 +513,7 @@ test validateParams {
         \\
         ,
     });
-    try testValidateParams(struct { a: u8, b: union(enum) {} }, .{
+    try testValidateParameters(struct { a: u8, b: union(enum) {} }, .{
         .params = .{
             .a = .{ .kind = .positionals },
             .b = .{ .kind = .command },
@@ -519,7 +527,7 @@ test validateParams {
         \\
         ,
     });
-    try testValidateParams(struct { a: u8, b: u8 }, .{
+    try testValidateParameters(struct { a: u8, b: u8 }, .{
         .params = .{
             .a = .{ .kind = .positionals },
             .b = .{ .kind = .positional },
@@ -533,7 +541,7 @@ test validateParams {
         \\
         ,
     });
-    try testValidateParams(struct { a: u8, b: u8 }, .{
+    try testValidateParameters(struct { a: u8, b: u8 }, .{
         .params = .{
             .a = .{ .kind = .positionals },
             .b = .{ .kind = .positionals },
@@ -548,7 +556,7 @@ test validateParams {
         ,
     });
 
-    try testValidateParams(struct { a: union(enum) {
+    try testValidateParameters(struct { a: union(enum) {
         a: struct { a: *const void },
         b: struct { a: *const void },
         c: struct { a: *const void },
@@ -622,76 +630,63 @@ pub const VersionParam = struct {
     description: []const u8 = "Print version",
 };
 
-pub const ExtraParams = struct {
+pub const ExtraParameters = struct {
     help: HelpParam = .{},
     version: VersionParam = .{},
 };
 
-pub fn ParseOptions(comptime T: type) type {
-    return struct {
-        gpa: std.mem.Allocator,
-        params: Params(T) = .{},
-        extra_params: ExtraParams = .{},
+pub const ParseOptions = struct {
+    gpa: std.mem.Allocator,
+    extra_params: ExtraParameters = .{},
 
-        assignment_separators: []const u8 = "=",
+    assignment_separators: []const u8 = "=",
 
-        /// The Writer used to write expected output like the help message when `-h` is passed. If
-        /// `null`, `std.io.getStdOut` will be used
-        stdout: ?std.io.AnyWriter = null,
+    /// The Writer used to write expected output like the help message when `-h` is passed. If
+    /// `null`, `std.io.getStdOut` will be used
+    stdout: ?std.io.AnyWriter = null,
 
-        /// The Writer used to write errors. `std.io.getStdErr` will be used. If `null`,
-        /// `std.io.getStdOut` will be used
-        stderr: ?std.io.AnyWriter = null,
-
-        pub fn withNewParams(opt: @This(), comptime T2: type, params: Params(T2)) ParseOptions(T2) {
-            var res: ParseOptions(T2) = undefined;
-            res.params = params;
-            inline for (@typeInfo(@This()).@"struct".fields) |field| {
-                if (comptime std.mem.eql(u8, field.name, "params"))
-                    continue;
-
-                @field(res, field.name) = @field(opt, field.name);
-            }
-
-            return res;
-        }
-    };
-}
+    /// The Writer used to write errors. `std.io.getStdErr` will be used. If `null`,
+    /// `std.io.getStdOut` will be used
+    stderr: ?std.io.AnyWriter = null,
+};
 
 pub const ParseError = error{
     ParsingInterrupted,
     ParsingFailed,
 } || std.mem.Allocator.Error;
 
-pub fn parseIter(it: anytype, comptime T: type, opt: ParseOptions(T)) ParseError!T {
-    switch (@import("builtin").mode) {
-        .Debug, .ReleaseSafe => {
-            validateParams(T, "", opt) catch @panic("Invalid parameters. See errors above.");
-        },
-        .ReleaseFast, .ReleaseSmall => {},
-    }
+pub fn parseIter(it: anytype, comptime T: type, opt: ParseOptions) ParseError!T {
+    const params: Parameters(T) = if (@hasDecl(T, "parameters")) T.parameters else .{};
+    return parseIterParameters(it, T, params, opt);
+}
 
-    var parser = try Parser(@TypeOf(it), T).init(it, opt);
+pub fn parseIterParameters(
+    it: anytype,
+    comptime T: type,
+    comptime params: Parameters(T),
+    opt: ParseOptions,
+) ParseError!T {
+    validateParametersComptime(T, params);
+    var parser = try Parser(@TypeOf(it), T, params).init(it, opt);
     return parser.parse();
 }
 
-fn Parser(comptime Iter: type, comptime T: type) type {
+fn Parser(comptime Iter: type, comptime T: type, comptime params: Parameters(T)) type {
     return struct {
         it: Iter,
-        opt: Options,
         result: T,
+        opt: ParseOptions,
         has_been_set: HasBeenSet,
         current_positional: usize,
 
         stdout_writer: std.fs.File.Writer,
         stderr_writer: std.fs.File.Writer,
 
-        const Options = ParseOptions(T);
         const Field = std.meta.FieldEnum(T);
         const HasBeenSet = std.EnumSet(Field);
         const fields = @typeInfo(T).@"struct".fields;
 
-        fn init(it: Iter, opt: Options) ParseError!@This() {
+        fn init(it: Iter, opt: ParseOptions) ParseError!@This() {
             var res = @This(){
                 .it = it,
                 .opt = opt,
@@ -703,9 +698,9 @@ fn Parser(comptime Iter: type, comptime T: type) type {
                 .stderr_writer = std.io.getStdErr().writer(),
             };
             inline for (fields) |field| {
-                const param = @field(opt.params, field.name);
+                const param = @field(params, field.name);
                 if (!param.required) {
-                    const initValue = param.init orelse unreachable; // Shouldn't happen (validateParams)
+                    const initValue = param.init orelse unreachable; // Shouldn't happen (validateParameters)
                     @field(res.result, field.name) = try initValue(opt.gpa);
                     res.has_been_set.insert(@field(Field, field.name));
                 }
@@ -718,7 +713,7 @@ fn Parser(comptime Iter: type, comptime T: type) type {
             errdefer {
                 // If we fail, deinit fields that can be deinited
                 inline for (fields) |field| continue_field_loop: {
-                    const param = @field(parser.opt.params, field.name);
+                    const param = @field(params, field.name);
                     const deinit = param.deinit orelse break :continue_field_loop;
                     if (parser.has_been_set.contains(@field(Field, field.name)))
                         deinit(&@field(parser.result, field.name), parser.opt.gpa);
@@ -744,7 +739,7 @@ fn Parser(comptime Iter: type, comptime T: type) type {
                 try parser.parsePositional(arg);
 
             inline for (fields) |field| {
-                const param = @field(parser.opt.params, field.name);
+                const param = @field(params, field.name);
                 _ = param;
                 if (!parser.has_been_set.contains(@field(Field, field.name))) {
                     // TODO: Proper error. Required argument not specified
@@ -763,9 +758,9 @@ fn Parser(comptime Iter: type, comptime T: type) type {
                 if (std.mem.eql(u8, name, v))
                     return parser.printVersion();
 
-            inline for (fields) |field| switch (@field(parser.opt.params, field.name).kind) {
+            inline for (fields) |field| switch (@field(params, field.name).kind) {
                 .flag => switch_case: {
-                    const param = @field(parser.opt.params, field.name);
+                    const param = @field(params, field.name);
                     const long_name = param.long orelse break :switch_case;
                     if (!std.mem.eql(u8, name, long_name))
                         break :switch_case;
@@ -773,7 +768,7 @@ fn Parser(comptime Iter: type, comptime T: type) type {
                     return parser.parseNext(@field(Field, field.name));
                 },
                 .option => switch_case: {
-                    const param = @field(parser.opt.params, field.name);
+                    const param = @field(params, field.name);
                     const long_name = param.long orelse break :switch_case;
                     if (!std.mem.startsWith(u8, name, long_name))
                         break :switch_case;
@@ -812,9 +807,9 @@ fn Parser(comptime Iter: type, comptime T: type) type {
                 if (shorts[pos] == v)
                     return parser.printVersion();
 
-            inline for (fields) |field| switch (@field(parser.opt.params, field.name).kind) {
+            inline for (fields) |field| switch (@field(params, field.name).kind) {
                 .flag => switch_case: {
-                    const param = @field(parser.opt.params, field.name);
+                    const param = @field(params, field.name);
                     const short_name = param.short orelse break :switch_case;
                     if (shorts[pos] != short_name)
                         break :switch_case;
@@ -823,7 +818,7 @@ fn Parser(comptime Iter: type, comptime T: type) type {
                     return pos + 1;
                 },
                 .option => switch_case: {
-                    const param = @field(parser.opt.params, field.name);
+                    const param = @field(params, field.name);
                     const short_name = param.short orelse break :switch_case;
                     if (shorts[pos] != short_name)
                         break :switch_case;
@@ -863,7 +858,7 @@ fn Parser(comptime Iter: type, comptime T: type) type {
                     .@"union" => |u| u.fields,
                     else => continue,
                 };
-                const param = @field(parser.opt.params, field.name);
+                const param = @field(params, field.name);
                 if (param.kind != .command)
                     break :continue_field_loop;
 
@@ -872,10 +867,8 @@ fn Parser(comptime Iter: type, comptime T: type) type {
                     if (!std.mem.eql(u8, arg, cmd_params.name orelse cmd_field.name))
                         break :continue_cmd_field_loop;
 
-                    var cmd_parser = try Parser(Iter, cmd_field.type).init(
-                        parser.it,
-                        parser.opt.withNewParams(cmd_field.type, cmd_params),
-                    );
+                    const P = Parser(Iter, cmd_field.type, cmd_params);
+                    var cmd_parser = try P.init(parser.it, parser.opt);
 
                     const cmd_result = try cmd_parser.parse();
                     const cmd_union = @unionInit(field.type, cmd_field.name, cmd_result);
@@ -891,7 +884,7 @@ fn Parser(comptime Iter: type, comptime T: type) type {
         fn parsePositional(parser: *@This(), arg: []const u8) ParseError!void {
             var i: usize = 0;
             inline for (fields) |field| continue_field_loop: {
-                const param = @field(parser.opt.params, field.name);
+                const param = @field(params, field.name);
                 const next_positional = switch (param.kind) {
                     .positional => parser.current_positional + 1,
                     .positionals => parser.current_positional,
@@ -913,14 +906,14 @@ fn Parser(comptime Iter: type, comptime T: type) type {
 
         fn parseNext(parser: *@This(), comptime field: Field) ParseError!void {
             const field_name = @tagName(field);
-            const param = @field(parser.opt.params, field_name);
+            const param = @field(params, field_name);
 
             if (!parser.has_been_set.contains(field)) {
-                const initValue = param.init orelse unreachable; // Shouldn't happen (validateParams)
+                const initValue = param.init orelse unreachable; // Shouldn't happen (validateParameters)
                 @field(parser.result, field_name) = try initValue(parser.opt.gpa);
             }
 
-            const next = param.next orelse unreachable; // Shouldn't happen (validateParams)
+            const next = param.next orelse unreachable; // Shouldn't happen (validateParameters)
             const field_ptr = &@field(parser.result, field_name);
             field_ptr.* = try next(field_ptr.*);
             parser.has_been_set.insert(field);
@@ -928,21 +921,20 @@ fn Parser(comptime Iter: type, comptime T: type) type {
 
         fn parseValue(parser: *@This(), comptime field: Field, value: []const u8) ParseError!void {
             const field_name = @tagName(field);
-            const param = @field(parser.opt.params, field_name);
+            const param = @field(params, field_name);
 
             if (!parser.has_been_set.contains(field)) {
-                const initValue = param.init orelse unreachable; // Shouldn't happen (validateParams)
+                const initValue = param.init orelse unreachable; // Shouldn't happen (validateParameters)
                 @field(parser.result, field_name) = try initValue(parser.opt.gpa);
             }
 
-            const parseInto = param.parse orelse unreachable; // Shouldn't happen (validateParams)
+            const parseInto = param.parse orelse unreachable; // Shouldn't happen (validateParameters)
             try parseInto(&@field(parser.result, field_name), parser.opt.gpa, value);
             parser.has_been_set.insert(field);
         }
 
         fn printHelp(parser: *@This()) ParseError {
-            help(parser.stdout(), T, .{
-                .params = parser.opt.params,
+            helpParameters(parser.stdout(), T, params, .{
                 .extra_params = parser.opt.extra_params,
             }) catch {};
             return error.ParsingInterrupted;
@@ -963,9 +955,8 @@ fn Parser(comptime Iter: type, comptime T: type) type {
     };
 }
 
-fn testParseIter(comptime T: type, opt: struct {
+fn testParseIter(comptime T: type, comptime params: Parameters(T), opt: struct {
     args: []const u8,
-    params: Params(T) = .{},
 
     expected: anyerror!T,
     expected_out: []const u8 = "",
@@ -983,9 +974,8 @@ fn testParseIter(comptime T: type, opt: struct {
     const err_writer = err.writer();
     defer err.deinit();
 
-    const actual = parseIter(&it, T, .{
+    const actual = parseIterParameters(&it, T, params, .{
         .gpa = gpa,
-        .params = opt.params,
         .stdout = out_writer.any(),
         .stderr = err_writer.any(),
     });
@@ -1000,7 +990,7 @@ fn testParseIter(comptime T: type, opt: struct {
     try std.testing.expectEqualStrings(opt.expected_err, err.items);
 }
 
-test "parseIterParams" {
+test "parseIterParameters" {
     const S = struct {
         a: bool = false,
         b: u8 = 0,
@@ -1013,105 +1003,100 @@ test "parseIterParams" {
         }
     };
 
-    try testParseIter(S, .{
+    try testParseIter(S, .{}, .{
         .args = "--a",
         .expected = .{ .a = true },
     });
-    try testParseIter(S, .{
+    try testParseIter(S, .{}, .{
         .args = "-a",
         .expected = .{ .a = true },
     });
 
-    try testParseIter(S, .{
+    try testParseIter(S, .{ .b = .{ .kind = .flag } }, .{
         .args = "--b",
         .expected = .{ .b = 1 },
-        .params = .{ .b = .{ .kind = .flag } },
     });
-    try testParseIter(S, .{
+    try testParseIter(S, .{ .b = .{ .kind = .flag } }, .{
         .args = "-b",
         .expected = .{ .b = 1 },
-        .params = .{ .b = .{ .kind = .flag } },
     });
-    try testParseIter(S, .{
+    try testParseIter(S, .{ .b = .{ .kind = .flag } }, .{
         .args = "-bb",
         .expected = .{ .b = 2 },
-        .params = .{ .b = .{ .kind = .flag } },
     });
 
-    try testParseIter(S, .{
+    try testParseIter(S, .{ .b = .{ .kind = .flag } }, .{
         .args = "-aabb",
         .expected = .{ .a = true, .b = 2 },
-        .params = .{ .b = .{ .kind = .flag } },
     });
 
-    try testParseIter(S, .{
+    try testParseIter(S, .{}, .{
         .args = "--b 1",
         .expected = .{ .b = 1 },
     });
-    try testParseIter(S, .{
+    try testParseIter(S, .{}, .{
         .args = "--b=2",
         .expected = .{ .b = 2 },
     });
 
-    try testParseIter(S, .{
+    try testParseIter(S, .{}, .{
         .args = "-b 1",
         .expected = .{ .b = 1 },
     });
-    try testParseIter(S, .{
+    try testParseIter(S, .{}, .{
         .args = "-b=2",
         .expected = .{ .b = 2 },
     });
-    try testParseIter(S, .{
+    try testParseIter(S, .{}, .{
         .args = "-b3",
         .expected = .{ .b = 3 },
     });
 
-    try testParseIter(S, .{
+    try testParseIter(S, .{}, .{
         .args = "-aab4",
         .expected = .{ .a = true, .b = 4 },
     });
 
-    try testParseIter(S, .{
+    try testParseIter(S, .{}, .{
         .args = "--c b",
         .expected = .{ .c = .b },
     });
-    try testParseIter(S, .{
+    try testParseIter(S, .{}, .{
         .args = "--c=c",
         .expected = .{ .c = .c },
     });
 
-    try testParseIter(S, .{
+    try testParseIter(S, .{}, .{
         .args = "-c b",
         .expected = .{ .c = .b },
     });
-    try testParseIter(S, .{
+    try testParseIter(S, .{}, .{
         .args = "-c=c",
         .expected = .{ .c = .c },
     });
-    try testParseIter(S, .{
+    try testParseIter(S, .{}, .{
         .args = "-cd",
         .expected = .{ .c = .d },
     });
 
-    try testParseIter(S, .{
+    try testParseIter(S, .{ .b = .{ .kind = .flag } }, .{
         .args = "-bbcd",
         .expected = .{ .b = 2, .c = .d },
-        .params = .{ .b = .{ .kind = .flag } },
     });
 
     var expected_items = [_]usize{ 0, 1, 2 };
-    try testParseIter(S, .{
+    try testParseIter(S, .{}, .{
         .args = "-d 0 -d 1 -d 2",
         .expected = .{ .d = .{ .items = &expected_items, .capacity = 8 } },
     });
 
-    try testParseIter(S, .{
+    try testParseIter(S, .{}, .{
         .args = "-e 2",
         .expected = .{ .e = 2 },
     });
 
     // Tests that `d` is not leaked when an error occurs
-    try testParseIter(S, .{
+    try testParseIter(S, .{}, .{
         .args = "-d 0 -d 1 -d 2 -qqqq",
         .expected = error.ParsingFailed,
     });
@@ -1123,33 +1108,29 @@ test "parseIterRequired" {
         b: bool,
     };
 
-    try testParseIter(S, .{
+    try testParseIter(S, .{}, .{
         .args = "",
         .expected = error.ParsingFailed,
     });
-    try testParseIter(S, .{
+    try testParseIter(S, .{}, .{
         .args = "-b",
         .expected = .{ .b = true },
     });
-    try testParseIter(S, .{
+    try testParseIter(S, .{ .a = .{ .required = true } }, .{
         .args = "",
         .expected = error.ParsingFailed,
-        .params = .{ .a = .{ .required = true } },
     });
-    try testParseIter(S, .{
+    try testParseIter(S, .{ .a = .{ .required = true } }, .{
         .args = "-a",
         .expected = error.ParsingFailed,
-        .params = .{ .a = .{ .required = true } },
     });
-    try testParseIter(S, .{
+    try testParseIter(S, .{ .a = .{ .required = true } }, .{
         .args = "-b",
         .expected = error.ParsingFailed,
-        .params = .{ .a = .{ .required = true } },
     });
-    try testParseIter(S, .{
+    try testParseIter(S, .{ .a = .{ .required = true } }, .{
         .args = "-a -b",
         .expected = .{ .a = true, .b = true },
-        .params = .{ .a = .{ .required = true } },
     });
 }
 
@@ -1160,104 +1141,88 @@ test "parseIterPositional" {
         c: enum { a, b, c, d } = .a,
     };
 
-    try testParseIter(S, .{
+    try testParseIter(S, .{ .a = .{ .kind = .positional } }, .{
         .args = "true",
         .expected = .{ .a = true },
-        .params = .{ .a = .{ .kind = .positional } },
     });
-    try testParseIter(S, .{
+    try testParseIter(S, .{ .a = .{ .kind = .positional } }, .{
         .args = "false",
         .expected = .{ .a = false },
-        .params = .{ .a = .{ .kind = .positional } },
     });
-    try testParseIter(S, .{
+    try testParseIter(S, .{ .b = .{ .kind = .positional } }, .{
         .args = "0",
         .expected = .{ .b = 0 },
-        .params = .{ .b = .{ .kind = .positional } },
     });
-    try testParseIter(S, .{
+    try testParseIter(S, .{ .b = .{ .kind = .positional } }, .{
         .args = "2",
         .expected = .{ .b = 2 },
-        .params = .{ .b = .{ .kind = .positional } },
     });
-    try testParseIter(S, .{
+    try testParseIter(S, .{ .c = .{ .kind = .positional } }, .{
         .args = "a",
         .expected = .{ .c = .a },
-        .params = .{ .c = .{ .kind = .positional } },
     });
-    try testParseIter(S, .{
+    try testParseIter(S, .{ .c = .{ .kind = .positional } }, .{
         .args = "c",
         .expected = .{ .c = .c },
-        .params = .{ .c = .{ .kind = .positional } },
     });
 
     try testParseIter(S, .{
+        .a = .{ .kind = .positional },
+        .b = .{ .kind = .positional },
+        .c = .{ .kind = .positional },
+    }, .{
         .args = "true 2 d",
         .expected = .{ .a = true, .b = 2, .c = .d },
-        .params = .{
-            .a = .{ .kind = .positional },
-            .b = .{ .kind = .positional },
-            .c = .{ .kind = .positional },
-        },
     });
     try testParseIter(S, .{
+        .a = .{ .kind = .positional },
+        .b = .{ .kind = .positional },
+        .c = .{ .kind = .positional },
+    }, .{
         .args = "false 4 c",
         .expected = .{ .a = false, .b = 4, .c = .c },
-        .params = .{
-            .a = .{ .kind = .positional },
-            .b = .{ .kind = .positional },
-            .c = .{ .kind = .positional },
-        },
     });
 
-    try testParseIter(S, .{
+    try testParseIter(S, .{ .a = .{ .kind = .positional } }, .{
         .args = "false true",
         .expected = error.ParsingFailed,
-        .params = .{ .a = .{ .kind = .positional } },
     });
-    try testParseIter(S, .{
+    try testParseIter(S, .{ .a = .{ .kind = .positionals } }, .{
         .args = "false true",
         .expected = .{ .a = true },
-        .params = .{ .a = .{ .kind = .positionals } },
     });
-    try testParseIter(S, .{
+    try testParseIter(S, .{ .b = .{ .kind = .positional } }, .{
         .args = "2 3",
         .expected = error.ParsingFailed,
-        .params = .{ .b = .{ .kind = .positional } },
     });
-    try testParseIter(S, .{
+    try testParseIter(S, .{ .b = .{ .kind = .positionals } }, .{
         .args = "2 3",
         .expected = .{ .b = 3 },
-        .params = .{ .b = .{ .kind = .positionals } },
     });
-    try testParseIter(S, .{
+    try testParseIter(S, .{ .c = .{ .kind = .positional } }, .{
         .args = "c d",
         .expected = error.ParsingFailed,
-        .params = .{ .c = .{ .kind = .positional } },
     });
-    try testParseIter(S, .{
+    try testParseIter(S, .{ .c = .{ .kind = .positionals } }, .{
         .args = "c d",
         .expected = .{ .c = .d },
-        .params = .{ .c = .{ .kind = .positionals } },
     });
 
     try testParseIter(S, .{
+        .a = .{ .kind = .positional },
+        .b = .{ .kind = .positional },
+        .c = .{ .kind = .positional },
+    }, .{
         .args = "true 2 d d",
         .expected = error.ParsingFailed,
-        .params = .{
-            .a = .{ .kind = .positional },
-            .b = .{ .kind = .positional },
-            .c = .{ .kind = .positional },
-        },
     });
     try testParseIter(S, .{
+        .a = .{ .kind = .positional },
+        .b = .{ .kind = .positional },
+        .c = .{ .kind = .positionals },
+    }, .{
         .args = "true 2 c d",
         .expected = .{ .a = true, .b = 2, .c = .d },
-        .params = .{
-            .a = .{ .kind = .positional },
-            .b = .{ .kind = .positional },
-            .c = .{ .kind = .positionals },
-        },
     });
 }
 
@@ -1271,15 +1236,15 @@ test "parseIterCommand" {
         },
     };
 
-    try testParseIter(S, .{
+    try testParseIter(S, .{}, .{
         .args = "sub1",
         .expected = .{ .command = .{ .sub1 = .{} } },
     });
-    try testParseIter(S, .{
+    try testParseIter(S, .{}, .{
         .args = "sub1 --a",
         .expected = .{ .command = .{ .sub1 = .{ .a = true } } },
     });
-    try testParseIter(S, .{
+    try testParseIter(S, .{}, .{
         .args = "--a --b sub1 --a",
         .expected = .{
             .a = true,
@@ -1287,15 +1252,15 @@ test "parseIterCommand" {
             .command = .{ .sub1 = .{ .a = true } },
         },
     });
-    try testParseIter(S, .{
+    try testParseIter(S, .{}, .{
         .args = "sub2",
         .expected = .{ .command = .{ .sub2 = .{} } },
     });
-    try testParseIter(S, .{
+    try testParseIter(S, .{}, .{
         .args = "sub2 --b",
         .expected = .{ .command = .{ .sub2 = .{ .b = true } } },
     });
-    try testParseIter(S, .{
+    try testParseIter(S, .{}, .{
         .args = "--a --b sub2 --b",
         .expected = .{
             .a = true,
@@ -1304,20 +1269,18 @@ test "parseIterCommand" {
         },
     });
 
-    try testParseIter(S, .{
+    try testParseIter(S, .{ .command = .{ .command = .{
+        .sub1 = .{ .name = "bob" },
+        .sub2 = .{ .name = "kurt" },
+    } } }, .{
         .args = "bob",
-        .params = .{ .command = .{ .command = .{
-            .sub1 = .{ .name = "bob" },
-            .sub2 = .{ .name = "kurt" },
-        } } },
         .expected = .{ .command = .{ .sub1 = .{} } },
     });
-    try testParseIter(S, .{
+    try testParseIter(S, .{ .command = .{ .command = .{
+        .sub1 = .{ .name = "bob" },
+        .sub2 = .{ .name = "kurt" },
+    } } }, .{
         .args = "kurt",
-        .params = .{ .command = .{ .command = .{
-            .sub1 = .{ .name = "bob" },
-            .sub2 = .{ .name = "kurt" },
-        } } },
         .expected = .{ .command = .{ .sub2 = .{} } },
     });
 }
@@ -1342,9 +1305,8 @@ test "parseIterHelp" {
 
     const help_args = [_][]const u8{ "-h", "--help", "help" };
     for (help_args) |args| {
-        try testParseIter(S, .{
+        try testParseIter(S, .{ .name = "testing-program" }, .{
             .args = args,
-            .params = .{ .name = "testing-program" },
             .expected = error.ParsingInterrupted,
             .expected_out =
             \\Usage: testing-program [OPTIONS] [COMMAND]
@@ -1366,19 +1328,18 @@ test "parseIterHelp" {
             ,
         });
         try testParseIter(S, .{
+            .name = "testing-program",
+            .description = "This is a test",
+            .alice = .{ .description = "Who is this?" },
+            .bob = .{ .description = "Bob the builder" },
+            .ben = .{ .description = "One of the people of all time" },
+            .kurt = .{ .description = "No fun allowed" },
+            .command = .{ .command = .{
+                .cmd1 = .{ .name = "command1", .description = "Command 1" },
+                .cmd2 = .{ .name = "command2", .description = "Command 2" },
+            } },
+        }, .{
             .args = args,
-            .params = .{
-                .name = "testing-program",
-                .description = "This is a test",
-                .alice = .{ .description = "Who is this?" },
-                .bob = .{ .description = "Bob the builder" },
-                .ben = .{ .description = "One of the people of all time" },
-                .kurt = .{ .description = "No fun allowed" },
-                .command = .{ .command = .{
-                    .cmd1 = .{ .name = "command1", .description = "Command 1" },
-                    .cmd2 = .{ .name = "command2", .description = "Command 2" },
-                } },
-            },
             .expected = error.ParsingInterrupted,
             .expected_out =
             \\This is a test
@@ -1404,29 +1365,36 @@ test "parseIterHelp" {
     }
 }
 
-pub fn HelpOptions(comptime T: type) type {
-    return struct {
-        params: Params(T) = .{},
-        extra_params: ExtraParams = .{},
-    };
-}
+pub const HelpOptions = struct {
+    extra_params: ExtraParameters = .{},
+};
 
 const help_long_prefix_len = 4;
 const help_value_prefix_len = 3;
 const help_description_spacing = 2;
 
-pub fn help(writer: anytype, comptime T: type, opt: HelpOptions(T)) !void {
+pub fn help(writer: anytype, comptime T: type, opt: HelpOptions) !void {
+    const params: Parameters(T) = if (@hasDecl(T, "parameters")) T.parameters else .{};
+    return helpParameters(writer, T, params, opt);
+}
+
+pub fn helpParameters(
+    writer: anytype,
+    comptime T: type,
+    params: Parameters(T),
+    opt: HelpOptions,
+) !void {
     const fields = @typeInfo(T).@"struct".fields;
 
     var self_exe_path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const program_name = opt.params.name orelse blk: {
+    const program_name = params.name orelse blk: {
         const self_exe_path = std.fs.selfExePath(&self_exe_path_buf) catch
             break :blk "program";
         break :blk std.fs.path.basename(self_exe_path);
     };
 
-    if (opt.params.description.len != 0) {
-        try writer.writeAll(opt.params.description);
+    if (params.description.len != 0) {
+        try writer.writeAll(params.description);
         try writer.writeAll("\n\n");
     }
 
@@ -1440,10 +1408,10 @@ pub fn help(writer: anytype, comptime T: type, opt: HelpOptions(T)) !void {
     if (opt.extra_params.version.command) |v|
         padding = @max(padding, v.len);
 
-    inline for (fields) |field| switch (@field(opt.params, field.name).kind) {
+    inline for (fields) |field| switch (@field(params, field.name).kind) {
         .flag, .option, .positional, .positionals => {},
         .command => {
-            const param = @field(opt.params, field.name);
+            const param = @field(params, field.name);
             inline for (@typeInfo(@TypeOf(param.command)).@"struct".fields) |cmd_field| {
                 const cmd_param = @field(param.command, cmd_field.name);
                 padding = @max(padding, (cmd_param.name orelse cmd_field.name).len);
@@ -1452,10 +1420,10 @@ pub fn help(writer: anytype, comptime T: type, opt: HelpOptions(T)) !void {
     };
 
     try writer.writeAll("\n\nCommands:\n");
-    inline for (fields) |field| switch (@field(opt.params, field.name).kind) {
+    inline for (fields) |field| switch (@field(params, field.name).kind) {
         .flag, .option, .positional, .positionals => {},
         .command => {
-            const param = @field(opt.params, field.name);
+            const param = @field(params, field.name);
             inline for (@typeInfo(@TypeOf(param.command)).@"struct".fields) |cmd_field| {
                 const cmd_param = @field(param.command, cmd_field.name);
                 try printCommand(writer, padding, .{
@@ -1482,7 +1450,7 @@ pub fn help(writer: anytype, comptime T: type, opt: HelpOptions(T)) !void {
     if (opt.extra_params.version.long) |v|
         padding = @max(padding, v.len + help_long_prefix_len);
     inline for (fields) |field| {
-        const param = @field(opt.params, field.name);
+        const param = @field(params, field.name);
 
         var pad: usize = 0;
         if (param.long) |long|
@@ -1494,7 +1462,7 @@ pub fn help(writer: anytype, comptime T: type, opt: HelpOptions(T)) !void {
 
     try writer.writeAll("\nOptions:\n");
     inline for (fields) |field| {
-        const param = @field(opt.params, field.name);
+        const param = @field(params, field.name);
         switch (param.kind) {
             .command, .positional, .positionals => {},
             .flag => try printParam(writer, padding, .{
@@ -1573,19 +1541,6 @@ fn printParam(writer: anytype, padding: usize, param: struct {
     }
 
     try writer.writeByte('\n');
-}
-
-fn testHelp(comptime T: type, opt: struct {
-    params: Params(T) = .{},
-    expected: []const u8,
-}) !void {
-    var buf: [std.mem.page_size]u8 = undefined;
-    var fbs = std.io.fixedBufferStream(&buf);
-
-    try help(fbs.writer(), T, .{
-        .params = opt.params,
-    });
-    try std.testing.expectEqualStrings(opt.expected, fbs.getWritten());
 }
 
 const types = @import("types.zig");
