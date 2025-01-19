@@ -904,7 +904,7 @@ fn Positionals(
         fields[i] = .{
             .name = std.fmt.comptimePrint("{}", .{i}),
             .type = FieldT,
-            .default_value = null,
+            .default_value_ptr = null,
             .is_comptime = false,
             .alignment = @alignOf(FieldT),
         };
@@ -1022,7 +1022,7 @@ fn Arguments(
         fields[i] = .{
             .name = name,
             .type = @TypeOf(default_value),
-            .default_value = @ptrCast(&default_value),
+            .default_value_ptr = @ptrCast(&default_value),
             .is_comptime = false,
             .alignment = @alignOf(@TypeOf(default_value)),
         };
