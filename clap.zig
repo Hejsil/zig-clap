@@ -795,7 +795,7 @@ pub fn parseEx(
             const i = positionals_index;
             positionals_index += 1;
 
-            if (stream.positional != arg.param)
+            if (arg.param.names.longest().kind != .positional)
                 // This is a trick to emulate a runtime `continue` in an `inline for`.
                 break :continue_params_loop;
 
@@ -809,15 +809,17 @@ pub fn parseEx(
             // positional parameters, the rest are stored in the last `positional` field.
             const pos = &positionals[i];
             const last = positionals.len == i + 1;
-            if ((last and positional_count >= i) or positional_count == i)
+            if ((last and positional_count >= i) or positional_count == i) {
                 switch (@typeInfo(@TypeOf(pos.*))) {
                     .optional => pos.* = try parser(arg.value.?),
                     else => try pos.append(allocator, try parser(arg.value.?)),
-                };
+                }
 
-            if (opt.terminating_positional <= positional_count)
-                break :arg_loop;
-            positional_count += 1;
+                if (opt.terminating_positional <= positional_count)
+                    break :arg_loop;
+                positional_count += 1;
+                continue :arg_loop;
+            }
         }
     }
 
@@ -1111,41 +1113,57 @@ test "single positional" {
 test "multiple positionals" {
     const params = comptime parseParamsComptime(
         \\<u8>
+        \\<u8>
         \\<str>
         \\
     );
 
-    // {
-    //     var iter = args.SliceIterator{ .args = &.{} };
-    //     var res = try parseEx(Help, &params, parsers.default, &iter, .{
-    //         .allocator = std.testing.allocator,
-    //     });
-    //     defer res.deinit();
+    {
+        var iter = args.SliceIterator{ .args = &.{} };
+        var res = try parseEx(Help, &params, parsers.default, &iter, .{
+            .allocator = std.testing.allocator,
+        });
+        defer res.deinit();
 
-    //     try std.testing.expect(res.positionals[0] == null);
-    //     try std.testing.expect(res.positionals[1] == null);
-    // }
-
-    // {
-    //     var iter = args.SliceIterator{ .args = &.{"1"} };
-    //     var res = try parseEx(Help, &params, parsers.default, &iter, .{
-    //         .allocator = std.testing.allocator,
-    //     });
-    //     defer res.deinit();
-
-    //     try std.testing.expectEqual(@as(u8, 1), res.positionals[0].?);
-    //     try std.testing.expect(res.positionals[1] == null);
-    // }
+        try std.testing.expect(res.positionals[0] == null);
+        try std.testing.expect(res.positionals[1] == null);
+        try std.testing.expect(res.positionals[2] == null);
+    }
 
     {
-        var iter = args.SliceIterator{ .args = &.{ "1", "b" } };
+        var iter = args.SliceIterator{ .args = &.{"1"} };
         var res = try parseEx(Help, &params, parsers.default, &iter, .{
             .allocator = std.testing.allocator,
         });
         defer res.deinit();
 
         try std.testing.expectEqual(@as(u8, 1), res.positionals[0].?);
-        try std.testing.expectEqualStrings("b", res.positionals[1].?);
+        try std.testing.expect(res.positionals[1] == null);
+        try std.testing.expect(res.positionals[2] == null);
+    }
+
+    {
+        var iter = args.SliceIterator{ .args = &.{ "1", "2" } };
+        var res = try parseEx(Help, &params, parsers.default, &iter, .{
+            .allocator = std.testing.allocator,
+        });
+        defer res.deinit();
+
+        try std.testing.expectEqual(@as(u8, 1), res.positionals[0].?);
+        try std.testing.expectEqual(@as(u8, 2), res.positionals[1].?);
+        try std.testing.expect(res.positionals[2] == null);
+    }
+
+    {
+        var iter = args.SliceIterator{ .args = &.{ "1", "2", "b" } };
+        var res = try parseEx(Help, &params, parsers.default, &iter, .{
+            .allocator = std.testing.allocator,
+        });
+        defer res.deinit();
+
+        try std.testing.expectEqual(@as(u8, 1), res.positionals[0].?);
+        try std.testing.expectEqual(@as(u8, 2), res.positionals[1].?);
+        try std.testing.expectEqualStrings("b", res.positionals[2].?);
     }
 }
 
