@@ -45,9 +45,9 @@ exe.root_module.addImport("clap", clap.module("clap"));
 
 ## API Reference
 
-Automatically generated API Reference for the project can be found at https://Hejsil.github.io/
-zig-clap.
-Note that Zig autodoc is in beta; the website may be broken or incomplete.
+Automatically generated API Reference for the project can be found at
+https://Hejsil.github.io/zig-clap. Note that Zig autodoc is in beta; the website
+may be broken or incomplete.
 
 ## Examples
 
