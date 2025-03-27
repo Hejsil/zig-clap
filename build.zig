@@ -42,43 +42,11 @@ pub fn build(b: *std.Build) void {
     });
     docs_step.dependOn(&install_docs.step);
 
-    const readme_step = b.step("readme", "Remake README.");
-    const readme = readMeStep(b);
-    readme.dependOn(example_step);
-    readme_step.dependOn(readme);
-
     const all_step = b.step("all", "Build everything and runs all tests");
     all_step.dependOn(test_step);
     all_step.dependOn(example_step);
-    all_step.dependOn(readme_step);
 
     b.default_step.dependOn(all_step);
-}
-
-fn readMeStep(b: *std.Build) *std.Build.Step {
-    const s = b.allocator.create(std.Build.Step) catch unreachable;
-    s.* = std.Build.Step.init(.{
-        .id = .custom,
-        .name = "ReadMeStep",
-        .owner = b,
-        .makeFn = struct {
-            fn make(step: *std.Build.Step, _: std.Build.Step.MakeOptions) anyerror!void {
-                @setEvalBranchQuota(10000);
-                _ = step;
-                const file = try std.fs.cwd().createFile("README.md", .{});
-                const stream = file.writer();
-                try stream.print(@embedFile("example/README.md.template"), .{
-                    @embedFile("example/simple.zig"),
-                    @embedFile("example/simple-ex.zig"),
-                    @embedFile("example/subcommands.zig"),
-                    @embedFile("example/streaming-clap.zig"),
-                    @embedFile("example/help.zig"),
-                    @embedFile("example/usage.zig"),
-                });
-            }
-        }.make,
-    });
-    return s;
 }
 
 const std = @import("std");
