@@ -770,15 +770,16 @@ pub fn parseEx(
 
             const parser = comptime switch (param.takes_value) {
                 .none => null,
-                .one, .many => @field(value_parsers, param.id.value()),
+                .one, .many => withAllocatorParser(@field(value_parsers, param.id.value())),
             };
 
             const name = longest.name[0..longest.name.len].*;
+
             switch (param.takes_value) {
                 .none => @field(arguments, &name) +|= 1,
-                .one => @field(arguments, &name) = try parser(arg.value.?),
+                .one => @field(arguments, &name) = try parser(arg.value.?, allocator),
                 .many => {
-                    const value = try parser(arg.value.?);
+                    const value = try parser(arg.value.?, allocator);
                     try @field(arguments, &name).append(allocator, value);
                 },
             }
@@ -801,7 +802,7 @@ pub fn parseEx(
 
             const parser = comptime switch (param.takes_value) {
                 .none => null,
-                .one, .many => @field(value_parsers, param.id.value()),
+                .one, .many => withAllocatorParser(@field(value_parsers, param.id.value())),
             };
 
             // We keep track of how many positionals we have received. This is used to pick which
@@ -811,8 +812,8 @@ pub fn parseEx(
             const last = positionals.len == i + 1;
             if ((last and positional_count >= i) or positional_count == i) {
                 switch (@typeInfo(@TypeOf(pos.*))) {
-                    .optional => pos.* = try parser(arg.value.?),
-                    else => try pos.append(allocator, try parser(arg.value.?)),
+                    .optional => pos.* = try parser(arg.value.?, allocator),
+                    else => try pos.append(allocator, try parser(arg.value.?, allocator)),
                 }
 
                 if (opt.terminating_positional <= positional_count)
@@ -850,6 +851,44 @@ pub fn parseEx(
         .positionals = result_positionals,
         .allocator = allocator,
     };
+}
+
+fn AllocatorParserReturnType(parser: anytype) type {
+    const parser_info = switch (@typeInfo(@TypeOf(parser))) {
+        .@"fn" => |info| info,
+        else => {
+            return void;
+        },
+    };
+    return parser_info.return_type orelse void;
+}
+
+fn AllocatorParser(parser: anytype) type {
+    return fn (value: anytype, allocator: std.mem.Allocator) AllocatorParserReturnType(parser);
+}
+
+pub fn withAllocatorParser(parser: anytype) AllocatorParser(parser) {
+    const parser_info = switch (@typeInfo(@TypeOf(parser))) {
+        .@"fn" => |info| info,
+        else => {
+            @compileError("withAllocatorParser() must be called with a non-null parser implementation");
+        },
+    };
+    return struct {
+        pub fn parseWithAllocator(value: anytype, allocator: std.mem.Allocator) AllocatorParserReturnType(parser) {
+            switch (parser_info.params.len) {
+                2 => {
+                    return parser(value, allocator);
+                },
+                1 => {
+                    return parser(value);
+                },
+                else => {
+                    return error.InvalidArgumentParser;
+                },
+            }
+        }
+    }.parseWithAllocator;
 }
 
 /// The result of `parseEx`. Is owned by the caller and should be freed with `deinit`.
