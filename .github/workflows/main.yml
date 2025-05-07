@@ -9,21 +9,28 @@ jobs:
   test:
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
-        step: [examples, test]
-        optimize: [Debug, ReleaseSafe, ReleaseFast]
-    runs-on: ${{matrix.os}}
+        optimize: [Debug, ReleaseSmall, ReleaseSafe, ReleaseFast]
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: mlugg/setup-zig@v1
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
         with:
           version: master
-      - run: zig build ${{ matrix.step }} -Doptimize=${{ matrix.optimize }}
+          cache-key: ${{ matrix.optimize }}
+      - run: zig test clap.zig -O${{ matrix.optimize }}
+  examples:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: master
+      - run: zig build examples
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: mlugg/setup-zig@v1
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
         with:
           version: master
       - run: zig fmt --check .
