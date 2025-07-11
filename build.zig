@@ -22,11 +22,14 @@ pub fn build(b: *std.Build) void {
         "subcommands",
         "usage",
     }) |example_name| {
-        const example = b.addExecutable(.{
-            .name = example_name,
+        const example_module = b.createModule(.{
             .root_source_file = b.path(b.fmt("example/{s}.zig", .{example_name})),
             .target = target,
             .optimize = optimize,
+        });
+        const example = b.addExecutable(.{
+            .name = example_name,
+            .root_module = example_module,
         });
         const install_example = b.addInstallArtifact(example, .{});
         example.root_module.addImport("clap", clap_mod);

@@ -6,7 +6,7 @@ pub fn CodepointCountingWriter(comptime WriterType: type) type {
         child_stream: WriterType,
 
         pub const Error = WriterType.Error || error{Utf8InvalidStartByte};
-        pub const Writer = std.io.Writer(*Self, Error, write);
+        pub const Writer = std.io.GenericWriter(*Self, Error, write);
 
         const Self = @This();
 
