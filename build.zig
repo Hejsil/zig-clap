@@ -24,12 +24,16 @@ pub fn build(b: *std.Build) void {
     }) |example_name| {
         const example = b.addExecutable(.{
             .name = example_name,
-            .root_source_file = b.path(b.fmt("example/{s}.zig", .{example_name})),
-            .target = target,
-            .optimize = optimize,
+            .root_module = b.createModule(.{
+                .root_source_file = b.path(b.fmt("example/{s}.zig", .{example_name})),
+                .target = target,
+                .optimize = optimize,
+                .imports = &.{
+                    .{ .name = "clap", .module = clap_mod },
+                },
+            }),
         });
         const install_example = b.addInstallArtifact(example, .{});
-        example.root_module.addImport("clap", clap_mod);
         example_step.dependOn(&example.step);
         example_step.dependOn(&install_example.step);
     }

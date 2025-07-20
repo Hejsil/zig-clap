@@ -17,8 +17,12 @@ pub fn main() !void {
     // where `Id` has a `description` and `value` method (`Param(Help)` is one such parameter).
     // The last argument contains options as to how `help` should print those parameters. Using
     // `.{}` means the default options.
-    if (res.args.help != 0)
-        return clap.help(std.io.getStdErr().writer(), clap.Help, &params, .{});
+    if (res.args.help != 0) {
+        var buf: [1024]u8 = undefined;
+        var stderr = std.fs.File.stderr().writer(&buf);
+        clap.help(&stderr.interface, clap.Help, &params, .{}) catch {};
+        return stderr.interface.flush();
+    }
 }
 
 const clap = @import("clap");

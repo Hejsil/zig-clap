@@ -1,30 +1,38 @@
 /// A Writer that counts how many codepoints has been written to it.
 /// Expects valid UTF-8 input, and does not validate the input.
-pub fn CodepointCountingWriter(comptime WriterType: type) type {
-    return struct {
-        codepoints_written: u64,
-        child_stream: WriterType,
+pub const CodepointCountingWriter = struct {
+    codepoints_written: u64 = 0,
+    child_stream: *std.Io.Writer,
+    interface: std.Io.Writer = .{
+        .buffer = &.{},
+        .vtable = &.{ .drain = drain },
+    },
 
-        pub const Error = WriterType.Error || error{Utf8InvalidStartByte};
-        pub const Writer = std.io.Writer(*Self, Error, write);
+    const Self = @This();
 
-        const Self = @This();
+    pub fn init(child_stream: *std.Io.Writer) Self {
+        return .{
+            .child_stream = child_stream,
+        };
+    }
 
-        pub fn write(self: *Self, bytes: []const u8) Error!usize {
-            const bytes_and_codepoints = try utf8CountCodepointsAllowTruncate(bytes);
+    fn drain(w: *std.Io.Writer, data: []const []const u8, splat: usize) std.Io.Writer.Error!usize {
+        const self: *Self = @fieldParentPtr("interface", w);
+        var n_bytes_written: usize = 0;
+        var i: usize = 0;
+        while (i < data.len + splat - 1) : (i += 1) {
+            const chunk = if (i < data.len) data[i] else data[data.len - 1];
+            const bytes_and_codepoints = utf8CountCodepointsAllowTruncate(chunk) catch return std.Io.Writer.Error.WriteFailed;
             // Might not be the full input, so the leftover bytes are written on the next call.
-            const bytes_to_write = bytes[0..bytes_and_codepoints.bytes];
+            const bytes_to_write = chunk[0..bytes_and_codepoints.bytes];
             const amt = try self.child_stream.write(bytes_to_write);
+            n_bytes_written += amt;
             const bytes_written = bytes_to_write[0..amt];
-            self.codepoints_written += (try utf8CountCodepointsAllowTruncate(bytes_written)).codepoints;
-            return amt;
+            self.codepoints_written += (utf8CountCodepointsAllowTruncate(bytes_written) catch return std.Io.Writer.Error.WriteFailed).codepoints;
         }
-
-        pub fn writer(self: *Self) Writer {
-            return .{ .context = self };
-        }
-    };
-}
+        return n_bytes_written;
+    }
+};
 
 // Like `std.unicode.utf8CountCodepoints`, but on truncated input, it returns
 // the number of codepoints up to that point.
@@ -58,44 +66,39 @@ fn utf8CountCodepointsAllowTruncate(s: []const u8) !struct { bytes: usize, codep
     return .{ .bytes = i, .codepoints = len };
 }
 
-pub fn codepointCountingWriter(child_stream: anytype) CodepointCountingWriter(@TypeOf(child_stream)) {
-    return .{ .codepoints_written = 0, .child_stream = child_stream };
-}
-
 const testing = std.testing;
 
 test CodepointCountingWriter {
-    var counting_stream = codepointCountingWriter(std.io.null_writer);
-    const stream = counting_stream.writer();
+    var discarding = std.Io.Writer.Discarding.init(&.{});
+    var counting_stream = CodepointCountingWriter.init(&discarding.writer);
 
     const utf8_text = "blåhaj" ** 100;
-    stream.writeAll(utf8_text) catch unreachable;
+    counting_stream.interface.writeAll(utf8_text) catch unreachable;
     const expected_count = try std.unicode.utf8CountCodepoints(utf8_text);
     try testing.expectEqual(expected_count, counting_stream.codepoints_written);
 }
 
 test "handles partial UTF-8 writes" {
     var buf: [100]u8 = undefined;
-    var fbs = std.io.fixedBufferStream(&buf);
-    var counting_stream = codepointCountingWriter(fbs.writer());
-    const stream = counting_stream.writer();
+    var fbs = std.Io.Writer.fixed(&buf);
+    var counting_stream = CodepointCountingWriter.init(&fbs);
 
     const utf8_text = "ååå";
     // `å` is represented as `\xC5\xA5`, write 1.5 `å`s.
-    var wc = try stream.write(utf8_text[0..3]);
+    var wc = try counting_stream.interface.write(utf8_text[0..3]);
     // One should have been written fully.
     try testing.expectEqual("å".len, wc);
     try testing.expectEqual(1, counting_stream.codepoints_written);
 
     // Write the rest, continuing from the reported number of bytes written.
-    wc = try stream.write(utf8_text[wc..]);
+    wc = try counting_stream.interface.write(utf8_text[wc..]);
     try testing.expectEqual(4, wc);
     try testing.expectEqual(3, counting_stream.codepoints_written);
 
     const expected_count = try std.unicode.utf8CountCodepoints(utf8_text);
     try testing.expectEqual(expected_count, counting_stream.codepoints_written);
 
-    try testing.expectEqualSlices(u8, utf8_text, fbs.getWritten());
+    try testing.expectEqualSlices(u8, utf8_text, fbs.buffered());
 }
 
 const std = @import("std");
