@@ -5,8 +5,9 @@ A simple and easy to use command line argument parser library for Zig.
 ## Installation
 
 Developers tend to either use
-* The latest tagged release of Zig
-* The latest build of Zigs master branch
+
+- The latest tagged release of Zig
+- The latest build of Zigs master branch
 
 Depending on which developer you are, you need to run different `zig fetch` commands:
 
@@ -29,22 +30,22 @@ exe.root_module.addImport("clap", clap.module("clap"));
 
 ## Features
 
-* Short arguments `-a`
-  * Chaining `-abc` where `a` and `b` does not take values.
-  * Multiple specifications are tallied (e.g. `-v -v`).
-* Long arguments `--long`
-* Supports both passing values using spacing and `=` (`-a 100`, `-a=100`)
-  * Short args also support passing values with no spacing or `=` (`-a100`)
-  * This all works with chaining (`-ba 100`, `-ba=100`, `-ba100`)
-* Supports options that can be specified multiple times (`-e 1 -e 2 -e 3`)
-* Print help message from parameter specification.
-* Parse help message to parameter specification.
+- Short arguments `-a`
+  - Chaining `-abc` where `a` and `b` does not take values.
+  - Multiple specifications are tallied (e.g. `-v -v`).
+- Long arguments `--long`
+- Supports both passing values using spacing and `=` (`-a 100`, `-a=100`)
+  - Short args also support passing values with no spacing or `=` (`-a100`)
+  - This all works with chaining (`-ba 100`, `-ba=100`, `-ba100`)
+- Supports options that can be specified multiple times (`-e 1 -e 2 -e 3`)
+- Print help message from parameter specification.
+- Parse help message to parameter specification.
 
 ## API Reference
 
 Automatically generated API Reference for the project can be found at
-https://Hejsil.github.io/zig-clap. Note that Zig autodoc is in beta; the website
-may be broken or incomplete.
+https://Hejsil.github.io/zig-clap. Note that Zig autodoc is in beta; the website may be broken or
+incomplete.
 
 ## Examples
 
@@ -76,7 +77,10 @@ pub fn main() !void {
         .allocator = gpa.allocator(),
     }) catch |err| {
         // Report useful error and exit.
-        diag.report(std.io.getStdErr().writer(), err) catch {};
+        var buf: [1024]u8 = undefined;
+        var stderr = std.fs.File.stderr().writer(&buf);
+        diag.report(&stderr.interface, err) catch {};
+        try stderr.interface.flush();
         return err;
     };
     defer res.deinit();
@@ -93,7 +97,6 @@ pub fn main() !void {
 
 const clap = @import("clap");
 const std = @import("std");
-
 ```
 
 The result will contain an `args` field and a `positionals` field. `args` will have one field for
@@ -141,7 +144,10 @@ pub fn main() !void {
         // allowed.
         .assignment_separators = "=:",
     }) catch |err| {
-        diag.report(std.io.getStdErr().writer(), err) catch {};
+        var buf: [1024]u8 = undefined;
+        var stderr = std.fs.File.stderr().writer(&buf);
+        diag.report(&stderr.interface, err) catch {};
+        try stderr.interface.flush();
         return err;
     };
     defer res.deinit();
@@ -160,7 +166,6 @@ pub fn main() !void {
 
 const clap = @import("clap");
 const std = @import("std");
-
 ```
 
 ### Subcommands
@@ -212,7 +217,10 @@ pub fn main() !void {
         // not fully consumed. It can then be reused to parse the arguments for subcommands.
         .terminating_positional = 0,
     }) catch |err| {
-        diag.report(std.io.getStdErr().writer(), err) catch {};
+        var buf: [1024]u8 = undefined;
+        var stderr = std.fs.File.stderr().writer(&buf);
+        diag.report(&stderr.interface, err) catch {};
+        try stderr.interface.flush();
         return err;
     };
     defer res.deinit();
@@ -248,8 +256,11 @@ fn mathMain(gpa: std.mem.Allocator, iter: *std.process.ArgIterator, main_args: M
         .diagnostic = &diag,
         .allocator = gpa,
     }) catch |err| {
-        diag.report(std.io.getStdErr().writer(), err) catch {};
-        return err;
+        var buf: [1024]u8 = undefined;
+        var stderr = std.fs.File.stderr().writer(&buf);
+        diag.report(&stderr.interface, err) catch {};
+        try stderr.interface.flush();
+        return err; // propagate error
     };
     defer res.deinit();
 
@@ -265,7 +276,6 @@ fn mathMain(gpa: std.mem.Allocator, iter: *std.process.ArgIterator, main_args: M
 
 const clap = @import("clap");
 const std = @import("std");
-
 ```
 
 ### `streaming.Clap`
@@ -310,7 +320,10 @@ pub fn main() !void {
     // Because we use a streaming parser, we have to consume each argument parsed individually.
     while (parser.next() catch |err| {
         // Report useful error and exit.
-        diag.report(std.io.getStdErr().writer(), err) catch {};
+        var buf: [1024]u8 = undefined;
+        var stderr = std.fs.File.stderr().writer(&buf);
+        diag.report(&stderr.interface, err) catch {};
+        try stderr.interface.flush();
         return err;
     }) |arg| {
         // arg.param will point to the parameter which matched the argument.
@@ -329,10 +342,17 @@ pub fn main() !void {
 
 const clap = @import("clap");
 const std = @import("std");
-
 ```
 
-Currently, this parser is the only parser that allows an array of `Param` that is generated at runtime.
+```
+$ zig-out/bin/streaming-clap --help --number=1 f=10
+Help!
+--number = 1
+f=10
+```
+
+Currently, this parser is the only parser that allows an array of `Param` that is generated at
+runtime.
 
 ### `help`
 
@@ -360,13 +380,16 @@ pub fn main() !void {
     // where `Id` has a `description` and `value` method (`Param(Help)` is one such parameter).
     // The last argument contains options as to how `help` should print those parameters. Using
     // `.{}` means the default options.
-    if (res.args.help != 0)
-        return clap.help(std.io.getStdErr().writer(), clap.Help, &params, .{});
+    if (res.args.help != 0) {
+        var buf: [1024]u8 = undefined;
+        var stderr = std.fs.File.stderr().writer(&buf);
+        try clap.help(&stderr.interface, clap.Help, &params, .{});
+        return stderr.interface.flush();
+    }
 }
 
 const clap = @import("clap");
 const std = @import("std");
-
 ```
 
 ```
@@ -402,17 +425,19 @@ pub fn main() !void {
 
     // `clap.usage` is a function that can print a simple help message. It can print any `Param`
     // where `Id` has a `value` method (`Param(Help)` is one such parameter).
-    if (res.args.help != 0)
-        return clap.usage(std.io.getStdErr().writer(), clap.Help, &params);
+    if (res.args.help != 0) {
+        var buf: [1024]u8 = undefined;
+        var stderr = std.fs.File.stderr().writer(&buf);
+        try clap.usage(&stderr.interface, clap.Help, &params);
+        return stderr.interface.flush();
+    }
 }
 
 const clap = @import("clap");
 const std = @import("std");
-
 ```
 
 ```
 $ zig-out/bin/usage --help
 [-hv] [--value <str>]
 ```
-

@@ -16,8 +16,13 @@ pub fn main() !void {
 
     // `clap.usage` is a function that can print a simple help message. It can print any `Param`
     // where `Id` has a `value` method (`Param(Help)` is one such parameter).
-    if (res.args.help != 0)
-        return clap.usage(std.io.getStdErr().writer(), clap.Help, &params);
+    if (res.args.help != 0) {
+        var buf: [1024]u8 = undefined;
+        var stderr = std.fs.File.stderr().writer(&buf);
+        clap.usage(&stderr.interface, clap.Help, &params) catch {};
+        try stderr.interface.flush();
+        return;
+    }
 }
 
 const clap = @import("clap");

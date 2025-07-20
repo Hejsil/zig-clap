@@ -34,8 +34,10 @@ pub fn main() !void {
     // Because we use a streaming parser, we have to consume each argument parsed individually.
     while (parser.next() catch |err| {
         // Report useful error and exit.
-        diag.report(std.io.getStdErr().writer(), err) catch {};
-        return err;
+        var buf: [1024]u8 = undefined;
+        var stderr = std.fs.File.stderr().writer(&buf);
+        try diag.report(&stderr.interface, err);
+        return stderr.interface.flush();
     }) |arg| {
         // arg.param will point to the parameter which matched the argument.
         switch (arg.param.id) {

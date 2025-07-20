@@ -31,7 +31,11 @@ pub fn main() !void {
         // allowed.
         .assignment_separators = "=:",
     }) catch |err| {
-        diag.report(std.io.getStdErr().writer(), err) catch {};
+        // Report useful error and exit.
+        var buf: [1024]u8 = undefined;
+        var stderr = std.fs.File.stderr().writer(&buf);
+        try diag.report(&stderr.interface, err);
+        try stderr.interface.flush();
         return err;
     };
     defer res.deinit();

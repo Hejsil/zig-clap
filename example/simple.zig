@@ -21,8 +21,10 @@ pub fn main() !void {
         .allocator = gpa.allocator(),
     }) catch |err| {
         // Report useful error and exit.
-        diag.report(std.io.getStdErr().writer(), err) catch {};
-        return err;
+        var buf: [1024]u8 = undefined;
+        var stderr = std.fs.File.stderr().writer(&buf);
+        try diag.report(&stderr.interface, err);
+        return stderr.interface.flush();
     };
     defer res.deinit();
 
