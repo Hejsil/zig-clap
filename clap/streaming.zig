@@ -235,7 +235,7 @@ fn expectError(
     while (parser.next() catch |err| {
         var buf: [1024]u8 = undefined;
         var fbs = std.Io.Writer.fixed(&buf);
-        diag.report(&fbs, err) catch return error.TestFailed;
+        try diag.report(&fbs, err);
         try std.testing.expectEqualStrings(expected, fbs.buffered());
         return;
     }) |_| {}

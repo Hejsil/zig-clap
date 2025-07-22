@@ -41,10 +41,8 @@ pub fn main() !void {
         // not fully consumed. It can then be reused to parse the arguments for subcommands.
         .terminating_positional = 0,
     }) catch |err| {
-        var buf: [1024]u8 = undefined;
-        var stderr = std.fs.File.stderr().writer(&buf);
-        try diag.report(&stderr.interface, err);
-        return stderr.interface.flush();
+        try diag.reportToFile(.stderr(), err);
+        return err;
     };
     defer res.deinit();
 
@@ -79,10 +77,7 @@ fn mathMain(gpa: std.mem.Allocator, iter: *std.process.ArgIterator, main_args: M
         .diagnostic = &diag,
         .allocator = gpa,
     }) catch |err| {
-        var buf: [1024]u8 = undefined;
-        var stderr = std.fs.File.stderr().writer(&buf);
-        try diag.report(&stderr.interface, err);
-        try stderr.interface.flush();
+        try diag.reportToFile(.stderr(), err);
         return err; // propagate error
     };
     defer res.deinit();

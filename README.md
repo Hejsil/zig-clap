@@ -77,10 +77,7 @@ pub fn main() !void {
         .allocator = gpa.allocator(),
     }) catch |err| {
         // Report useful error and exit.
-        var buf: [1024]u8 = undefined;
-        var stderr = std.fs.File.stderr().writer(&buf);
-        diag.report(&stderr.interface, err) catch {};
-        try stderr.interface.flush();
+        try diag.reportToFile(.stderr(), err);
         return err;
     };
     defer res.deinit();
@@ -144,10 +141,7 @@ pub fn main() !void {
         // allowed.
         .assignment_separators = "=:",
     }) catch |err| {
-        var buf: [1024]u8 = undefined;
-        var stderr = std.fs.File.stderr().writer(&buf);
-        diag.report(&stderr.interface, err) catch {};
-        try stderr.interface.flush();
+        try diag.reportToFile(.stderr(), err);
         return err;
     };
     defer res.deinit();
@@ -217,10 +211,7 @@ pub fn main() !void {
         // not fully consumed. It can then be reused to parse the arguments for subcommands.
         .terminating_positional = 0,
     }) catch |err| {
-        var buf: [1024]u8 = undefined;
-        var stderr = std.fs.File.stderr().writer(&buf);
-        diag.report(&stderr.interface, err) catch {};
-        try stderr.interface.flush();
+        try diag.reportToFile(.stderr(), err);
         return err;
     };
     defer res.deinit();
@@ -256,10 +247,7 @@ fn mathMain(gpa: std.mem.Allocator, iter: *std.process.ArgIterator, main_args: M
         .diagnostic = &diag,
         .allocator = gpa,
     }) catch |err| {
-        var buf: [1024]u8 = undefined;
-        var stderr = std.fs.File.stderr().writer(&buf);
-        diag.report(&stderr.interface, err) catch {};
-        try stderr.interface.flush();
+        try diag.reportToFile(.stderr(), err);
         return err; // propagate error
     };
     defer res.deinit();
@@ -320,10 +308,7 @@ pub fn main() !void {
     // Because we use a streaming parser, we have to consume each argument parsed individually.
     while (parser.next() catch |err| {
         // Report useful error and exit.
-        var buf: [1024]u8 = undefined;
-        var stderr = std.fs.File.stderr().writer(&buf);
-        diag.report(&stderr.interface, err) catch {};
-        try stderr.interface.flush();
+        try diag.reportToFile(.stderr(), err);
         return err;
     }) |arg| {
         // arg.param will point to the parameter which matched the argument.

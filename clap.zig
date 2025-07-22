@@ -563,12 +563,20 @@ pub const Diagnostic = struct {
             else => try stream.print("Error while parsing arguments: {s}\n", .{@errorName(err)}),
         }
     }
+
+    /// Wrapper around `report`, which writes to a file in a buffered manner
+    pub fn reportToFile(diag: Diagnostic, file: std.fs.File, err: anyerror) !void {
+        var buf: [1024]u8 = undefined;
+        var writer = file.writer(&buf);
+        try diag.report(&writer.interface, err);
+        return writer.end();
+    }
 };
 
 fn testDiag(diag: Diagnostic, err: anyerror, expected: []const u8) !void {
     var buf: [1024]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buf);
-    diag.report(&writer, err) catch unreachable;
+    try diag.report(&writer, err);
     try std.testing.expectEqualStrings(expected, writer.buffered());
 }
 
@@ -1264,7 +1272,7 @@ fn testErr(
     }) catch |err| {
         var buf: [1024]u8 = undefined;
         var writer = std.Io.Writer.fixed(&buf);
-        diag.report(&writer, err) catch return error.TestFailed;
+        try diag.report(&writer, err);
         try std.testing.expectEqualStrings(expected, writer.buffered());
         return;
     };
