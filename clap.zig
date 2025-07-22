@@ -1367,6 +1367,19 @@ pub const HelpOptions = struct {
     spacing_between_parameters: usize = 1,
 };
 
+/// Wrapper around `help`, which writes to a file in a buffered manner
+pub fn helpToFile(
+    file: std.fs.File,
+    comptime Id: type,
+    params: []const Param(Id),
+    opt: HelpOptions,
+) !void {
+    var buf: [1024]u8 = undefined;
+    var writer = file.writer(&buf);
+    try help(&writer.interface, Id, params, opt);
+    return writer.end();
+}
+
 /// Print a slice of `Param` formatted as a help string to `writer`. This function expects
 /// `Id` to have the methods `description` and `value` which are used by `help` to describe
 /// each parameter. Using `Help` as `Id` is good choice.
