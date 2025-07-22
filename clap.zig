@@ -569,7 +569,7 @@ pub const Diagnostic = struct {
         var buf: [1024]u8 = undefined;
         var writer = file.writer(&buf);
         try diag.report(&writer.interface, err);
-        return writer.end();
+        return writer.interface.flush();
     }
 };
 
@@ -1377,7 +1377,7 @@ pub fn helpToFile(
     var buf: [1024]u8 = undefined;
     var writer = file.writer(&buf);
     try help(&writer.interface, Id, params, opt);
-    return writer.end();
+    return writer.interface.flush();
 }
 
 /// Print a slice of `Param` formatted as a help string to `writer`. This function expects
@@ -2025,6 +2025,14 @@ test "clap.help" {
         \\-d, --dd <V3>...    Böth repeäted öptiön.
         \\
     );
+}
+
+/// Wrapper around `usage`, which writes to a file in a buffered manner
+pub fn usageToFile(file: std.fs.File, comptime Id: type, params: []const Param(Id)) !void {
+    var buf: [1024]u8 = undefined;
+    var writer = file.writer(&buf);
+    try usage(&writer.interface, Id, params);
+    return writer.interface.flush();
 }
 
 /// Will print a usage message in the following format:
