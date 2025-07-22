@@ -1315,7 +1315,7 @@ pub const Help = struct {
 };
 
 pub const HelpOptions = struct {
-    /// Render the description of a parameter in a simular way to how markdown would render
+    /// Render the description of a parameter in a similar way to how markdown would render
     /// such a string. This means that single newlines won't be respected unless followed by
     /// bullet points or other markdown elements.
     markdown_lite: bool = true,
