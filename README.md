@@ -55,7 +55,7 @@ The simplest way to use this library is to just call the `clap.parse` function.
 
 ```zig
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa = std.heap.DebugAllocator(.{}){};
     defer _ = gpa.deinit();
 
     // First we specify what parameters our program can take.
@@ -109,7 +109,7 @@ if you want some other mapping.
 
 ```zig
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa = std.heap.DebugAllocator(.{}){};
     defer _ = gpa.deinit();
 
     // First we specify what parameters our program can take.
@@ -190,7 +190,7 @@ const main_params = clap.parseParamsComptime(
 const MainArgs = clap.ResultEx(clap.Help, &main_params, main_parsers);
 
 pub fn main() !void {
-    var gpa_state = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa_state = std.heap.DebugAllocator(.{}){};
     const gpa = gpa_state.allocator();
     defer _ = gpa_state.deinit();
 
@@ -347,7 +347,7 @@ is passed to `help` to control how the help message is printed.
 
 ```zig
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa = std.heap.DebugAllocator(.{}){};
     defer _ = gpa.deinit();
 
     const params = comptime clap.parseParamsComptime(
@@ -389,7 +389,7 @@ $ zig-out/bin/help --help
 
 ```zig
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa = std.heap.DebugAllocator(.{}){};
     defer _ = gpa.deinit();
 
     const params = comptime clap.parseParamsComptime(

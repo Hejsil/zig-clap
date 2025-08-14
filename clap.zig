@@ -84,11 +84,11 @@ pub fn parseParams(allocator: std.mem.Allocator, str: []const u8) ![]Param(Help)
 /// Takes a string and parses it into many Param(Help). Returned is a newly allocated slice
 /// containing all the parsed params. The caller is responsible for freeing the slice.
 pub fn parseParamsEx(allocator: std.mem.Allocator, str: []const u8, end: *usize) ![]Param(Help) {
-    var list = std.ArrayList(Param(Help)).init(allocator);
-    errdefer list.deinit();
+    var list = std.ArrayList(Param(Help)){};
+    errdefer list.deinit(allocator);
 
-    try parseParamsIntoArrayListEx(&list, str, end);
-    return try list.toOwnedSlice();
+    try parseParamsIntoArrayListEx(allocator, &list, str, end);
+    return try list.toOwnedSlice(allocator);
 }
 
 /// Takes a string and parses it into many Param(Help) at comptime. Returned is an array of
@@ -131,9 +131,7 @@ fn countParams(str: []const u8) usize {
 /// is returned, containing all the parameters parsed. This function will fail if the input slice
 /// is to small.
 pub fn parseParamsIntoSlice(slice: []Param(Help), str: []const u8) ![]Param(Help) {
-    var null_alloc = std.heap.FixedBufferAllocator.init("");
     var list = std.ArrayList(Param(Help)){
-        .allocator = null_alloc.allocator(),
         .items = slice[0..0],
         .capacity = slice.len,
     };
@@ -146,14 +144,13 @@ pub fn parseParamsIntoSlice(slice: []Param(Help), str: []const u8) ![]Param(Help
 /// is returned, containing all the parameters parsed. This function will fail if the input slice
 /// is to small.
 pub fn parseParamsIntoSliceEx(slice: []Param(Help), str: []const u8, end: *usize) ![]Param(Help) {
-    var null_alloc = std.heap.FixedBufferAllocator.init("");
+    var null_allocator = std.heap.FixedBufferAllocator.init("");
     var list = std.ArrayList(Param(Help)){
-        .allocator = null_alloc.allocator(),
         .items = slice[0..0],
         .capacity = slice.len,
     };
 
-    try parseParamsIntoArrayListEx(&list, str, end);
+    try parseParamsIntoArrayListEx(null_allocator.allocator(), &list, str, end);
     return list.items;
 }
 
@@ -164,13 +161,13 @@ pub fn parseParamsIntoArrayList(list: *std.ArrayList(Param(Help)), str: []const 
 }
 
 /// Takes a string and parses it into many Param(Help), which are appended onto `list`.
-pub fn parseParamsIntoArrayListEx(list: *std.ArrayList(Param(Help)), str: []const u8, end: *usize) !void {
+pub fn parseParamsIntoArrayListEx(allocator: std.mem.Allocator, list: *std.ArrayList(Param(Help)), str: []const u8, end: *usize) !void {
     var i: usize = 0;
     while (i != str.len) {
         var end_of_this: usize = undefined;
         errdefer end.* = i + end_of_this;
 
-        try list.append(try parseParamEx(str[i..], &end_of_this));
+        try list.append(allocator, try parseParamEx(str[i..], &end_of_this));
         i += end_of_this;
     }
 
