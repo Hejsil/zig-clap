@@ -19,7 +19,7 @@ jobs:
     name: Build website
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - uses: mlugg/setup-zig@v2
       with:
         version: master
