@@ -407,7 +407,7 @@ pub fn main() !void {
     // `clap.usageToFile` is a function that can print a simple usage string. It can print any
     // `Param` where `Id` has a `value` method (`Param(Help)` is one such parameter).
     if (res.args.help != 0)
-        return clap.usage(.stdout(), clap.Help, &params);
+        return clap.usageToFile(.stdout(), clap.Help, &params);
 }
 
 const clap = @import("clap");
