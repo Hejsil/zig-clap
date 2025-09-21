@@ -31,7 +31,7 @@ exe.root_module.addImport("clap", clap.module("clap"));
 ## Features
 
 - Short arguments `-a`
-  - Chaining `-abc` where `a` and `b` does not take values.
+  - Chaining `-abc` where `a` and `b` do not take values.
   - Multiple specifications are tallied (e.g. `-v -v`).
 - Long arguments `--long`
 - Supports both passing values using spacing and `=` (`-a 100`, `-a=100`)
@@ -70,7 +70,7 @@ pub fn main() !void {
 
     // Initialize our diagnostics, which can be used for reporting useful errors.
     // This is optional. You can also pass `.{}` to `clap.parse` if you don't
-    // care about the extra information `Diagnostics` provides.
+    // care about the extra information `Diagnostic` provides.
     var diag = clap.Diagnostic{};
     var res = clap.parse(clap.Help, &params, clap.parsers.default, .{
         .diagnostic = &diag,
@@ -100,7 +100,7 @@ The result will contain an `args` field and a `positionals` field. `args` will h
 each non-positional parameter of your program. The name of the field will be the longest name of the
 parameter. `positionals` will be a tuple with one field for each positional parameter.
 
-The fields in `args` and `postionals` are typed. The type is based on the name of the value the
+The fields in `args` and `positionals` are typed. The type is based on the name of the value the
 parameter takes. Since `--number` takes a `usize` the field `res.args.number` has the type `usize`.
 
 Note that this is only the case because `clap.parsers.default` has a field called `usize` which
@@ -342,7 +342,7 @@ runtime.
 ### `help`
 
 `help` prints a simple list of all parameters the program can take. It expects the `Id` to have a
-`description` method and an `value` method so that it can provide that in the output. `HelpOptions`
+`description` method and a `value` method so that it can provide that in the output. `HelpOptions`
 is passed to `help` to control how the help message is printed.
 
 ```zig
