@@ -891,7 +891,7 @@ fn Positionals(
         fields_len += 1;
     }
 
-    var fields: [fields_len]std.builtin.Type.StructField = undefined;
+    var field_types: [fields_len]type = undefined;
     var i: usize = 0;
     for (params) |param| {
         const longest = param.names.longest();
@@ -908,22 +908,11 @@ fn Positionals(
             },
         };
 
-        fields[i] = .{
-            .name = std.fmt.comptimePrint("{}", .{i}),
-            .type = FieldT,
-            .default_value_ptr = null,
-            .is_comptime = false,
-            .alignment = @alignOf(FieldT),
-        };
+        field_types[i] = FieldT;
         i += 1;
     }
 
-    return @Type(.{ .@"struct" = .{
-        .layout = .auto,
-        .fields = &fields,
-        .decls = &.{},
-        .is_tuple = true,
-    } });
+    return @Tuple(&field_types);
 }
 
 fn initPositionals(
@@ -1008,7 +997,9 @@ fn Arguments(
         fields_len += 1;
     }
 
-    var fields: [fields_len]std.builtin.Type.StructField = undefined;
+    var field_names: [fields_len][]const u8 = undefined;
+    var field_types: [fields_len]type = undefined;
+    var field_attrs: [fields_len]std.builtin.Type.StructField.Attributes = undefined;
     var i: usize = 0;
     for (params) |param| {
         const longest = param.names.longest();
@@ -1026,22 +1017,23 @@ fn Arguments(
         };
 
         const name = longest.name[0..longest.name.len] ++ ""; // Adds null terminator
-        fields[i] = .{
-            .name = name,
-            .type = @TypeOf(default_value),
+        field_names[i] = name;
+        field_types[i] = @TypeOf(default_value);
+        field_attrs[i] = .{
+            .@"comptime" = false,
+            .@"align" = @alignOf(@TypeOf(default_value)),
             .default_value_ptr = @ptrCast(&default_value),
-            .is_comptime = false,
-            .alignment = @alignOf(@TypeOf(default_value)),
         };
         i += 1;
     }
 
-    return @Type(.{ .@"struct" = .{
-        .layout = .auto,
-        .fields = &fields,
-        .decls = &.{},
-        .is_tuple = false,
-    } });
+    return @Struct(
+        .auto,
+        null,
+        &field_names,
+        &field_types,
+        if (fields_len == 0) &@splat(.{}) else &field_attrs,
+    );
 }
 
 test "str and u64" {
