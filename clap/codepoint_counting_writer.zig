@@ -17,7 +17,7 @@ pub const CodepointCountingWriter = struct {
     }
 
     fn drain(w: *std.Io.Writer, data: []const []const u8, splat: usize) std.Io.Writer.Error!usize {
-        const self: *Self = @fieldParentPtr("interface", w);
+        const self: *Self = @alignCast(@fieldParentPtr("interface", w));
         var n_bytes_written: usize = 0;
         var i: usize = 0;
 
