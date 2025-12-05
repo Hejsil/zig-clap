@@ -162,6 +162,8 @@ const clap = @import("clap");
 const std = @import("std");
 ```
 
+Note that a positional parameter that takes many values can currently only be specified at the end due to limitations in the parser.
+
 ### Subcommands
 
 There is an option for `clap.parse` and `clap.parseEx` called `terminating_positional`. It allows
@@ -373,7 +375,7 @@ const clap = @import("clap");
 const std = @import("std");
 ```
 
-```
+```sh
 $ zig-out/bin/help --help
     -h, --help
             Display this help and exit.
@@ -414,7 +416,7 @@ const clap = @import("clap");
 const std = @import("std");
 ```
 
-```
+```sh
 $ zig-out/bin/usage --help
 [-hv] [--value <str>]
 ```
