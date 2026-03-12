@@ -954,7 +954,7 @@ fn initPositionals(
             .one => @as(?T, null),
             .many => switch (multi_arg_kind) {
                 .slice => @as([]const T, &[_]T{}),
-                .list => std.ArrayListUnmanaged(T){},
+                .list => std.ArrayListUnmanaged(T).empty,
             },
         };
         i += 1;
