@@ -84,7 +84,7 @@ pub fn parseParams(allocator: std.mem.Allocator, str: []const u8) ![]Param(Help)
 /// Takes a string and parses it into many Param(Help). Returned is a newly allocated slice
 /// containing all the parsed params. The caller is responsible for freeing the slice.
 pub fn parseParamsEx(allocator: std.mem.Allocator, str: []const u8, end: *usize) ![]Param(Help) {
-    var list = std.ArrayList(Param(Help)){};
+    var list: std.ArrayList(Param(Help)) = .empty;
     errdefer list.deinit(allocator);
 
     try parseParamsIntoArrayListEx(allocator, &list, str, end);
@@ -131,13 +131,8 @@ fn countParams(str: []const u8) usize {
 /// is returned, containing all the parameters parsed. This function will fail if the input slice
 /// is to small.
 pub fn parseParamsIntoSlice(slice: []Param(Help), str: []const u8) ![]Param(Help) {
-    var list = std.ArrayList(Param(Help)){
-        .items = slice[0..0],
-        .capacity = slice.len,
-    };
-
-    try parseParamsIntoArrayList(&list, str);
-    return list.items;
+    var end: usize = undefined;
+    return parseParamsIntoSliceEx(slice, str, &end);
 }
 
 /// Takes a string and parses it into many Param(Help), which are written to `slice`. A subslice
@@ -155,9 +150,15 @@ pub fn parseParamsIntoSliceEx(slice: []Param(Help), str: []const u8, end: *usize
 }
 
 /// Takes a string and parses it into many Param(Help), which are appended onto `list`.
-pub fn parseParamsIntoArrayList(list: *std.ArrayList(Param(Help)), str: []const u8) !void {
-    var end: usize = undefined;
-    return parseParamsIntoArrayListEx(list, str, &end);
+/// To append into an unmanaged `std.ArrayList`, use `parseParamsIntoArrayListEx` and pass the
+/// allocator explicitly.
+pub fn parseParamsIntoArrayList(list: *std.array_list.Managed(Param(Help)), str: []const u8) !void {
+    var i: usize = 0;
+    while (i != str.len) {
+        var end_of_this: usize = undefined;
+        try list.append(try parseParamEx(str[i..], &end_of_this));
+        i += end_of_this;
+    }
 }
 
 /// Takes a string and parses it into many Param(Help), which are appended onto `list`.
@@ -1031,7 +1032,7 @@ fn Arguments(
             .one => @as(?T, null),
             .many => switch (multi_arg_kind) {
                 .slice => @as([]const T, &[_]T{}),
-                .list => std.ArrayListUnmanaged(T){},
+                .list => std.ArrayListUnmanaged(T).empty,
             },
         };
 
