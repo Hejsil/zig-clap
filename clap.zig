@@ -153,12 +153,10 @@ pub fn parseParamsIntoSliceEx(slice: []Param(Help), str: []const u8, end: *usize
 /// To append into an unmanaged `std.ArrayList`, use `parseParamsIntoArrayListEx` and pass the
 /// allocator explicitly.
 pub fn parseParamsIntoArrayList(list: *std.array_list.Managed(Param(Help)), str: []const u8) !void {
-    var i: usize = 0;
-    while (i != str.len) {
-        var end_of_this: usize = undefined;
-        try list.append(try parseParamEx(str[i..], &end_of_this));
-        i += end_of_this;
-    }
+    var unmanaged = list.moveToUnmanaged();
+    defer list.* = unmanaged.toManaged(list.allocator);
+    var end: usize = undefined;
+    try parseParamsIntoArrayListEx(list.allocator, &unmanaged, str, &end);
 }
 
 /// Takes a string and parses it into many Param(Help), which are appended onto `list`.
