@@ -1,6 +1,6 @@
 .{
     .name = .clap,
-    .version = "0.11.0",
+    .version = "0.12.0",
     .minimum_zig_version = "0.16.0-dev.2261+d6b3dd25a",
     .fingerprint = 0x65f99e6f07a316a0,
     .paths = .{
