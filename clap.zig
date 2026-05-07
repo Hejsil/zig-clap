@@ -1247,8 +1247,9 @@ test "overflow-safe" {
         \\-a, --aa
     );
 
+    const as: [300]u8 = @splat('a');
     var iter = args.SliceIterator{
-        .args = &(.{"-" ++ ("a" ** 300)}),
+        .args = &(.{"-" ++ as}),
     };
 
     // This just needs to not crash
