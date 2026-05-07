@@ -73,7 +73,18 @@ test CodepointCountingWriter {
     var discarding = std.Io.Writer.Discarding.init(&.{});
     var counting_stream = CodepointCountingWriter.init(&discarding.writer);
 
-    const utf8_text = "blåhaj" ** 100;
+    // copy "blåhaj" 100 times into a comptime array
+    const utf8_text_arr = comptime blk: {
+        var buf: ["blåhaj".len * 100]u8 = undefined;
+        var i: usize = 0;
+        while (i < 100) : (i += 1) {
+            buf[i * "blåhaj".len ..][0.."blåhaj".len].* = "blåhaj".*;
+        }
+        break :blk buf;
+    };
+    // array to slice
+    const utf8_text = utf8_text_arr[0..];
+
     counting_stream.interface.writeAll(utf8_text) catch unreachable;
     const expected_count = try std.unicode.utf8CountCodepoints(utf8_text);
     try testing.expectEqual(expected_count, counting_stream.codepoints_written);

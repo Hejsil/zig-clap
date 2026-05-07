@@ -1247,8 +1247,16 @@ test "overflow-safe" {
         \\-a, --aa
     );
 
+    // copy a 300 times to the stack to make sure we overflow any internal buffers if we are not careful.
+    const long_arg = comptime blk: {
+        var buf: [301]u8 = undefined;
+        buf[0] = '-';
+        @memset(buf[1..], 'a');
+        break :blk buf;
+    };
+
     var iter = args.SliceIterator{
-        .args = &(.{"-" ++ ("a" ** 300)}),
+        .args = &.{long_arg[0..]},
     };
 
     // This just needs to not crash
