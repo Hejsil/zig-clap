@@ -773,17 +773,18 @@ pub fn parseEx(
                 // This is a trick to emulate a runtime `continue` in an `inline for`.
                 break :continue_params_loop;
 
-            const parser = comptime switch (param.takes_value) {
+            const Parser = comptime switch (param.takes_value) {
                 .none => null,
-                .one, .many => @field(value_parsers, param.id.value()),
+                .one, .many => VariadicParser(@field(value_parsers, param.id.value())),
             };
 
             const name = longest.name[0..longest.name.len].*;
+
             switch (param.takes_value) {
                 .none => @field(arguments, &name) +|= 1,
-                .one => @field(arguments, &name) = try parser(arg.value.?),
+                .one => @field(arguments, &name) = try Parser.parse(arg.value.?, allocator),
                 .many => {
-                    const value = try parser(arg.value.?);
+                    const value = try Parser.parse(arg.value.?, allocator);
                     try @field(arguments, &name).append(allocator, value);
                 },
             }
@@ -804,9 +805,9 @@ pub fn parseEx(
                 // This is a trick to emulate a runtime `continue` in an `inline for`.
                 break :continue_params_loop;
 
-            const parser = comptime switch (param.takes_value) {
+            const Parser = comptime switch (param.takes_value) {
                 .none => null,
-                .one, .many => @field(value_parsers, param.id.value()),
+                .one, .many => VariadicParser(@field(value_parsers, param.id.value())),
             };
 
             // We keep track of how many positionals we have received. This is used to pick which
@@ -816,8 +817,8 @@ pub fn parseEx(
             const last = positionals.len == i + 1;
             if ((last and positional_count >= i) or positional_count == i) {
                 switch (@typeInfo(@TypeOf(pos.*))) {
-                    .optional => pos.* = try parser(arg.value.?),
-                    else => try pos.append(allocator, try parser(arg.value.?)),
+                    .optional => pos.* = try Parser.parse(arg.value.?, allocator),
+                    else => try pos.append(allocator, try Parser.parse(arg.value.?, allocator)),
                 }
 
                 if (opt.terminating_positional <= positional_count)
@@ -854,6 +855,27 @@ pub fn parseEx(
         .args = result_args,
         .positionals = result_positionals,
         .allocator = allocator,
+    };
+}
+
+fn VariadicParser(parser: anytype) type {
+    const parser_info = switch (@typeInfo(@TypeOf(parser))) {
+        .@"fn" => |info| info,
+        else => {
+            return void;
+        },
+    };
+    return struct {
+        pub fn parse(value: anytype, allocator: std.mem.Allocator) (parser_info.return_type orelse void) {
+            switch (parser_info.params.len) {
+                inline 2 => {
+                    return parser(value, allocator);
+                },
+                inline else => {
+                    return parser(value);
+                },
+            }
+        }
     };
 }
 
