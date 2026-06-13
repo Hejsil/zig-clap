@@ -831,13 +831,14 @@ pub fn parseEx(
     // We are done parsing, but our arguments are stored in lists, and not slices. Map the list
     // fields to slices and return that.
     var result_args = Arguments(Id, params, value_parsers, .slice){};
-    inline for (std.meta.fields(@TypeOf(arguments))) |field| {
-        switch (@typeInfo(field.type)) {
+    const info = @typeInfo(@TypeOf(arguments)).@"struct";
+    inline for (info.field_names, info.field_types) |field_name, field_type| {
+        switch (@typeInfo(field_type)) {
             .@"struct" => {
-                const slice = try @field(arguments, field.name).toOwnedSlice(allocator);
-                @field(result_args, field.name) = slice;
+                const slice = try @field(arguments, field_name).toOwnedSlice(allocator);
+                @field(result_args, field_name) = slice;
             },
-            else => @field(result_args, field.name) = @field(arguments, field.name),
+            else => @field(result_args, field_name) = @field(arguments, field_name),
         }
     }
 
@@ -987,11 +988,12 @@ fn ParamType(comptime Id: type, comptime param: Param(Id), comptime value_parser
 /// Deinitializes a struct of type `Argument`. Since the `Argument` type is generated, and we
 /// cannot add the deinit declaration to it, we declare it here instead.
 fn deinitArgs(arguments: anytype, allocator: std.mem.Allocator) void {
-    inline for (@typeInfo(@TypeOf(arguments.*)).@"struct".fields) |field| {
-        switch (@typeInfo(field.type)) {
+    const info = @typeInfo(@TypeOf(arguments.*)).@"struct";
+    inline for (info.field_names, info.field_types) |field_name, field_type| {
+        switch (@typeInfo(field_type)) {
             .int, .optional => {},
-            .@"struct" => @field(arguments, field.name).deinit(allocator),
-            else => allocator.free(@field(arguments, field.name)),
+            .@"struct" => @field(arguments, field_name).deinit(allocator),
+            else => allocator.free(@field(arguments, field_name)),
         }
     }
 }
@@ -1017,7 +1019,7 @@ fn Arguments(
 
     var field_names: [fields_len][]const u8 = undefined;
     var field_types: [fields_len]type = undefined;
-    var field_attrs: [fields_len]std.builtin.Type.StructField.Attributes = undefined;
+    var field_attrs: [fields_len]std.builtin.Type.Struct.FieldAttributes = undefined;
     var i: usize = 0;
     for (params) |param| {
         const longest = param.names.longest();
