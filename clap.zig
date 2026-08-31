@@ -143,6 +143,7 @@ pub fn parseParamsIntoSliceEx(slice: []Param(Help), str: []const u8, end: *usize
     var list = std.ArrayList(Param(Help)){
         .items = slice[0..0],
         .capacity = slice.len,
+        .pointer_stability = .{},
     };
 
     try parseParamsIntoArrayListEx(null_allocator.allocator(), &list, str, end);
