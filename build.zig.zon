@@ -1,7 +1,7 @@
 .{
     .name = .clap,
     .version = "0.12.0",
-    .minimum_zig_version = "0.17.0-dev.1941+71115f0ab",
+    .minimum_zig_version = "0.18.0-dev.954+60635c2bd",
     .fingerprint = 0x65f99e6f07a316a0,
     .paths = .{
         "clap",
