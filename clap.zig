@@ -924,7 +924,7 @@ fn Positionals(
             .one => ?T,
             .many => switch (multi_arg_kind) {
                 .slice => []const T,
-                .list => std.ArrayListUnmanaged(T),
+                .list => std.ArrayList(T),
             },
         };
 
@@ -955,7 +955,7 @@ fn initPositionals(
             .one => @as(?T, null),
             .many => switch (multi_arg_kind) {
                 .slice => @as([]const T, &[_]T{}),
-                .list => std.ArrayListUnmanaged(T).empty,
+                .list => std.ArrayList(T).empty,
             },
         };
         i += 1;
@@ -1033,7 +1033,7 @@ fn Arguments(
             .one => @as(?T, null),
             .many => switch (multi_arg_kind) {
                 .slice => @as([]const T, &[_]T{}),
-                .list => std.ArrayListUnmanaged(T).empty,
+                .list => std.ArrayList(T).empty,
             },
         };
 
